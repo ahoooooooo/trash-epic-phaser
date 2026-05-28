@@ -275,10 +275,28 @@ export class Game extends Scene
         invBtn.on('pointerdown', () => this.openInventory());
         this.input.keyboard?.on('keydown-I', () => this.openInventory());
 
+        // Gacha 入口 button(Inventory 旁邊)
+        const gachaBtn = this.add.text(W - 110, 30, '🎰', {
+            fontFamily: 'sans-serif', fontSize: 44, color: '#ff8830', fontStyle: 'bold',
+            backgroundColor: '#2a2520', padding: { x: 18, y: 8 }
+        }).setOrigin(1, 0).setDepth(1002).setInteractive({ useHandCursor: true });
+        gachaBtn.on('pointerdown', () => this.openGacha());
+        this.input.keyboard?.on('keydown-G', () => this.openGacha());
+
         // 底部 hint(per Codex review:移回 create,不重複 spawn)
         this.add.text(20, H - 60, '搖桿移動 / WASD / 方向鍵 — 自動攻擊', {
             fontFamily: 'sans-serif', fontSize: 22, color: '#a05a30'
         }).setDepth(1000);
+    }
+
+    private openGacha()
+    {
+        if (this.isGameOver) return;
+        if (this.scene.isActive('Gacha')) return;
+        if (this.scene.isActive('Inventory')) return;
+        this.joystick.cancel();
+        this.scene.launch('Gacha');
+        this.scene.pause();
     }
 
     private openInventory()

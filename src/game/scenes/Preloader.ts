@@ -39,6 +39,31 @@ export class Preloader extends Scene
         this.load.image('mob_giantrat', 'mobs/boss_wasteland_giantrat_portrait.png');
         this.load.image('mob_centipede', 'mobs/mob_centipede.png');
         this.load.image('npc_clerk', 'characters/npc_quest_clerk_greenscarf.png');
+
+        // Phase 4a-20 Gacha familiar pool(13 隻全載)
+        const fams = [
+            'pip', 'mira', 'grub', 'zix', 'neek', 'dorl',
+            'fire_imp', 'ironguard', 'frost_witch', 'axe_brothers',
+            'blackmarket_fox', 'wasteland_prophet', 'shadow_hunter',
+            'appraisal_queen'
+        ];
+        const famFiles: Record<string, string> = {
+            pip: 'familiar_r_scavver_kid_pip',
+            mira: 'familiar_r_gather_rat_mira',
+            grub: 'familiar_r_goblin_underling_grub',
+            zix: 'familiar_r_pickpocket_goblin_zix',
+            neek: 'familiar_r_oilamp_lighter_neek',
+            dorl: 'familiar_r_pot_dishwasher_dorl',
+            fire_imp: 'familiar_sr_fire_imp',
+            ironguard: 'familiar_sr_ironguard_portrait',
+            frost_witch: 'familiar_sr_frost_tongue_witch',
+            axe_brothers: 'familiar_sr_axe_brothers',
+            blackmarket_fox: 'familiar_ssr_blackmarket_fox',
+            wasteland_prophet: 'familiar_ssr_wasteland_prophet',
+            shadow_hunter: 'familiar_ssr_shadow_hunter_portrait',
+            appraisal_queen: 'familiar_ur_appraisal_queen'
+        };
+        fams.forEach(f => this.load.image(`fam_${f}`, `familiars/${famFiles[f]}.png`));
     }
 
     create ()

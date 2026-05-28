@@ -18,6 +18,10 @@ interface SaveData {
     // Phase 4a-19 quest 狀態
     questProgress: Record<string, number>;  // questId → 當前進度
     questCompleted: Record<string, boolean>; // questId → 已領獎
+    // Phase 4a-20 gacha
+    gachaCollection: Record<string, number>; // familiar id → owned count
+    gachaPullsSinceSSR: number;
+    gachaTotalPulls: number;
 }
 
 // per Codex review:nested object 必須 deep clone,不能 spread(weaponEnh 會共用 reference)
@@ -39,7 +43,10 @@ function makeDefaultSave(): SaveData {
             weapon_hand_rag: 0
         },
         questProgress: {},
-        questCompleted: {}
+        questCompleted: {},
+        gachaCollection: {},
+        gachaPullsSinceSSR: 0,
+        gachaTotalPulls: 0
     };
 }
 
@@ -77,6 +84,7 @@ export class SaveService {
             merged.weaponEnh = { ...makeDefaultSave().weaponEnh, ...(parsed.weaponEnh ?? {}) };
             merged.questProgress = { ...(parsed.questProgress ?? {}) };
             merged.questCompleted = { ...(parsed.questCompleted ?? {}) };
+            merged.gachaCollection = { ...(parsed.gachaCollection ?? {}) };
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -142,6 +150,24 @@ export class SaveService {
     }
     isQuestCompleted(id: string): boolean { return !!this.data.questCompleted[id]; }
     markQuestCompleted(id: string): void { this.data.questCompleted[id] = true; }
+
+    // Gacha
+    getGachaPity(): { pullsSinceSSR: number } {
+        return { pullsSinceSSR: this.data.gachaPullsSinceSSR };
+    }
+    setGachaPity(pullsSinceSSR: number): void {
+        this.data.gachaPullsSinceSSR = pullsSinceSSR;
+    }
+    addGachaPulls(n: number): void { this.data.gachaTotalPulls += n; }
+    addFamiliar(id: string): void {
+        this.data.gachaCollection[id] = (this.data.gachaCollection[id] ?? 0) + 1;
+    }
+    getCollectionCount(): number {
+        return Object.keys(this.data.gachaCollection).length;
+    }
+    getOwnedCount(id: string): number {
+        return this.data.gachaCollection[id] ?? 0;
+    }
 
     reset(): void {
         this.data = makeDefaultSave();
