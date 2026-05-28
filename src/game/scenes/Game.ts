@@ -4,6 +4,7 @@ import { VirtualJoystick } from '../services/VirtualJoystick';
 import { SaveService } from '../services/SaveService';
 import { effectiveDamage, getWeapon, WeaponDef } from '../services/WeaponService';
 import { QUESTS, QuestDef } from '../services/QuestService';
+import { getMap, MapConfig, NpcSpec, PortalSpec } from '../services/MapService';
 
 // 視窗尺寸(Phaser config 內固定 1080×1920 portrait)
 const VIEW_W = 1080;
@@ -14,8 +15,10 @@ const MAP_H = 3200;
 // alias 保留 — 玩家邊界 / 內容定位用 MAP 尺寸
 const W = MAP_W;
 const H = MAP_H;
-const CX = W / 2;
-const CY = H / 2;
+const _CX = W / 2;
+const _CY = H / 2;
+void _CX;
+void _CY;
 
 // 楓谷 cycle spawn(per project-v2-gameplay-lock §2)
 // max kill/hour = 3600 / 7.56 × spawn_point_count
@@ -129,9 +132,11 @@ export class Game extends Scene
     private pageHideHandler?: () => void;
     private sessionKills = 0;
     private bossActive = false;
-    private npcClerk!: Phaser.GameObjects.Image;
-    private npcBangMark!: Phaser.GameObjects.Text;
+    private npcClerk?: Phaser.GameObjects.Image;
+    private npcBangMark?: Phaser.GameObjects.Text;
     private questDialogOpen = false;
+    private mapConfig!: MapConfig;
+    private portals: Phaser.GameObjects.GameObject[] = [];
     // 主角動作 state machine — 楓谷風:不同武器類別不同 attack 動作
     private playerAnimState: 'idle' | 'walking' = 'idle';
     private playerStateTween?: Phaser.Tweens.Tween;
@@ -166,65 +171,73 @@ export class Game extends Scene
         this.sessionKills = 0;
         this.bossActive = false;
         this.mobs = [];
+        this.portals = [];
+        this.npcClerk = undefined;
+        this.npcBangMark = undefined;
 
-        this.cameras.main.setBackgroundColor('#2a2520');
-        // Camera follow player + bounds = 整張大地圖(per Phase 4b 荒野亂鬥風)
-        this.cameras.main.setBounds(0, 0, MAP_W, MAP_H);
+        // Phase 4b-3:讀 current map config
+        this.mapConfig = getMap(SaveService.instance.getCurrentMapId());
+        const mapW = this.mapConfig.width;
+        const mapH = this.mapConfig.height;
 
-        // 廢墟地面網格(整張大地圖)
+        this.cameras.main.setBackgroundColor(this.mapConfig.bgColor);
+        this.cameras.main.setBounds(0, 0, mapW, mapH);
+
+        // 地面網格(整張地圖)
         const grid = this.add.graphics();
         grid.lineStyle(1, 0x4a5d3a, 0.3);
-        for (let x = 0; x <= MAP_W; x += 120) { grid.moveTo(x, 0); grid.lineTo(x, MAP_H); }
-        for (let y = 0; y <= MAP_H; y += 120) { grid.moveTo(0, y); grid.lineTo(MAP_W, y); }
+        for (let x = 0; x <= mapW; x += 120) { grid.moveTo(x, 0); grid.lineTo(x, mapH); }
+        for (let y = 0; y <= mapH; y += 120) { grid.moveTo(0, y); grid.lineTo(mapW, y); }
         grid.strokePath();
 
-        // 地圖邊界(廢墟柵欄概念 — 紅 stroke 框)
-        this.add.rectangle(MAP_W / 2, MAP_H / 2, MAP_W, MAP_H, 0, 0)
+        // 地圖邊框(廢墟柵欄)
+        this.add.rectangle(mapW / 2, mapH / 2, mapW, mapH, 0, 0)
             .setStrokeStyle(8, 0x8b3a1f, 0.5);
 
-        this.player = this.add.image(CX, CY, 'player_scavver').setScale(0.3);
-        // Camera follow player(per 荒野亂鬥)
+        // 玩家出生點:從 SaveService(若有 portal enter pos)或 mapConfig.playerStart
+        const enterPos = SaveService.instance.consumeMapEnterPos();
+        const startX = enterPos.x ?? this.mapConfig.playerStartX;
+        const startY = enterPos.y ?? this.mapConfig.playerStartY;
+        this.player = this.add.image(startX, startY, 'player_scavver').setScale(0.3);
         this.cameras.main.startFollow(this.player, true, 0.15, 0.15);
         // 開始 idle 動畫(state machine 控制 idle/walk/attack 切換,force first start)
         this.setPlayerAnimState('idle', true);
 
-        // NPC 委託員 — Phase 4b-3 將移到公會地圖,此處保留但放遠處
-        this.npcClerk = this.add.image(CX, 300, 'npc_clerk').setScale(0.32);
-        this.npcClerk.setInteractive({ useHandCursor: true });
-        this.npcClerk.on('pointerdown', () => {
-            // 必須玩家在 110px 內才能接觸(避免遠距點擊)
-            const d = Math.hypot(this.player.x - this.npcClerk.x, this.player.y - this.npcClerk.y);
-            if (d > 160) return;
-            this.joystick.cancel();
-            this.openQuestDialog();
+        // NPC 從 mapConfig.npcs(Phase 4b-3:NPC 移到公會地圖)
+        this.mapConfig.npcs.forEach((npc: NpcSpec) => {
+            if (npc.type === 'clerk') {
+                this.npcClerk = this.add.image(npc.x, npc.y, npc.spriteKey).setScale(npc.scale);
+                this.npcClerk.setInteractive({ useHandCursor: true });
+                this.npcClerk.on('pointerdown', () => {
+                    if (!this.npcClerk) return;
+                    const d = Math.hypot(this.player.x - this.npcClerk.x, this.player.y - this.npcClerk.y);
+                    if (d > 160) return;
+                    this.joystick.cancel();
+                    this.openQuestDialog();
+                });
+            }
         });
-        this.npcBangMark = this.add.text(CX, 280, '!', {
-            fontFamily: 'sans-serif', fontSize: 64, color: '#ffe060', fontStyle: 'bold',
-            stroke: '#1a1612', strokeThickness: 6
-        }).setOrigin(0.5).setDepth(500);
-        this.tweens.add({
-            targets: this.npcBangMark,
-            y: 270, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.inOut'
-        });
+        // Portals 從 mapConfig.portals(傳送門)
+        this.mapConfig.portals.forEach((p: PortalSpec) => this.spawnPortal(p));
+        // NPC clerk 的 ! 漂浮提示(若有 clerk on map)
+        const clerk = this.npcClerk as Phaser.GameObjects.Image | undefined;
+        if (clerk) {
+            const clerkX = clerk.x;
+            const clerkY = clerk.y;
+            this.npcBangMark = this.add.text(clerkX, clerkY - 130, '!', {
+                fontFamily: 'sans-serif', fontSize: 64, color: '#ffe060', fontStyle: 'bold',
+                stroke: '#1a1612', strokeThickness: 6
+            }).setOrigin(0.5).setDepth(500);
+            this.tweens.add({
+                targets: this.npcBangMark,
+                y: clerkY - 140, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.inOut'
+            });
+        }
 
         HitStopService.instance.attach(this);
 
-        // 16 spawn points 散布大地圖各 region(per Phase 4b 大地圖)
-        const points: { x: number; y: number; blueprintIdx: number }[] = [
-            // 北區(NPC 周圍少怪)
-            { x: 400, y: 600, blueprintIdx: 0 },   { x: 1200, y: 700, blueprintIdx: 1 },
-            { x: 1800, y: 600, blueprintIdx: 0 },  { x: 2100, y: 800, blueprintIdx: 2 },
-            // 中區
-            { x: 300, y: 1400, blueprintIdx: 1 },  { x: 800, y: 1500, blueprintIdx: 0 },
-            { x: 1700, y: 1400, blueprintIdx: 2 }, { x: 2200, y: 1600, blueprintIdx: 0 },
-            // 中南
-            { x: 400, y: 2000, blueprintIdx: 0 },  { x: 1100, y: 2100, blueprintIdx: 2 },
-            { x: 1800, y: 2000, blueprintIdx: 1 }, { x: 2200, y: 2200, blueprintIdx: 1 },
-            // 南區
-            { x: 500, y: 2700, blueprintIdx: 2 },  { x: 1200, y: 2800, blueprintIdx: 1 },
-            { x: 1700, y: 2700, blueprintIdx: 0 }, { x: 2100, y: 2900, blueprintIdx: 1 }
-        ];
-        this.spawnPoints = points.map(p => ({
+        // Spawn points 從 mapConfig(Phase 4b-3)
+        this.spawnPoints = this.mapConfig.spawnPoints.map(p => ({
             x: p.x, y: p.y, mob: null, nextSpawnAt: 0, blueprintIdx: p.blueprintIdx
         }));
 
@@ -352,6 +365,7 @@ export class Game extends Scene
     private updateNpcBangVisibility()
     {
         // 任務可領取(progress >= target)→ 黃 ! 變紅 !!
+        if (!this.npcBangMark) return;
         const q = this.getCurrentQuest();
         if (!q) {
             this.npcBangMark.setVisible(false);
@@ -468,6 +482,36 @@ export class Game extends Scene
     private formatWeaponLabel(w: WeaponDef, enh: number): string {
         const dmg = effectiveDamage(w, enh);
         return enh > 0 ? `⚔ ${w.nameZH} +${enh} [${dmg}]` : `⚔ ${w.nameZH} [${dmg}]`;
+    }
+
+    private spawnPortal(p: PortalSpec) {
+        // 傳送門:廢土橙圓形 + label,tap 切地圖
+        const ring = this.add.circle(p.x, p.y, 60, 0xff8830, 0.35)
+            .setStrokeStyle(4, 0xffe0c0, 0.9);
+        ring.setInteractive({ useHandCursor: true });
+        // 漂浮動畫
+        this.tweens.add({
+            targets: ring, scale: 1.15, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.inOut'
+        });
+        const label = this.add.text(p.x, p.y - 90, p.label, {
+            fontFamily: 'sans-serif', fontSize: 24, color: '#ffe0c0', fontStyle: 'bold',
+            backgroundColor: '#1a1612', padding: { x: 14, y: 6 },
+            stroke: '#1a1612', strokeThickness: 4
+        }).setOrigin(0.5).setDepth(500);
+        ring.on('pointerdown', () => {
+            // 必須玩家在 160px 內才能用
+            const d = Math.hypot(this.player.x - p.x, this.player.y - p.y);
+            if (d > 160) return;
+            this.joystick.cancel();
+            this.switchMap(p.targetMapId, p.targetX, p.targetY);
+        });
+        this.portals.push(ring, label);
+    }
+
+    private switchMap(targetMapId: string, targetX: number, targetY: number) {
+        SaveService.instance.setCurrentMap(targetMapId, targetX, targetY);
+        SaveService.instance.save();
+        this.scene.restart();
     }
 
     // 楓谷風 state machine:idle / walking / attacking(by weapon)
@@ -635,8 +679,8 @@ export class Game extends Scene
         const normDy = mag > 1 ? dy / mag : dy;
         const nx = this.player.x + normDx * Game.MOVE_SPEED * delta;
         const ny = this.player.y + normDy * Game.MOVE_SPEED * delta;
-        this.player.x = Math.max(60, Math.min(W - 60, nx));
-        this.player.y = Math.max(60, Math.min(H - 60, ny));
+        this.player.x = Math.max(60, Math.min(this.mapConfig.width - 60, nx));
+        this.player.y = Math.max(60, Math.min(this.mapConfig.height - 60, ny));
         if (Math.abs(normDx) > 0.1) this.player.setFlipX(normDx < 0);
         // state machine:走路時切 walking,讓 walk tween 跑
         if (this.playerAnimState !== 'walking' && !this.playerAttackTween?.isPlaying()) {
@@ -817,8 +861,8 @@ export class Game extends Scene
             const dx = nearest.x - this.player.x;
             const dy = nearest.y - this.player.y;
             const len = Math.hypot(dx, dy) || 1;
-            nearest.x = Math.max(60, Math.min(W - 60, nearest.x + (dx / len) * weapon.knockbackPx));
-            nearest.y = Math.max(60, Math.min(H - 60, nearest.y + (dy / len) * weapon.knockbackPx));
+            nearest.x = Math.max(60, Math.min(this.mapConfig.width - 60, nearest.x + (dx / len) * weapon.knockbackPx));
+            nearest.y = Math.max(60, Math.min(this.mapConfig.height - 60, nearest.y + (dy / len) * weapon.knockbackPx));
         }
 
         const data = target.getData('mob') as MobData;
@@ -939,6 +983,7 @@ export class Game extends Scene
 
     private trySpawnBoss(time: number)
     {
+        if (!this.mapConfig.bossEnabled) return; // 公會地圖無 boss
         if (this.bossActive) return;
         if (this.sessionKills < BOSS_TRIGGER_KILLS) return;
         this.bossActive = true;

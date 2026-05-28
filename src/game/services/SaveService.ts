@@ -22,6 +22,10 @@ interface SaveData {
     gachaCollection: Record<string, number>; // familiar id → owned count
     gachaPullsSinceSSR: number;
     gachaTotalPulls: number;
+    // Phase 4b-3 地圖
+    currentMapId: string;
+    mapEnterX?: number;  // 切地圖時的出生位置(null = 用 mapConfig.playerStart)
+    mapEnterY?: number;
 }
 
 // per Codex review:nested object 必須 deep clone,不能 spread(weaponEnh 會共用 reference)
@@ -46,7 +50,8 @@ function makeDefaultSave(): SaveData {
         questCompleted: {},
         gachaCollection: {},
         gachaPullsSinceSSR: 0,
-        gachaTotalPulls: 0
+        gachaTotalPulls: 0,
+        currentMapId: 'wasteland_outskirts'
     };
 }
 
@@ -172,6 +177,20 @@ export class SaveService {
     }
     getOwnedCount(id: string): number {
         return this.data.gachaCollection[id] ?? 0;
+    }
+
+    // Phase 4b-3 地圖
+    getCurrentMapId(): string { return this.data.currentMapId; }
+    setCurrentMap(mapId: string, enterX?: number, enterY?: number): void {
+        this.data.currentMapId = mapId;
+        this.data.mapEnterX = enterX;
+        this.data.mapEnterY = enterY;
+    }
+    consumeMapEnterPos(): { x?: number; y?: number } {
+        const r = { x: this.data.mapEnterX, y: this.data.mapEnterY };
+        this.data.mapEnterX = undefined;
+        this.data.mapEnterY = undefined;
+        return r;
     }
 
     reset(): void {
