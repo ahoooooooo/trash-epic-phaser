@@ -188,42 +188,15 @@ export class Game extends Scene
         this.cameras.main.setBackgroundColor(this.mapConfig.bgColor);
         this.cameras.main.setBounds(0, 0, mapW, mapH);
 
-        // 廢土地表 — 大地塊 patches(深淺褐色斑)
-        const ground = this.add.graphics();
-        for (let i = 0; i < 80; i++) {
-            const px = Math.random() * mapW;
-            const py = Math.random() * mapH;
-            const radius = 80 + Math.random() * 160;
-            const dark = Math.random() < 0.5;
-            ground.fillStyle(dark ? 0x1f1812 : 0x3a302a, 0.45);
-            ground.fillCircle(px, py, radius);
-        }
-
-        // 地圖網格(更淡)
-        const grid = this.add.graphics();
-        grid.lineStyle(1, 0x4a5d3a, 0.15);
-        for (let x = 0; x <= mapW; x += 140) { grid.moveTo(x, 0); grid.lineTo(x, mapH); }
-        for (let y = 0; y <= mapH; y += 140) { grid.moveTo(0, y); grid.lineTo(mapW, y); }
-        grid.strokePath();
-
-        // 廢土 props 散布(150 個)— 鐵塊/坑洞/輪胎/木板/油漬/廢桶
-        this.scatterMapDecorations(mapW, mapH);
-
-        // 地圖邊框(廢墟柵欄密集)
-        const fence = this.add.graphics();
-        fence.lineStyle(10, 0x8b3a1f, 0.7);
-        fence.strokeRect(4, 4, mapW - 8, mapH - 8);
-        fence.lineStyle(3, 0xff8830, 0.4);
-        // 柵欄條紋
-        for (let i = 0; i < mapW; i += 80) {
-            fence.moveTo(i, 0); fence.lineTo(i, 20);
-            fence.moveTo(i, mapH); fence.lineTo(i, mapH - 20);
-        }
-        for (let i = 0; i < mapH; i += 80) {
-            fence.moveTo(0, i); fence.lineTo(20, i);
-            fence.moveTo(mapW, i); fence.lineTo(mapW - 20, i);
-        }
-        fence.strokePath();
+        // Phase 4b-9 — 改用 Phase 3b' SDXL painted 廢土 backgrounds(楓谷風 painted)
+        // painted PNG 的 sky 區是 transparent → 底層先填廢土褐色,painted 在上層補 painterly 細節
+        const groundBase = this.add.rectangle(mapW / 2, mapH / 2, mapW, mapH, 0x3a2818);
+        groundBase.setDepth(-200);
+        const bgKey = this.mapConfig.id === 'guild_hall' ? 'bg_zone1_mid_ruins' : 'bg_zone1_scrap_far';
+        const bg = this.add.image(mapW / 2, mapH / 2, bgKey);
+        bg.setDisplaySize(mapW, mapH);
+        bg.setDepth(-100);
+        bg.setAlpha(0.85);
 
         // 玩家出生點:從 SaveService(若有 portal enter pos)或 mapConfig.playerStart
         const enterPos = SaveService.instance.consumeMapEnterPos();
@@ -603,82 +576,6 @@ export class Game extends Scene
     private formatWeaponLabel(w: WeaponDef, enh: number): string {
         const dmg = effectiveDamage(w, enh);
         return enh > 0 ? `⚔ ${w.nameZH} +${enh} [${dmg}]` : `⚔ ${w.nameZH} [${dmg}]`;
-    }
-
-    // Phase 4b 美術 — 廢土 props 程式化生成(地圖視覺豐富度)
-    private scatterMapDecorations(mapW: number, mapH: number) {
-        const g = this.add.graphics();
-        const PROP_COUNT = 150;
-        for (let i = 0; i < PROP_COUNT; i++) {
-            const x = 80 + Math.random() * (mapW - 160);
-            const y = 80 + Math.random() * (mapH - 160);
-            const kind = Math.floor(Math.random() * 7);
-            switch (kind) {
-                case 0: { // 廢鐵塊 — 灰色不規則矩形
-                    const w = 18 + Math.random() * 30;
-                    const h = 12 + Math.random() * 24;
-                    g.fillStyle(0x5a4a3a, 0.85);
-                    g.fillRect(x, y, w, h);
-                    g.lineStyle(1, 0x8b3a1f, 0.6);
-                    g.strokeRect(x, y, w, h);
-                    break;
-                }
-                case 1: { // 焦黑坑洞 — 深圓 + ring
-                    g.fillStyle(0x0a0806, 0.9);
-                    g.fillCircle(x, y, 22 + Math.random() * 14);
-                    g.lineStyle(2, 0x2a1810, 0.7);
-                    g.strokeCircle(x, y, 26 + Math.random() * 14);
-                    break;
-                }
-                case 2: { // 廢輪胎 — 黑圈
-                    const r = 18 + Math.random() * 10;
-                    g.lineStyle(6, 0x1a1410, 0.85);
-                    g.strokeCircle(x, y, r);
-                    g.lineStyle(2, 0x3a3028, 0.5);
-                    g.strokeCircle(x, y, r - 6);
-                    break;
-                }
-                case 3: { // 廢木板 — 棕色長條
-                    const w = 60 + Math.random() * 40;
-                    const ang = (Math.random() - 0.5) * 0.6;
-                    g.translateCanvas(x, y);
-                    g.rotateCanvas(ang);
-                    g.fillStyle(0x4a3018, 0.85);
-                    g.fillRect(-w / 2, -8, w, 16);
-                    g.lineStyle(1, 0x2a1810, 0.7);
-                    g.strokeRect(-w / 2, -8, w, 16);
-                    g.rotateCanvas(-ang);
-                    g.translateCanvas(-x, -y);
-                    break;
-                }
-                case 4: { // 油漬水窪 — 深褐橢圓
-                    const w = 30 + Math.random() * 40;
-                    const h = 20 + Math.random() * 24;
-                    g.fillStyle(0x281410, 0.7);
-                    g.fillEllipse(x, y, w, h);
-                    g.lineStyle(1, 0x4a2818, 0.4);
-                    g.strokeEllipse(x, y, w, h);
-                    break;
-                }
-                case 5: { // 廢油桶 — 橙鏽矩形 + 頂部
-                    const w = 22, h = 38;
-                    g.fillStyle(0x6a3018, 0.9);
-                    g.fillRect(x - w / 2, y - h / 2, w, h);
-                    g.lineStyle(2, 0xff8830, 0.5);
-                    g.strokeRect(x - w / 2, y - h / 2, w, h);
-                    g.strokeRect(x - w / 2, y - h / 2, w, 6);
-                    break;
-                }
-                case 6: { // 鐵絲網碎片 — 白 X
-                    g.lineStyle(2, 0x6a5a4a, 0.7);
-                    const s = 16;
-                    g.moveTo(x - s, y - s); g.lineTo(x + s, y + s);
-                    g.moveTo(x - s, y + s); g.lineTo(x + s, y - s);
-                    g.strokePath();
-                    break;
-                }
-            }
-        }
     }
 
     private spawnPortal(p: PortalSpec) {

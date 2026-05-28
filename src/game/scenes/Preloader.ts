@@ -64,6 +64,11 @@ export class Preloader extends Scene
             appraisal_queen: 'familiar_ur_appraisal_queen'
         };
         fams.forEach(f => this.load.image(`fam_${f}`, `familiars/${famFiles[f]}.png`));
+
+        // Phase 4b-9 painted 廢土 backgrounds(Phase 3b' 留下 SDXL Zone1 layers)
+        // 砍 procedural Graphics 散布石頭,改用真 painted 楓谷風背景
+        this.load.image('bg_zone1_scrap_far', 'maps/zone1/bg_zone1_layer_04_scrap_far.png');
+        this.load.image('bg_zone1_mid_ruins', 'maps/zone1/bg_zone1_layer_03_mid_ruins.png');
     }
 
     create ()
