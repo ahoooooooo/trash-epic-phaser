@@ -127,6 +127,10 @@ export class Game extends Scene
     private levelText!: Phaser.GameObjects.Text;
     private goldText!: Phaser.GameObjects.Text;
     private weaponText!: Phaser.GameObjects.Text;
+    private mpBarFill!: Phaser.GameObjects.Rectangle;
+    private mpText!: Phaser.GameObjects.Text;
+    private hpPotionText!: Phaser.GameObjects.Text;
+    private mpPotionText!: Phaser.GameObjects.Text;
     private sessionStartMs = 0;
     private lastPersistMs = 0;
     private pageHideHandler?: () => void;
@@ -275,7 +279,19 @@ export class Game extends Scene
             fontFamily: 'monospace', fontSize: 18, color: '#ffe0c0'
         }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
 
-        const expBarY = barY + Game.HP_BAR_HEIGHT + 10;
+        // MP bar(HP bar 正下方,藍色)
+        const mpBarY = barY + Game.HP_BAR_HEIGHT + 6;
+        const mpBarH = 18;
+        this.add.rectangle(barX, mpBarY, Game.HP_BAR_WIDTH, mpBarH, 0x10202a)
+            .setOrigin(0, 0).setStrokeStyle(2, 0x4080ff).setDepth(1000).setScrollFactor(0);
+        const mpRatio = save.mp / save.maxMp;
+        this.mpBarFill = this.add.rectangle(barX + 2, mpBarY + 2, (Game.HP_BAR_WIDTH - 4) * mpRatio, mpBarH - 4, 0x4080ff)
+            .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
+        this.mpText = this.add.text(VIEW_W / 2, mpBarY + mpBarH / 2, `MP ${save.mp} / ${save.maxMp}`, {
+            fontFamily: 'monospace', fontSize: 14, color: '#ffe0c0'
+        }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
+
+        const expBarY = mpBarY + mpBarH + 8;
         const expBarH = 14;
         this.add.rectangle(barX, expBarY, Game.HP_BAR_WIDTH, expBarH, 0x2a2010)
             .setOrigin(0, 0).setStrokeStyle(2, 0x4a5d3a).setDepth(1000).setScrollFactor(0);
@@ -297,8 +313,67 @@ export class Game extends Scene
         }).setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
         this.refreshWeaponText();
 
+        // HP / MP 藥水 quick button(HUD 右上)
+        this.hpPotionText = this.add.text(VIEW_W - 30, 90, `🧪${save.hpPotions}`, {
+            fontFamily: 'monospace', fontSize: 30, color: '#ff4040', fontStyle: 'bold',
+            backgroundColor: '#2a1010', padding: { x: 12, y: 6 }
+        }).setOrigin(1, 0).setDepth(1002).setScrollFactor(0).setInteractive({ useHandCursor: true });
+        this.hpPotionText.on('pointerdown', () => this.useHpPotion());
+        this.input.keyboard?.on('keydown-Q', () => this.useHpPotion());
+
+        this.mpPotionText = this.add.text(VIEW_W - 30, 150, `🔮${save.mpPotions}`, {
+            fontFamily: 'monospace', fontSize: 30, color: '#4080ff', fontStyle: 'bold',
+            backgroundColor: '#102030', padding: { x: 12, y: 6 }
+        }).setOrigin(1, 0).setDepth(1002).setScrollFactor(0).setInteractive({ useHandCursor: true });
+        this.mpPotionText.on('pointerdown', () => this.useMpPotion());
+        this.input.keyboard?.on('keydown-E', () => this.useMpPotion());
+
         // 底部 5 tab UI 取代右上 ⚒ / 🎰 button(Phase 4b-5)
         this.buildBottomTabs();
+    }
+
+    private useHpPotion() {
+        if (this.isGameOver) return;
+        if (!SaveService.instance.useHpPotion()) {
+            this.flashHudMessage('🧪 沒有藥水', 0xff4040);
+            return;
+        }
+        const heal = 50;
+        this.playerHP = Math.min(Game.PLAYER_MAX_HP, this.playerHP + heal);
+        this.hpBarFill.width = (Game.HP_BAR_WIDTH - 4) * (this.playerHP / Game.PLAYER_MAX_HP);
+        this.hpText.setText(`${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
+        this.hpPotionText.setText(`🧪${SaveService.instance.getHpPotions()}`);
+        this.flashHudMessage(`+${heal} HP`, 0xff4040);
+        SaveService.instance.save();
+    }
+
+    private useMpPotion() {
+        if (this.isGameOver) return;
+        if (!SaveService.instance.useMpPotion()) {
+            this.flashHudMessage('🔮 沒有藥水', 0x4080ff);
+            return;
+        }
+        const restore = 30;
+        const save = SaveService.instance;
+        save.setMp(save.getMp() + restore);
+        const cur = save.get();
+        this.mpBarFill.width = (Game.HP_BAR_WIDTH - 4) * (cur.mp / cur.maxMp);
+        this.mpText.setText(`MP ${cur.mp} / ${cur.maxMp}`);
+        this.mpPotionText.setText(`🔮${save.getMpPotions()}`);
+        this.flashHudMessage(`+${restore} MP`, 0x4080ff);
+        save.save();
+    }
+
+    private flashHudMessage(msg: string, color: number) {
+        const t = this.add.text(VIEW_W / 2, 220, msg, {
+            fontFamily: 'sans-serif', fontSize: 36, color: '#ffe0c0', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 5
+        }).setOrigin(0.5).setDepth(2000).setScrollFactor(0);
+        t.setTint(color);
+        this.tweens.add({
+            targets: t, y: t.y - 50, alpha: 0, duration: 800,
+            onComplete: () => t.destroy()
+        });
     }
 
 

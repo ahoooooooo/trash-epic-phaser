@@ -24,8 +24,13 @@ interface SaveData {
     gachaTotalPulls: number;
     // Phase 4b-3 地圖
     currentMapId: string;
-    mapEnterX?: number;  // 切地圖時的出生位置(null = 用 mapConfig.playerStart)
+    mapEnterX?: number;
     mapEnterY?: number;
+    // Phase 4b-6 MP + 藥水
+    mp: number;
+    maxMp: number;
+    hpPotions: number;
+    mpPotions: number;
 }
 
 // per Codex review:nested object 必須 deep clone,不能 spread(weaponEnh 會共用 reference)
@@ -51,7 +56,11 @@ function makeDefaultSave(): SaveData {
         gachaCollection: {},
         gachaPullsSinceSSR: 0,
         gachaTotalPulls: 0,
-        currentMapId: 'wasteland_outskirts'
+        currentMapId: 'wasteland_outskirts',
+        mp: 50,
+        maxMp: 50,
+        hpPotions: 3,  // 初始送 3 個
+        mpPotions: 3
     };
 }
 
@@ -90,6 +99,11 @@ export class SaveService {
             merged.questProgress = { ...(parsed.questProgress ?? {}) };
             merged.questCompleted = { ...(parsed.questCompleted ?? {}) };
             merged.gachaCollection = { ...(parsed.gachaCollection ?? {}) };
+            // Phase 4b-6 forward-compat:舊 save 沒 mp/potion → 用 default
+            if (typeof parsed.mp !== 'number') merged.mp = makeDefaultSave().mp;
+            if (typeof parsed.maxMp !== 'number') merged.maxMp = makeDefaultSave().maxMp;
+            if (typeof parsed.hpPotions !== 'number') merged.hpPotions = makeDefaultSave().hpPotions;
+            if (typeof parsed.mpPotions !== 'number') merged.mpPotions = makeDefaultSave().mpPotions;
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -192,6 +206,30 @@ export class SaveService {
         this.data.mapEnterY = undefined;
         return r;
     }
+
+    // Phase 4b-6 MP / 藥水
+    getMp(): number { return this.data.mp; }
+    getMaxMp(): number { return this.data.maxMp; }
+    setMp(v: number): void { this.data.mp = Math.max(0, Math.min(this.data.maxMp, v)); }
+    spendMp(n: number): boolean {
+        if (this.data.mp < n) return false;
+        this.data.mp -= n;
+        return true;
+    }
+    getHpPotions(): number { return this.data.hpPotions; }
+    getMpPotions(): number { return this.data.mpPotions; }
+    useHpPotion(): boolean {
+        if (this.data.hpPotions <= 0) return false;
+        this.data.hpPotions--;
+        return true;
+    }
+    useMpPotion(): boolean {
+        if (this.data.mpPotions <= 0) return false;
+        this.data.mpPotions--;
+        return true;
+    }
+    addHpPotions(n: number): void { this.data.hpPotions += n; }
+    addMpPotions(n: number): void { this.data.mpPotions += n; }
 
     reset(): void {
         this.data = makeDefaultSave();
