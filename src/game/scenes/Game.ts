@@ -1,6 +1,7 @@
 import { Scene } from 'phaser';
 import { HitStopService } from '../services/HitStopService';
 import { VirtualJoystick } from '../services/VirtualJoystick';
+import { DashButton } from '../services/DashButton';
 
 const W = 1080;
 const H = 1920;
@@ -44,6 +45,10 @@ export class Game extends Scene
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
     private wasd!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
     private joystick!: VirtualJoystick;
+    private dashButton!: DashButton;
+    private dashUntilMs = 0;
+    private lastDirX = 0;
+    private lastDirY = -1; // 預設朝上(初次按 Dash 沒 input 時的 fallback)
     private attackCooldownMs = 0;
     private hpBarFill!: Phaser.GameObjects.Rectangle;
     private hpText!: Phaser.GameObjects.Text;
@@ -54,6 +59,9 @@ export class Game extends Scene
     private static readonly CRIT_CHANCE = 0.15;
     private static readonly CRIT_MULT = 1.5;
     private static readonly MOVE_SPEED = 0.4;        // 玩家 px/ms
+    private static readonly DASH_DURATION_MS = 400;  // 楓谷風 dash 0.4s
+    private static readonly DASH_SPEED_MULT = 3;     // dash 速度 ×3(280px 位移約等於楓谷一段)
+    private static readonly DASH_CD_MS = 2500;       // dash CD
     private static readonly MOB_SPEED_CHASE = 0.10;  // 怪追擊 px/ms
     private static readonly MOB_SPEED_WANDER = 0.04; // 怪漫遊 px/ms(慢)
     private static readonly MOB_AGGRO_RANGE = 350;   // < 進入 chase
@@ -101,8 +109,14 @@ export class Game extends Scene
 
         this.cursors = this.input.keyboard!.createCursorKeys();
         this.wasd = this.input.keyboard!.addKeys('W,A,S,D') as typeof this.wasd;
-        // 手機虛擬搖桿(bottom-left,touch any 下半部觸發)
+        // 手機虛擬搖桿(bottom-left)
         this.joystick = new VirtualJoystick(this, { x: 220, y: H - 280, radius: 130 });
+        // Dash 閃招按鈕(bottom-right)
+        this.dashButton = new DashButton(
+            this,
+            { x: W - 220, y: H - 280, radius: 110, cdMs: Game.DASH_CD_MS },
+            () => this.triggerDash()
+        );
 
         // HUD — 血條(畫面頂端)
         const barX = (W - Game.HP_BAR_WIDTH) / 2;
@@ -128,13 +142,65 @@ export class Game extends Scene
         this.handleSpawn(time);
         this.handleMobAI(time, delta);
         this.handleMobContactDamage(time);
-        // per Codex review:contact damage 可能 trigger GameOver,這 frame 不能再 attack(會 HitStop/shake 死後畫面)
         if (this.isGameOver) return;
         this.handleAutoAttack(time, delta);
+        this.dashButton.update();
+    }
+
+    private spawnSwingEffect(targetX: number, targetY: number, isCrit: boolean)
+    {
+        const angle = Math.atan2(targetY - this.player.y, targetX - this.player.x);
+        const arcR = isCrit ? 210 : 180;
+        const halfSpread = Math.PI / 6; // 60° 弧
+        const startA = angle - halfSpread;
+        const endA = angle + halfSpread;
+        const g = this.add.graphics();
+        // 外弧(粗,廢土橙;crit 紅)
+        g.lineStyle(10, isCrit ? 0xff4040 : 0xff8830, 0.9);
+        g.beginPath();
+        g.arc(this.player.x, this.player.y, arcR, startA, endA);
+        g.strokePath();
+        // 內弧 highlight(白)
+        g.lineStyle(3, 0xffffff, 0.7);
+        g.beginPath();
+        g.arc(this.player.x, this.player.y, arcR - 6, startA + 0.05, endA - 0.05);
+        g.strokePath();
+        this.tweens.add({
+            targets: g,
+            alpha: 0,
+            duration: isCrit ? 200 : 130,
+            onComplete: () => g.destroy()
+        });
+    }
+
+    private triggerDash()
+    {
+        const now = this.time.now;
+        if (now < this.dashUntilMs) return; // 正在 dash
+        this.dashUntilMs = now + Game.DASH_DURATION_MS;
+        // i-frame 跟 dash 同步(per 楓谷 Hayato/Phantom dash 0.4s 無敵)
+        this.playerInvulnUntilMs = Math.max(this.playerInvulnUntilMs, this.dashUntilMs);
+        // Ghost trail(每 50ms 留一個 fading ghost)
+        const step = 50;
+        const steps = Math.floor(Game.DASH_DURATION_MS / step);
+        for (let i = 0; i < steps; i++) {
+            this.time.delayedCall(i * step, () => {
+                if (this.isGameOver || !this.player.active) return;
+                const ghost = this.add.image(this.player.x, this.player.y, 'player_scavver')
+                    .setScale(0.3).setAlpha(0.5);
+                ghost.setTint(0xff8830).setTintMode(TINT_FILL);
+                if (this.player.flipX) ghost.setFlipX(true);
+                this.tweens.add({
+                    targets: ghost, alpha: 0, duration: 300,
+                    onComplete: () => ghost.destroy()
+                });
+            });
+        }
     }
 
     private handleMovement(delta: number)
     {
+        const isDashing = this.time.now < this.dashUntilMs;
         let dx = 0, dy = 0;
         // 優先吃搖桿(手機),沒搖桿才吃鍵盤(電腦)
         if (this.joystick.active) {
@@ -147,15 +213,28 @@ export class Game extends Scene
             if (this.cursors.down.isDown  || this.wasd.S.isDown) dy += 1;
         }
         const mag = Math.hypot(dx, dy);
-        if (mag < 0.01) return;
-        // joystick 已 normalized,鍵盤需 normalize
-        const normDx = mag > 1 ? dx / mag : dx;
-        const normDy = mag > 1 ? dy / mag : dy;
-        const nx = this.player.x + normDx * Game.MOVE_SPEED * delta;
-        const ny = this.player.y + normDy * Game.MOVE_SPEED * delta;
+        let normDx: number, normDy: number;
+        if (mag < 0.01) {
+            // 沒輸入時,dash 期間照樣按最後方向衝
+            if (!isDashing) return;
+            normDx = this.lastDirX;
+            normDy = this.lastDirY;
+        } else {
+            normDx = mag > 1 ? dx / mag : dx;
+            normDy = mag > 1 ? dy / mag : dy;
+            // 記住方向給下次 dash 用
+            const dirMag = Math.hypot(normDx, normDy);
+            if (dirMag > 0.05) {
+                this.lastDirX = normDx / dirMag;
+                this.lastDirY = normDy / dirMag;
+            }
+        }
+        const speed = Game.MOVE_SPEED * (isDashing ? Game.DASH_SPEED_MULT : 1);
+        const nx = this.player.x + normDx * speed * delta;
+        const ny = this.player.y + normDy * speed * delta;
         this.player.x = Math.max(60, Math.min(W - 60, nx));
         this.player.y = Math.max(60, Math.min(H - 60, ny));
-        if (Math.abs(dx) > 0.1) this.player.setFlipX(dx < 0);
+        if (Math.abs(normDx) > 0.1) this.player.setFlipX(normDx < 0);
     }
 
     private handleSpawn(time: number)
@@ -308,6 +387,9 @@ export class Game extends Scene
 
         const data = target.getData('mob') as MobData;
         data.hp -= dmg;
+
+        // 木棍揮砍視覺(廢土橙弧線從 player 朝 target 揮 60°)
+        this.spawnSwingEffect(target.x, target.y, isCrit);
 
         // Hit flash(白色 fill mode)
         target.setTint(0xffffff).setTintMode(TINT_FILL);

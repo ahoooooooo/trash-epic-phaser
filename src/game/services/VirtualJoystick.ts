@@ -40,9 +40,10 @@ export class VirtualJoystick {
     private attach() {
         const scene = this.scene;
         scene.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-            // 任何 touch 在畫面下半部都啟動搖桿(joystick base 跟到指頭)
+            // joystick 限定「下半屏 + 左半屏」(bottom-left 區),右半留給 Dash button
             if (this.pointerId !== null) return;
-            if (p.y < scene.scale.height * 0.5) return; // 上半屏不接(避免跟 UI 衝)
+            if (p.y < scene.scale.height * 0.5) return;
+            if (p.x > scene.scale.width * 0.5) return;
             this.pointerId = p.id;
             this.baseX = p.x;
             this.baseY = p.y;

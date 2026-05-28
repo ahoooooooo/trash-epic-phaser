@@ -18,6 +18,8 @@ const config: Phaser.Types.Core.GameConfig = {
         height: 1920
     },
     pixelArt: false, // user 拍板:不要像素風,走 BiRefNet 廢土手繪
+    // per Codex review 2026-05-28:手機左手 joystick + 右手 dash 同時觸控,需 2+ pointer
+    input: { activePointers: 3 },
     scene: [
         Boot,
         Preloader,
