@@ -10,6 +10,9 @@ const CY = H / 2;
 // max kill/hour = 3600 / 7.56 × spawn_point_count
 const RESPAWN_CYCLE_MS = 7560;
 
+// Phaser 4 TintModes.FILL enum value(production build 無 Phaser global namespace,hardcode 1)
+const TINT_FILL = 1;
+
 interface SpawnPoint {
     x: number;
     y: number;
@@ -193,7 +196,7 @@ export class Game extends Scene
         }
 
         // 受擊 flash + shake(只在還活著時)
-        this.player.setTint(0xff4040).setTintFill();
+        this.player.setTint(0xff4040).setTintMode(TINT_FILL);
         this.time.delayedCall(120, () => {
             if (!this.isGameOver && this.player.active) this.player.clearTint();
         });
@@ -213,7 +216,7 @@ export class Game extends Scene
     {
         if (this.isGameOver) return; // idempotent
         this.isGameOver = true;
-        this.player.setTint(0x8b3a1f).setTintFill();
+        this.player.setTint(0x8b3a1f).setTintMode(TINT_FILL);
         this.cameras.main.shake(400, 0.025);
         this.time.delayedCall(800, () => {
             if (this.scene.isActive()) this.scene.start('GameOver');
@@ -246,7 +249,7 @@ export class Game extends Scene
         data.hp -= dmg;
 
         // Hit flash(白色 fill mode)
-        target.setTint(0xffffff).setTintFill();
+        target.setTint(0xffffff).setTintMode(TINT_FILL);
         this.time.delayedCall(100, () => target.active && target.clearTint());
 
         // Damage popup(crit 紅大 / 普通橘小)
