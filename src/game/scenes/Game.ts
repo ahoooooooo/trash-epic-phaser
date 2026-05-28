@@ -1,5 +1,6 @@
 import { Scene } from 'phaser';
 import { HitStopService } from '../services/HitStopService';
+import { VirtualJoystick } from '../services/VirtualJoystick';
 
 const W = 1080;
 const H = 1920;
@@ -20,10 +21,16 @@ interface SpawnPoint {
     nextSpawnAt: number;
 }
 
+type MobState = 'wander' | 'chase';
+
 interface MobData {
     hp: number;
     spawnPoint: SpawnPoint;
-    lastContactMs: number; // throttle 對 player 接觸傷害
+    lastContactMs: number;
+    state: MobState;
+    wanderTargetX: number;
+    wanderTargetY: number;
+    nextWanderAt: number; // ms 換 wander target 的下次 timestamp
 }
 
 export class Game extends Scene
@@ -36,6 +43,7 @@ export class Game extends Scene
     private mobs: Phaser.GameObjects.Image[] = [];
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
     private wasd!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
+    private joystick!: VirtualJoystick;
     private attackCooldownMs = 0;
     private hpBarFill!: Phaser.GameObjects.Rectangle;
     private hpText!: Phaser.GameObjects.Text;
@@ -46,7 +54,12 @@ export class Game extends Scene
     private static readonly CRIT_CHANCE = 0.15;
     private static readonly CRIT_MULT = 1.5;
     private static readonly MOVE_SPEED = 0.4;        // 玩家 px/ms
-    private static readonly MOB_SPEED = 0.08;        // 怪 px/ms(玩家 5×,可拉開)
+    private static readonly MOB_SPEED_CHASE = 0.10;  // 怪追擊 px/ms
+    private static readonly MOB_SPEED_WANDER = 0.04; // 怪漫遊 px/ms(慢)
+    private static readonly MOB_AGGRO_RANGE = 350;   // < 進入 chase
+    private static readonly MOB_LOST_RANGE = 500;    // > 退出 chase(hysteresis 防抖)
+    private static readonly MOB_WANDER_RADIUS = 200; // wander target 範圍(spawn point 周圍)
+    private static readonly MOB_WANDER_INTERVAL_MS = 2500; // 換 wander target 週期
     private static readonly MOB_CONTACT_RANGE = 65;  // 圓形碰撞半徑(player 中心 vs mob 中心)
     private static readonly MOB_CONTACT_DAMAGE = 8;
     private static readonly MOB_CONTACT_COOLDOWN_MS = 800; // 怪 0.8s 才能再打一次
@@ -88,6 +101,8 @@ export class Game extends Scene
 
         this.cursors = this.input.keyboard!.createCursorKeys();
         this.wasd = this.input.keyboard!.addKeys('W,A,S,D') as typeof this.wasd;
+        // 手機虛擬搖桿(bottom-left,touch any 下半部觸發)
+        this.joystick = new VirtualJoystick(this, { x: 220, y: H - 280, radius: 130 });
 
         // HUD — 血條(畫面頂端)
         const barX = (W - Game.HP_BAR_WIDTH) / 2;
@@ -101,7 +116,7 @@ export class Game extends Scene
             fontFamily: 'monospace', fontSize: 18, color: '#ffe0c0'
         }).setOrigin(0.5);
 
-        this.add.text(20, H - 60, 'WASD / 方向鍵移動,自動攻擊', {
+        this.add.text(20, H - 60, '搖桿移動 / WASD / 方向鍵 — 自動攻擊', {
             fontFamily: 'sans-serif', fontSize: 22, color: '#a05a30'
         });
     }
@@ -121,18 +136,26 @@ export class Game extends Scene
     private handleMovement(delta: number)
     {
         let dx = 0, dy = 0;
-        if (this.cursors.left.isDown || this.wasd.A.isDown)  dx -= 1;
-        if (this.cursors.right.isDown || this.wasd.D.isDown) dx += 1;
-        if (this.cursors.up.isDown    || this.wasd.W.isDown) dy -= 1;
-        if (this.cursors.down.isDown  || this.wasd.S.isDown) dy += 1;
-        if (dx === 0 && dy === 0) return;
-        const norm = Math.hypot(dx, dy);
-        // per Codex runtime error 2026-05-28: production build 無 Phaser global namespace,改 Math 原生
-        const nx = this.player.x + (dx / norm) * Game.MOVE_SPEED * delta;
-        const ny = this.player.y + (dy / norm) * Game.MOVE_SPEED * delta;
+        // 優先吃搖桿(手機),沒搖桿才吃鍵盤(電腦)
+        if (this.joystick.active) {
+            dx = this.joystick.dx;
+            dy = this.joystick.dy;
+        } else {
+            if (this.cursors.left.isDown || this.wasd.A.isDown)  dx -= 1;
+            if (this.cursors.right.isDown || this.wasd.D.isDown) dx += 1;
+            if (this.cursors.up.isDown    || this.wasd.W.isDown) dy -= 1;
+            if (this.cursors.down.isDown  || this.wasd.S.isDown) dy += 1;
+        }
+        const mag = Math.hypot(dx, dy);
+        if (mag < 0.01) return;
+        // joystick 已 normalized,鍵盤需 normalize
+        const normDx = mag > 1 ? dx / mag : dx;
+        const normDy = mag > 1 ? dy / mag : dy;
+        const nx = this.player.x + normDx * Game.MOVE_SPEED * delta;
+        const ny = this.player.y + normDy * Game.MOVE_SPEED * delta;
         this.player.x = Math.max(60, Math.min(W - 60, nx));
         this.player.y = Math.max(60, Math.min(H - 60, ny));
-        this.player.setFlipX(dx < 0);
+        if (Math.abs(dx) > 0.1) this.player.setFlipX(dx < 0);
     }
 
     private handleSpawn(time: number)
@@ -140,7 +163,15 @@ export class Game extends Scene
         for (const sp of this.spawnPoints) {
             if (sp.mob === null && time >= sp.nextSpawnAt) {
                 const mob = this.add.image(sp.x, sp.y, 'mob_giantrat').setScale(0.18);
-                const data: MobData = { hp: 50, spawnPoint: sp, lastContactMs: -Infinity };
+                const data: MobData = {
+                    hp: 50,
+                    spawnPoint: sp,
+                    lastContactMs: -Infinity,
+                    state: 'wander',
+                    wanderTargetX: sp.x,
+                    wanderTargetY: sp.y,
+                    nextWanderAt: 0
+                };
                 mob.setData('mob', data);
                 sp.mob = mob;
                 this.mobs.push(mob);
@@ -148,17 +179,47 @@ export class Game extends Scene
         }
     }
 
-    private handleMobAI(_time: number, delta: number)
+    private handleMobAI(time: number, delta: number)
     {
         for (const m of this.mobs) {
             if (!m.active) continue;
-            const dx = this.player.x - m.x;
-            const dy = this.player.y - m.y;
-            const d = Math.hypot(dx, dy);
-            if (d < 1) continue;
-            m.x += (dx / d) * Game.MOB_SPEED * delta;
-            m.y += (dy / d) * Game.MOB_SPEED * delta;
-            m.setFlipX(dx < 0);
+            const data = m.getData('mob') as MobData;
+
+            // 距離 player
+            const pdx = this.player.x - m.x;
+            const pdy = this.player.y - m.y;
+            const pd = Math.hypot(pdx, pdy);
+
+            // state transition(hysteresis 防抖)
+            if (data.state === 'wander' && pd < Game.MOB_AGGRO_RANGE) {
+                data.state = 'chase';
+            } else if (data.state === 'chase' && pd > Game.MOB_LOST_RANGE) {
+                data.state = 'wander';
+                data.nextWanderAt = 0; // 立刻換 wander target
+            }
+
+            if (data.state === 'chase') {
+                if (pd < 1) continue;
+                m.x += (pdx / pd) * Game.MOB_SPEED_CHASE * delta;
+                m.y += (pdy / pd) * Game.MOB_SPEED_CHASE * delta;
+                if (Math.abs(pdx) > 1) m.setFlipX(pdx < 0);
+            } else {
+                // wander:每 MOB_WANDER_INTERVAL_MS 隨機選新 target(spawn point 周圍 MOB_WANDER_RADIUS)
+                if (time >= data.nextWanderAt) {
+                    const a = Math.random() * Math.PI * 2;
+                    const r = Math.random() * Game.MOB_WANDER_RADIUS;
+                    data.wanderTargetX = data.spawnPoint.x + Math.cos(a) * r;
+                    data.wanderTargetY = data.spawnPoint.y + Math.sin(a) * r;
+                    data.nextWanderAt = time + Game.MOB_WANDER_INTERVAL_MS;
+                }
+                const wdx = data.wanderTargetX - m.x;
+                const wdy = data.wanderTargetY - m.y;
+                const wd = Math.hypot(wdx, wdy);
+                if (wd < 5) continue; // 已到 target,等下次換
+                m.x += (wdx / wd) * Game.MOB_SPEED_WANDER * delta;
+                m.y += (wdy / wd) * Game.MOB_SPEED_WANDER * delta;
+                if (Math.abs(wdx) > 1) m.setFlipX(wdx < 0);
+            }
         }
     }
 
