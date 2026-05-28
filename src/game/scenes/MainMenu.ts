@@ -14,6 +14,9 @@ export class MainMenu extends Scene
 
     create ()
     {
+        // per user 2026-05-29 bug 報告:死後重進不了 — starting flag 是 instance field,
+        // scene 第二次進來時還是 true 卡住。每次 create() reset。
+        this.starting = false;
         // 1. painted 廢土背景(沿用 wasteland map 當 ambience)
         const bg = this.add.image(W / 2, H / 2, 'map_wasteland_topdown');
         bg.setDisplaySize(W, H);
