@@ -162,6 +162,8 @@ export class Game extends Scene
     // 主角動作 state machine — 楓谷風:不同武器類別不同 attack 動作
     private playerAnimState: 'idle' | 'walking' = 'idle';
     private playerStateTween?: Phaser.Tweens.Tween;
+    // VFX-A:腳下落地陰影(半透明黑橢圓,跟隨移動增立體感)
+    private playerShadow!: Phaser.GameObjects.Ellipse;
 
     private static readonly PERSIST_THROTTLE_MS = 3000; // per Codex review
 
@@ -220,6 +222,8 @@ export class Game extends Scene
         const enterPos = SaveService.instance.consumeMapEnterPos();
         const startX = enterPos.x ?? this.mapConfig.playerStartX;
         const startY = enterPos.y ?? this.mapConfig.playerStartY;
+        // VFX-A:玩家落地陰影(在 player 下方,depth -10 蓋在地圖上、躲在 sprite 下)
+        this.playerShadow = this.makeGroundShadow(startX, startY, 70);
         this.player = this.add.sprite(startX, startY, 'player_idle').setScale(0.3);
         // Phase 4b-10 register walk anim 一次性 — frames 跨不同 texture key
         if (!this.anims.exists('player_walk')) {
@@ -672,6 +676,11 @@ export class Game extends Scene
     {
         if (this.isGameOver) return;
         if (this.questDialogOpen) return;
+        // VFX-A:玩家陰影跟腳(origin 中心,腳在下方 ~ displayHeight*0.42)
+        if (this.playerShadow) {
+            this.playerShadow.x = this.player.x;
+            this.playerShadow.y = this.player.y + this.player.displayHeight * 0.42;
+        }
         this.handleMovement(delta);
         this.handleSpawn(time);
         this.trySpawnBoss(time);
@@ -930,30 +939,62 @@ export class Game extends Scene
             this.setPlayerAnimState(s, true);
         });
     }
+    // VFX-A:建立腳下落地陰影橢圓(扁圓 + 柔和暗影色,depth -10 躲在 sprite 下、蓋在地圖上)
+    private makeGroundShadow(x: number, y: number, radiusX: number): Phaser.GameObjects.Ellipse {
+        const sh = this.add.ellipse(x, y, radiusX, radiusX * 0.42, 0x0f0c0a, 0.34);
+        sh.setDepth(-10);
+        return sh;
+    }
+
     private spawnSwingEffect(targetX: number, targetY: number, isCrit: boolean)
     {
-        const angle = Math.atan2(targetY - this.player.y, targetX - this.player.x);
-        const arcR = isCrit ? 210 : 180;
-        const halfSpread = Math.PI / 6; // 60° 弧
+        const px = this.player.x, py = this.player.y;
+        const angle = Math.atan2(targetY - py, targetX - px);
+        const arcR = isCrit ? 220 : 188;
+        const halfSpread = isCrit ? Math.PI / 4.5 : Math.PI / 6; // crit 弧更開
         const startA = angle - halfSpread;
         const endA = angle + halfSpread;
         const g = this.add.graphics();
-        // 外弧(粗,廢土橙;crit 紅)
-        g.lineStyle(10, isCrit ? 0xff4040 : 0xff8830, 0.9);
+        g.setDepth(450);
+        // 外弧(最粗,廢土橙;crit 鏽紅)— 飽滿底層
+        g.lineStyle(isCrit ? 18 : 13, isCrit ? 0x8b3a1f : 0xa05a30, 0.55);
         g.beginPath();
-        g.arc(this.player.x, this.player.y, arcR, startA, endA);
+        g.arc(px, py, arcR, startA, endA);
         g.strokePath();
-        // 內弧 highlight(白)
-        g.lineStyle(3, 0xffffff, 0.7);
+        // 中弧(主色暖橙 / crit 亮紅)— 弧的本體
+        g.lineStyle(isCrit ? 10 : 8, isCrit ? 0xff4040 : 0xff8830, 0.95);
         g.beginPath();
-        g.arc(this.player.x, this.player.y, arcR - 6, startA + 0.05, endA - 0.05);
+        g.arc(px, py, arcR, startA + 0.03, endA - 0.03);
         g.strokePath();
+        // 內弧高光(米白)— 銳利刀刃光
+        g.lineStyle(isCrit ? 4 : 3, 0xffe0c0, 0.85);
+        g.beginPath();
+        g.arc(px, py, arcR - (isCrit ? 9 : 7), startA + 0.08, endA - 0.08);
+        g.strokePath();
+        // 揮砍掃過 — 微微旋轉 + 縮放 + 淡出(更有「掃」的動感)
         this.tweens.add({
             targets: g,
             alpha: 0,
-            duration: isCrit ? 200 : 130,
+            duration: isCrit ? 220 : 140,
             onComplete: () => g.destroy()
         });
+        // 末端火花 spark(弧的尾端,朝外噴小碎光)
+        const tipX = px + Math.cos(endA) * arcR;
+        const tipY = py + Math.sin(endA) * arcR;
+        const sparkN = isCrit ? 7 : 4;
+        for (let i = 0; i < sparkN; i++) {
+            const sa = endA + (Math.random() - 0.5) * 1.2;
+            const sd = (isCrit ? 36 : 22) + Math.random() * (isCrit ? 40 : 24);
+            const spark = this.add.circle(tipX, tipY, isCrit ? 4 : 3, isCrit ? 0xffe060 : 0xffe0c0, 0.95).setDepth(451);
+            this.tweens.add({
+                targets: spark,
+                x: tipX + Math.cos(sa) * sd,
+                y: tipY + Math.sin(sa) * sd,
+                alpha: 0, scale: 0.2,
+                duration: isCrit ? 240 : 170, ease: 'Quad.out',
+                onComplete: () => spark.destroy()
+            });
+        }
     }
 
     private handleMovement(delta: number)
@@ -1016,6 +1057,8 @@ export class Game extends Scene
                     nextWanderAt: 0
                 };
                 mob.setData('mob', data);
+                // VFX-A:怪落地陰影(依 mob displayWidth 縮放)
+                mob.setData('shadow', this.makeGroundShadow(mob.x, mob.y, Math.max(36, mob.displayWidth * 0.7)));
                 sp.mob = mob;
                 this.mobs.push(mob);
             }
@@ -1027,6 +1070,13 @@ export class Game extends Scene
         for (const m of this.mobs) {
             if (!m.active) continue;
             const data = m.getData('mob') as MobData;
+
+            // VFX-A:怪陰影跟腳(在任何 continue 前先同步)
+            const sh = m.getData('shadow') as Phaser.GameObjects.Ellipse | undefined;
+            if (sh) {
+                sh.x = m.x;
+                sh.y = m.y + m.displayHeight * 0.42;
+            }
 
             // 距離 player
             const pdx = this.player.x - m.x;
@@ -1201,6 +1251,15 @@ export class Game extends Scene
         // 木棍揮砍視覺(廢土橙弧線從 player 朝 target 揮 60°)
         this.spawnSwingEffect(target.x, target.y, isCrit);
 
+        // VFX-A:命中點衝擊環 — 白橙細環瞬間擴張淡出(增打擊質感,不碰 mob scale 避免與死亡 tween 衝突)
+        const impactRing = this.add.circle(target.x, target.y, isCrit ? 18 : 12, 0xffe0c0, 0)
+            .setStrokeStyle(isCrit ? 5 : 3, isCrit ? 0xffe060 : 0xffe0c0, 0.95).setDepth(455);
+        this.tweens.add({
+            targets: impactRing, scale: isCrit ? 3.2 : 2.2, alpha: 0,
+            duration: isCrit ? 240 : 160, ease: 'Quad.out',
+            onComplete: () => impactRing.destroy()
+        });
+
         // Hit flash + 還原:rage boss 用 0xff2020,普通 用 blueprint.tint(per Codex review)
         target.setTint(0xffffff).setTintMode(TINT_FILL);
         this.time.delayedCall(100, () => {
@@ -1217,22 +1276,37 @@ export class Game extends Scene
             }
         });
 
-        // Damage popup(crit 紅大 / 普通橘小)
-        const dmgText = this.add.text(target.x, target.y - 50, isCrit ? `${dmg}!` : `${dmg}`, {
+        // Damage popup — crit:大、亮黃紅、彈跳重擊感;普通:小、暖橙、輕飄
+        const jitterX = (Math.random() - 0.5) * 40;
+        const dmgText = this.add.text(target.x + jitterX, target.y - 56, isCrit ? `${dmg}!` : `${dmg}`, {
             fontFamily: 'sans-serif',
-            fontSize: isCrit ? 56 : 32,
-            color: isCrit ? '#ff4040' : '#ff8830',
-            stroke: '#1a1612', strokeThickness: isCrit ? 6 : 4,
-            fontStyle: isCrit ? 'bold' : 'normal'
-        }).setOrigin(0.5);
-        this.tweens.add({
-            targets: dmgText,
-            y: dmgText.y - (isCrit ? 110 : 80),
-            alpha: 0,
-            scale: isCrit ? 1.2 : 1,
-            duration: isCrit ? 800 : 600,
-            onComplete: () => dmgText.destroy()
-        });
+            fontSize: isCrit ? 78 : 36,
+            color: isCrit ? '#ffe060' : '#ff8830',
+            stroke: isCrit ? '#8b3a1f' : '#1a1612', strokeThickness: isCrit ? 10 : 4,
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(460);
+        if (isCrit) {
+            // crit:從大砸下 → 回彈 → 飄升淡出(重擊震感)
+            dmgText.setScale(1.9).setAngle((Math.random() - 0.5) * 16);
+            this.tweens.chain({
+                targets: dmgText,
+                tweens: [
+                    { scale: 1.1, angle: 0, duration: 130, ease: 'Back.out' },
+                    { y: dmgText.y - 120, alpha: 0, scale: 1.25, duration: 620, delay: 90, ease: 'Quad.out' }
+                ],
+                onComplete: () => dmgText.destroy()
+            });
+        } else {
+            dmgText.setScale(0.7);
+            this.tweens.chain({
+                targets: dmgText,
+                tweens: [
+                    { scale: 1, duration: 90, ease: 'Back.out' },
+                    { y: dmgText.y - 78, alpha: 0, duration: 540, ease: 'Quad.out' }
+                ],
+                onComplete: () => dmgText.destroy()
+            });
+        }
 
         // per Codex review:shake 必須在 HitStop 之前,否則 shake duration 被 timescale 拉長變黏膩
         // Phase 4b-12 (F) HitStop tweak — 0.05 too frozen, 0.10 feels more "snap"
@@ -1269,6 +1343,14 @@ export class Game extends Scene
             }
             // Phase 4b-12 (A) 死亡爆碎屑 + sprite 膨脹消失
             this.spawnDeathBurst(target.x, target.y, data.blueprint.isBoss === true);
+            // VFX-A:陰影同步淡出消失
+            const deadShadow = target.getData('shadow') as Phaser.GameObjects.Ellipse | undefined;
+            if (deadShadow) {
+                this.tweens.add({
+                    targets: deadShadow, alpha: 0, scaleX: 1.3, scaleY: 1.3,
+                    duration: 180, onComplete: () => deadShadow.destroy()
+                });
+            }
             this.tweens.add({
                 targets: target, scale: target.scaleX * 1.4, alpha: 0,
                 duration: 180, ease: 'Quad.out',
@@ -1386,6 +1468,8 @@ export class Game extends Scene
             isRaging: false
         };
         mob.setData('mob', data);
+        // VFX-A:boss 大陰影
+        mob.setData('shadow', this.makeGroundShadow(mob.x, mob.y, Math.max(80, mob.displayWidth * 0.7)));
         this.mobs.push(mob);
 
         // Boss spawn 視覺
@@ -1484,21 +1568,38 @@ export class Game extends Scene
 
     // Phase 4b-12 (A) 怪死亡爆碎屑 — 廢土碎屑粒子 8-12 顆飛濺
     private spawnDeathBurst(x: number, y: number, isBoss: boolean) {
-        const count = isBoss ? 24 : 10;
-        const palette = [0x4a3018, 0x8b3a1f, 0xb08850, 0x2a2520, 0xa05a30];
+        // 1) 瞬間白閃核心 — 死亡那一下的高光點
+        const flash = this.add.circle(x, y, isBoss ? 50 : 30, 0xffe0c0, 0.9).setDepth(424);
+        this.tweens.add({
+            targets: flash, scale: isBoss ? 2.4 : 1.8, alpha: 0,
+            duration: isBoss ? 220 : 150, ease: 'Quad.out',
+            onComplete: () => flash.destroy()
+        });
+        // 2) 灰塵環 — 沿地面散開淡化(per boss-effects 規則:散開非縮小)
+        const dust = this.add.circle(x, y + 20, isBoss ? 30 : 20, 0x4a3018, 0)
+            .setStrokeStyle(isBoss ? 8 : 5, 0xb08850, 0.6).setDepth(421);
+        this.tweens.add({
+            targets: dust, scale: isBoss ? 5 : 3.4, alpha: 0,
+            duration: isBoss ? 560 : 420, ease: 'Cubic.out',
+            onComplete: () => dust.destroy()
+        });
+        // 3) 碎屑爆射 — 比原本更猛(數量↑、距離↑、加重力下墜感)
+        const count = isBoss ? 40 : 18;
+        const palette = [0x4a3018, 0x8b3a1f, 0xb08850, 0x2a2520, 0xa05a30, 0x8b6020];
         for (let i = 0; i < count; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const dist = isBoss ? 60 + Math.random() * 180 : 40 + Math.random() * 110;
-            const size = 2 + Math.random() * (isBoss ? 6 : 4);
+            const dist = isBoss ? 90 + Math.random() * 230 : 55 + Math.random() * 150;
+            const size = 2 + Math.random() * (isBoss ? 8 : 5);
             const color = palette[Math.floor(Math.random() * palette.length)];
-            const p = this.add.rectangle(x, y, size, size, color, 0.95).setDepth(420);
+            const p = this.add.rectangle(x, y, size, size, color, 0.96).setDepth(422);
             this.tweens.add({
                 targets: p,
                 x: x + Math.cos(angle) * dist,
-                y: y + Math.sin(angle) * dist + 30,
+                y: y + Math.sin(angle) * dist + (isBoss ? 70 : 45), // 重力下墜
                 alpha: 0,
-                angle: (Math.random() - 0.5) * 540,
-                duration: 500 + Math.random() * 300,
+                scale: 0.4,
+                angle: (Math.random() - 0.5) * 720,
+                duration: 480 + Math.random() * 360,
                 ease: 'Cubic.out',
                 onComplete: () => p.destroy()
             });
@@ -1521,30 +1622,57 @@ export class Game extends Scene
         this.mpBarFill.width = this.hudPlateBarW - 4;
         this.mpText.setText(`MP  ${maxMp} / ${maxMp}`);
 
-        // 大字「LEVEL UP!」中央停 1.5s
+        // 全屏暖橙光暈 — 螢幕固定的徑向 glow,從中央炸開淡化(壯觀感)
+        const glow = this.add.circle(VIEW_W / 2, VIEW_H / 2, 120, 0xff8830, 0.55)
+            .setDepth(1900).setScrollFactor(0);
+        this.tweens.add({
+            targets: glow, scale: 9, alpha: 0,
+            duration: 700, ease: 'Quad.out',
+            onComplete: () => glow.destroy()
+        });
+
+        // 大字「LEVEL UP!」中央停 1.5s — 帶金色描邊 + 重彈
         const txt = levelsGained > 1 ? `LEVEL UP ×${levelsGained}!` : 'LEVEL UP!';
         const popup = this.add.text(this.player.x, this.player.y - 120, txt, {
-            fontFamily: 'sans-serif', fontSize: 96, color: '#ffe0c0', fontStyle: 'bold',
-            stroke: '#ff8830', strokeThickness: 10
-        }).setOrigin(0.5).setDepth(2000).setScale(0.2);
+            fontFamily: 'sans-serif', fontSize: 104, color: '#ffe0c0', fontStyle: 'bold',
+            stroke: '#ff8830', strokeThickness: 12
+        }).setOrigin(0.5).setDepth(2000).setScale(0.1);
         this.tweens.chain({
             targets: popup,
             tweens: [
-                { scale: 1.4, duration: 250, ease: 'Back.out' },
-                { scale: 1.2, duration: 80 },
-                { alpha: 0, y: popup.y - 80, duration: 700, delay: 600 }
+                { scale: 1.5, duration: 260, ease: 'Back.out' },
+                { scale: 1.25, duration: 90, ease: 'Sine.inOut' },
+                { alpha: 0, y: popup.y - 90, duration: 700, delay: 600 }
             ],
             onComplete: () => popup.destroy()
         });
 
-        // 三道金色光環擴散
-        for (let i = 0; i < 3; i++) {
-            const ring = this.add.circle(this.player.x, this.player.y, 60, 0xff8830, 0)
-                .setStrokeStyle(8, 0xffe060, 0.95).setDepth(500);
+        // 多層金環擴散 — 4 道,粗細與顏色交錯
+        for (let i = 0; i < 4; i++) {
+            const ring = this.add.circle(this.player.x, this.player.y, 50, 0xff8830, 0)
+                .setStrokeStyle(i % 2 === 0 ? 9 : 5, i % 2 === 0 ? 0xffe060 : 0xff8830, 0.95)
+                .setDepth(500);
             this.tweens.add({
-                targets: ring, radius: 320, alpha: 0,
-                duration: 1100, delay: i * 180,
+                targets: ring, radius: 360, alpha: 0,
+                duration: 1150, delay: i * 150, ease: 'Cubic.out',
                 onComplete: () => ring.destroy()
+            });
+        }
+
+        // 升騰金色光點 — 從玩家腳下往上飄(升級的「提升」意象)
+        for (let i = 0; i < 12; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const r = Math.random() * 70;
+            const sx = this.player.x + Math.cos(a) * r;
+            const sy = this.player.y + 40 + Math.random() * 30;
+            const mote = this.add.circle(sx, sy, 4 + Math.random() * 4, 0xffe060, 0.95).setDepth(501);
+            this.tweens.add({
+                targets: mote,
+                y: sy - 200 - Math.random() * 120,
+                alpha: 0, scale: 0.2,
+                duration: 800 + Math.random() * 400, delay: Math.random() * 200,
+                ease: 'Quad.out',
+                onComplete: () => mote.destroy()
             });
         }
     }
@@ -1555,23 +1683,32 @@ export class Game extends Scene
         void amount; // 不視覺顯示
         const dropX = x + (Math.random() - 0.5) * 30;
         const dropY = y + (Math.random() - 0.5) * 30;
-        const coin = this.add.circle(dropX, dropY - 40, 14, 0xffe060, 1)
-            .setStrokeStyle(2, 0x8b6020).setDepth(400);
-        // 啵跳 — 上升再落下
+        // 金幣本體(更亮的金 + 較粗鏽金邊,立體幣感)
+        const coin = this.add.circle(dropX, dropY - 40, 15, 0xffe060, 1)
+            .setStrokeStyle(3, 0x8b6020).setDepth(400);
+        // 起跳瞬間的高光點 — 快速淡出(在磁吸前消失,不需跟隨)
+        const glint = this.add.circle(dropX - 4, dropY - 44, 4, 0xfff6d0, 0.95).setDepth(401);
+        this.tweens.add({
+            targets: glint, alpha: 0, scale: 0.3, duration: 280, ease: 'Quad.out',
+            onComplete: () => glint.destroy()
+        });
+        // 啵跳 — 上升再彈落
         this.tweens.chain({
             targets: coin,
             tweens: [
-                { y: dropY - 80, duration: 180, ease: 'Quad.out' },
-                { y: dropY, duration: 200, ease: 'Bounce.out' }
+                { y: dropY - 84, duration: 180, ease: 'Quad.out' },
+                { y: dropY, duration: 220, ease: 'Bounce.out' }
             ]
         });
-        // 閃光環
-        const ring = this.add.circle(dropX, dropY, 20, 0xffe060, 0)
-            .setStrokeStyle(3, 0xffe060, 0.8).setDepth(399);
-        this.tweens.add({
-            targets: ring, radius: 60, alpha: 0, duration: 400,
-            onComplete: () => ring.destroy()
-        });
+        // 落地閃光環 ×2(交錯擴散)
+        for (let i = 0; i < 2; i++) {
+            const ring = this.add.circle(dropX, dropY, 18, 0xffe060, 0)
+                .setStrokeStyle(3, 0xffe060, 0.8).setDepth(399);
+            this.tweens.add({
+                targets: ring, radius: 64, alpha: 0, duration: 440, delay: i * 130,
+                onComplete: () => ring.destroy()
+            });
+        }
         // 加進磁吸 queue,player 靠近自動拾取
         this.pendingPickups.push({
             obj: coin,
@@ -1583,21 +1720,31 @@ export class Game extends Scene
     spawnDropPickup(x: number, y: number, color: number, label: string, onCollect: () => void) {
         const dropX = x + (Math.random() - 0.5) * 60;
         const dropY = y + (Math.random() - 0.5) * 30;
-        const icon = this.add.rectangle(dropX, dropY - 40, 24, 24, color, 1)
-            .setStrokeStyle(2, 0xffe0c0, 0.9).setDepth(400);
+        const icon = this.add.rectangle(dropX, dropY - 40, 26, 26, color, 1)
+            .setStrokeStyle(3, 0xffe0c0, 0.95).setDepth(400).setAngle(45);
+        // 起跳高光點(快速淡出)
+        const glint = this.add.circle(dropX - 5, dropY - 46, 4, 0xffffff, 0.85).setDepth(401);
+        this.tweens.add({
+            targets: glint, alpha: 0, scale: 0.3, duration: 300, ease: 'Quad.out',
+            onComplete: () => glint.destroy()
+        });
+        // 啵跳 + 邊旋轉落地(更有「掉寶」感)
         this.tweens.chain({
             targets: icon,
             tweens: [
-                { y: dropY - 80, duration: 180, ease: 'Quad.out' },
-                { y: dropY, duration: 220, ease: 'Bounce.out' }
+                { y: dropY - 84, angle: 0, duration: 180, ease: 'Quad.out' },
+                { y: dropY, duration: 240, ease: 'Bounce.out' }
             ]
         });
-        const ring = this.add.circle(dropX, dropY, 24, color, 0)
-            .setStrokeStyle(3, color, 0.8).setDepth(399);
-        this.tweens.add({
-            targets: ring, radius: 80, alpha: 0, duration: 500,
-            onComplete: () => ring.destroy()
-        });
+        // 稀有度雙環擴散(用 item 顏色)
+        for (let i = 0; i < 2; i++) {
+            const ring = this.add.circle(dropX, dropY, 24, color, 0)
+                .setStrokeStyle(3, color, 0.85).setDepth(399);
+            this.tweens.add({
+                targets: ring, radius: 88, alpha: 0, duration: 520, delay: i * 140,
+                onComplete: () => ring.destroy()
+            });
+        }
         const tag = this.add.text(dropX, dropY - 32, label, {
             fontFamily: 'sans-serif', fontSize: 16, color: '#ffe0c0',
             stroke: '#1a1612', strokeThickness: 2
