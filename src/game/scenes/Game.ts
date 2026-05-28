@@ -188,15 +188,11 @@ export class Game extends Scene
         this.cameras.main.setBackgroundColor(this.mapConfig.bgColor);
         this.cameras.main.setBounds(0, 0, mapW, mapH);
 
-        // Phase 4b-9 — 改用 Phase 3b' SDXL painted 廢土 backgrounds(楓谷風 painted)
-        // painted PNG 的 sky 區是 transparent → 底層先填廢土褐色,painted 在上層補 painterly 細節
-        const groundBase = this.add.rectangle(mapW / 2, mapH / 2, mapW, mapH, 0x3a2818);
-        groundBase.setDepth(-200);
-        const bgKey = this.mapConfig.id === 'guild_hall' ? 'bg_zone1_mid_ruins' : 'bg_zone1_scrap_far';
+        // Phase 4b-9 — GPT-4o painted top-down 廢土地圖(楓谷風,單張 opaque 全鋪滿)
+        const bgKey = this.mapConfig.id === 'guild_hall' ? 'map_guild_hall_topdown' : 'map_wasteland_topdown';
         const bg = this.add.image(mapW / 2, mapH / 2, bgKey);
         bg.setDisplaySize(mapW, mapH);
         bg.setDepth(-100);
-        bg.setAlpha(0.85);
 
         // 玩家出生點:從 SaveService(若有 portal enter pos)或 mapConfig.playerStart
         const enterPos = SaveService.instance.consumeMapEnterPos();
