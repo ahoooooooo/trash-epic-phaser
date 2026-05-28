@@ -29,12 +29,13 @@ export class VirtualJoystick {
     get active(): boolean { return this.pointerId !== null; }
 
     private create() {
-        // 半透明 base 圓(廢土橙)
+        // UI depth = 1000+(高於 mob sprite 預設 0)
         this.base = this.scene.add.circle(this.baseX, this.baseY, this.radius, 0xff8830, 0.18)
-            .setStrokeStyle(3, 0xff8830, 0.6);
-        // 中心 stick
+            .setStrokeStyle(3, 0xff8830, 0.6)
+            .setDepth(1000);
         this.stick = this.scene.add.circle(this.baseX, this.baseY, this.radius * 0.42, 0xff8830, 0.55)
-            .setStrokeStyle(2, 0xffffff, 0.4);
+            .setStrokeStyle(2, 0xffffff, 0.4)
+            .setDepth(1001);
     }
 
     private attach() {

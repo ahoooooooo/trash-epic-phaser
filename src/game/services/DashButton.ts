@@ -28,18 +28,17 @@ export class DashButton {
     }
 
     private create() {
-        // base 圓(廢土暖橙)
         this.base = this.scene.add.circle(this.cx, this.cy, this.radius, 0xff8830, 0.55)
-            .setStrokeStyle(3, 0xffe0c0, 0.8);
-        // icon
+            .setStrokeStyle(3, 0xffe0c0, 0.8)
+            .setDepth(1000);
         this.icon = this.scene.add.text(this.cx, this.cy, '⟪', {
             fontFamily: 'sans-serif', fontSize: this.radius * 1.1, color: '#1a1612', fontStyle: 'bold'
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setDepth(1002);
         this.label = this.scene.add.text(this.cx, this.cy + this.radius * 0.62, '閃', {
             fontFamily: 'sans-serif', fontSize: 22, color: '#1a1612', fontStyle: 'bold'
-        }).setOrigin(0.5);
-        // CD overlay(deep mask,radial fill 顯示 cooldown)
-        this.cdOverlay = this.scene.add.graphics();
+        }).setOrigin(0.5).setDepth(1002);
+        // CD overlay 在 icon 下方,base 上方
+        this.cdOverlay = this.scene.add.graphics().setDepth(1001);
     }
 
     private attach() {

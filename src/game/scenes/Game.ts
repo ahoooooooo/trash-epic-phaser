@@ -118,17 +118,19 @@ export class Game extends Scene
             () => this.triggerDash()
         );
 
-        // HUD — 血條(畫面頂端)
+        // HUD — 血條(畫面頂端,UI depth 高於 mob 預設 0)
         const barX = (W - Game.HP_BAR_WIDTH) / 2;
         const barY = 50;
         this.add.rectangle(barX, barY, Game.HP_BAR_WIDTH, Game.HP_BAR_HEIGHT, 0x2a1010)
             .setOrigin(0, 0)
-            .setStrokeStyle(2, 0x8b3a1f);
+            .setStrokeStyle(2, 0x8b3a1f)
+            .setDepth(1000);
         this.hpBarFill = this.add.rectangle(barX + 2, barY + 2, Game.HP_BAR_WIDTH - 4, Game.HP_BAR_HEIGHT - 4, 0xc23a1a)
-            .setOrigin(0, 0);
+            .setOrigin(0, 0)
+            .setDepth(1001);
         this.hpText = this.add.text(W / 2, barY + Game.HP_BAR_HEIGHT / 2, `${this.playerHP} / ${Game.PLAYER_MAX_HP}`, {
             fontFamily: 'monospace', fontSize: 18, color: '#ffe0c0'
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setDepth(1002);
 
         this.add.text(20, H - 60, '搖桿移動 / WASD / 方向鍵 — 自動攻擊', {
             fontFamily: 'sans-serif', fontSize: 22, color: '#a05a30'
