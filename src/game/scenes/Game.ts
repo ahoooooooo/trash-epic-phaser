@@ -568,11 +568,13 @@ export class Game extends Scene
             this.minimap.fillStyle(0x4080ff, 1);
             this.minimap.fillCircle(px(this.npcClerk.x), py(this.npcClerk.y), 4);
         }
-        // portal(廢土橙環)
+        // portal(廢土橙環)— per Codex Phase 4a #99 fix:production build 無 global Phaser
+        // 不能用 instanceof Phaser.GameObjects.Arc。用 setData('isPortalRing') 標記
         for (const p of this.portals) {
-            if (p instanceof Phaser.GameObjects.Arc && p.fillColor === 0xff8830) {
+            const pp = p as unknown as { x: number; y: number; getData?: (key: string) => unknown };
+            if (pp.getData && pp.getData('isPortalRing')) {
                 this.minimap.lineStyle(2, 0xff8830, 0.9);
-                this.minimap.strokeCircle(px(p.x), py(p.y), 4);
+                this.minimap.strokeCircle(px(pp.x), py(pp.y), 4);
             }
         }
         // player(綠廢土,大一點)
@@ -719,6 +721,7 @@ export class Game extends Scene
         // 傳送門:廢土橙圓形 + label,tap 切地圖
         const ring = this.add.circle(p.x, p.y, 60, 0xff8830, 0.35)
             .setStrokeStyle(4, 0xffe0c0, 0.9);
+        ring.setData('isPortalRing', true); // per Phaser 4 prod build no global Phaser fix
         ring.setInteractive({ useHandCursor: true });
         // 漂浮動畫
         this.tweens.add({
