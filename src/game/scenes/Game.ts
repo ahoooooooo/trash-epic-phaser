@@ -1,4 +1,4 @@
-import { Scene, Geom } from 'phaser';
+import { Scene } from 'phaser';
 import { HitStopService } from '../services/HitStopService';
 import { VirtualJoystick } from '../services/VirtualJoystick';
 import { SaveService } from '../services/SaveService';
@@ -569,13 +569,12 @@ export class Game extends Scene
             this.add.circle(rivetR, 0, 4, 0x4a3a30).setStrokeStyle(1, 0x1a1612, 0.8),
         ];
         container.add([outerRing, inner, tintGlow, iconText, ...rivets, badgeBg, countText]);
-        // hit area = 大圓(讓 padding 不漏)
-        container.setSize((radius + 3) * 2, (radius + 3) * 2);
-        container.setInteractive({
-            hitArea: new Geom.Circle(0, 0, radius + 3),
-            hitAreaCallback: Geom.Circle.Contains,
-            useHandCursor: true
-        });
+        // hit area:container.setSize + setInteractive 預設用 size 矩形(per Phase 4a #99 + 4b-13:
+        // production build 無 global Phaser,Geom.Circle 在 minified bundle 被當 Phaser.Geom.X
+        // 造成 ReferenceError → Game.create crash → 進不去)
+        const hitSize = (radius + 3) * 2;
+        container.setSize(hitSize, hitSize);
+        container.setInteractive({ useHandCursor: true });
         container.on('pointerdown', () => {
             // 觸控反饋:scale 1→0.9→1 200ms
             this.tweens.add({
