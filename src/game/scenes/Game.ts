@@ -31,7 +31,7 @@ const TINT_FILL = 1;
 interface SpawnPoint {
     x: number;
     y: number;
-    mob: Phaser.GameObjects.Image | null;
+    mob: Phaser.GameObjects.Sprite | null;
     nextSpawnAt: number;
     blueprintIdx: number; // 該 spawn point 固定生哪種 mob
 }
@@ -61,19 +61,19 @@ interface MobBlueprint {
 const MOB_BLUEPRINTS: MobBlueprint[] = [
     {
         id: 'giantrat', type: 'Rat',
-        spriteKey: 'mob_giantrat', scale: 0.18,
+        spriteKey: 'mob_giantrat_run_a', scale: 0.18,
         hp: 50, speedChase: 0.10, speedWander: 0.04,
         contactDamage: 8, expReward: 5, goldReward: 3
     },
     {
         id: 'centipede', type: 'Insect',
-        spriteKey: 'mob_centipede', scale: 0.14,
+        spriteKey: 'mob_centipede_wave_a', scale: 0.14,
         hp: 80, speedChase: 0.07, speedWander: 0.03,
         contactDamage: 12, expReward: 8, goldReward: 5
     },
     {
         id: 'scrap_drone', type: 'Robot',
-        spriteKey: 'mob_giantrat', scale: 0.16, tint: 0x8090a0,
+        spriteKey: 'mob_giantrat_run_a', scale: 0.16, tint: 0x8090a0,
         hp: 35, speedChase: 0.14, speedWander: 0.05,
         contactDamage: 6, expReward: 6, goldReward: 4
     }
@@ -83,7 +83,7 @@ const MOB_BLUEPRINTS: MobBlueprint[] = [
 const BOSS_GIANTRAT: MobBlueprint = {
     id: 'boss_giantrat',
     type: 'Rat',
-    spriteKey: 'mob_giantrat',
+    spriteKey: 'mob_giantrat_run_a',
     scale: 0.40,           // boss 是普通 mob 2× 大
     tint: 0xff6020,        // 紅 fill(blood-soaked giant)
     hp: 600,
@@ -117,7 +117,7 @@ export class Game extends Scene
     private playerInvulnUntilMs = 0;
     private isGameOver = false;
     private spawnPoints: SpawnPoint[] = [];
-    private mobs: Phaser.GameObjects.Image[] = [];
+    private mobs: Phaser.GameObjects.Sprite[] = [];
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
     private wasd!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
     private joystick!: VirtualJoystick;
@@ -207,6 +207,23 @@ export class Game extends Scene
                     { key: 'player_walk_r' },
                     { key: 'player_walk_l' }
                 ],
+                frameRate: 6,
+                repeat: -1
+            });
+        }
+        // Phase 4b-11 mob anims(2-frame loops,scene-scope)
+        if (!this.anims.exists('giantrat_run')) {
+            this.anims.create({
+                key: 'giantrat_run',
+                frames: [{ key: 'mob_giantrat_run_a' }, { key: 'mob_giantrat_run_b' }],
+                frameRate: 8,
+                repeat: -1
+            });
+        }
+        if (!this.anims.exists('centipede_wave')) {
+            this.anims.create({
+                key: 'centipede_wave',
+                frames: [{ key: 'mob_centipede_wave_a' }, { key: 'mob_centipede_wave_b' }],
                 frameRate: 6,
                 repeat: -1
             });
@@ -787,10 +804,13 @@ export class Game extends Scene
         for (const sp of this.spawnPoints) {
             if (sp.mob === null && time >= sp.nextSpawnAt) {
                 const bp = MOB_BLUEPRINTS[sp.blueprintIdx];
-                const mob = this.add.image(sp.x, sp.y, bp.spriteKey).setScale(bp.scale);
+                const mob = this.add.sprite(sp.x, sp.y, bp.spriteKey).setScale(bp.scale);
                 if (bp.tint !== undefined) {
                     mob.setTint(bp.tint).setTintMode(TINT_FILL);
                 }
+                // Phase 4b-11 play frame anim by blueprint id
+                if (bp.id === 'centipede') mob.play('centipede_wave');
+                else mob.play('giantrat_run'); // giantrat + scrap_drone 都用 4-leg gallop
                 const data: MobData = {
                     blueprint: bp,
                     hp: bp.hp,
@@ -1126,10 +1146,11 @@ export class Game extends Scene
             by = Math.max(120, Math.min(H - 120, this.player.y + Math.sin(angle) * 600));
             if (Math.hypot(bx - this.player.x, by - this.player.y) >= MIN_DIST) break;
         }
-        const mob = this.add.image(bx, by, BOSS_GIANTRAT.spriteKey).setScale(BOSS_GIANTRAT.scale);
+        const mob = this.add.sprite(bx, by, BOSS_GIANTRAT.spriteKey).setScale(BOSS_GIANTRAT.scale);
         if (BOSS_GIANTRAT.tint !== undefined) {
             mob.setTint(BOSS_GIANTRAT.tint).setTintMode(TINT_FILL);
         }
+        mob.play('giantrat_run');
         const data: MobData = {
             blueprint: BOSS_GIANTRAT,
             hp: BOSS_GIANTRAT.hp,

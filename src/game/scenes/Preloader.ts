@@ -38,8 +38,11 @@ export class Preloader extends Scene
         this.load.image('player_idle', 'characters/player_scavver_sideview_idle.png');
         this.load.image('player_walk_r', 'characters/player_scavver_walk_right.png');
         this.load.image('player_walk_l', 'characters/player_scavver_walk_left.png');
-        this.load.image('mob_giantrat', 'mobs/boss_wasteland_giantrat_portrait.png');
-        this.load.image('mob_centipede', 'mobs/mob_centipede.png');
+        // Phase 4b-11 mob frame anims(2-frame gallop / wave loop)
+        this.load.image('mob_giantrat_run_a', 'mobs/mob_giantrat_run_a.png');
+        this.load.image('mob_giantrat_run_b', 'mobs/mob_giantrat_run_b.png');
+        this.load.image('mob_centipede_wave_a', 'mobs/mob_centipede_wave_a.png');
+        this.load.image('mob_centipede_wave_b', 'mobs/mob_centipede_wave_b.png');
         this.load.image('npc_clerk', 'characters/npc_quest_clerk_greenscarf.png');
 
         // Phase 4a-20 Gacha familiar pool(13 隻全載)
