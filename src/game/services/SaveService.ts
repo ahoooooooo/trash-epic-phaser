@@ -252,6 +252,8 @@ export class SaveService {
 
     reset(): void {
         this.data = makeDefaultSave();
-        this.save();
+        // 不 save() — 留 lastSavedAt = 0 讓登入頁辨識為新角色
+        // 把舊 localStorage 也清掉,下次 load() 從零開始
+        try { localStorage.removeItem(STORAGE_KEY); } catch { /* private mode */ }
     }
 }

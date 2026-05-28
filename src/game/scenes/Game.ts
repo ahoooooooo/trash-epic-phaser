@@ -125,6 +125,7 @@ export class Game extends Scene
     private hpBarFill!: Phaser.GameObjects.Rectangle;
     private hpText!: Phaser.GameObjects.Text;
     private expBarFill!: Phaser.GameObjects.Rectangle;
+    private expText!: Phaser.GameObjects.Text;
     private levelText!: Phaser.GameObjects.Text;
     private goldText!: Phaser.GameObjects.Text;
     private weaponText!: Phaser.GameObjects.Text;
@@ -137,6 +138,12 @@ export class Game extends Scene
     private pageHideHandler?: () => void;
     private sessionKills = 0;
     private bossActive = false;
+    // Phase 4b-12 (E) combo counter
+    private comboCount = 0;
+    private comboLastHitMs = 0;
+    private comboText?: Phaser.GameObjects.Text;
+    // Phase 4b-12 (B) 掉落物磁吸 — pending pickups
+    private pendingPickups: { obj: Phaser.GameObjects.GameObject & { x: number; y: number; destroy: () => void }; collect: () => void }[] = [];
     private npcClerk?: Phaser.GameObjects.Image;
     private npcBangMark?: Phaser.GameObjects.Text;
     private questDialogOpen = false;
@@ -179,6 +186,12 @@ export class Game extends Scene
         this.portals = [];
         this.npcClerk = undefined;
         this.npcBangMark = undefined;
+        // Phase 4b-12 reset transient state for scene.restart()
+        this.comboCount = 0;
+        this.comboLastHitMs = 0;
+        this.comboText = undefined;
+        this.comboResetting = false;
+        this.pendingPickups = [];
 
         // Phase 4b-3:讀 current map config
         this.mapConfig = getMap(SaveService.instance.getCurrentMapId());
@@ -323,6 +336,10 @@ export class Game extends Scene
         const expRatio = save.exp / SaveService.instance.expToNext();
         this.expBarFill = this.add.rectangle(barX + 2, expBarY + 2, (Game.HP_BAR_WIDTH - 4) * expRatio, expBarH - 4, 0xb08850)
             .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
+        // Phase 4b-12 EXP HUD 數字 — 看得到目前 exp / next + %
+        this.expText = this.add.text(VIEW_W / 2, expBarY + expBarH / 2, `EXP ${save.exp} / ${SaveService.instance.expToNext()} (${Math.floor(expRatio * 100)}%)`, {
+            fontFamily: 'monospace', fontSize: 12, color: '#ffe0c0'
+        }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
 
         this.levelText = this.add.text(barX, barY - 8, `Lv ${save.level}`, {
             fontFamily: 'monospace', fontSize: 22, color: '#ff8830', fontStyle: 'bold'
@@ -468,6 +485,9 @@ export class Game extends Scene
         if (this.isGameOver) return;
         this.handleAutoAttack(time, delta);
         this.updateNpcBangVisibility();
+        // Phase 4b-12 (B + E) 磁吸 + combo timeout
+        this.updateMagnet();
+        this.updateComboTimeout();
     }
 
     // 當前可接 / 可領的 quest(prereq 完成 + 自己未領)
@@ -1021,8 +1041,14 @@ export class Game extends Scene
         });
 
         // per Codex review:shake 必須在 HitStop 之前,否則 shake duration 被 timescale 拉長變黏膩
-        this.cameras.main.shake(isCrit ? 120 : 50, isCrit ? 0.012 : 0.005);
-        HitStopService.instance.trigger(isCrit ? 100 : 60, isCrit ? 0.03 : 0.05);
+        // Phase 4b-12 (F) HitStop tweak — 0.05 too frozen, 0.10 feels more "snap"
+        // Phase 4b-12 (C) 暴擊增強 — bigger shake + camera red flash
+        this.cameras.main.shake(isCrit ? 180 : 50, isCrit ? 0.018 : 0.005);
+        HitStopService.instance.trigger(isCrit ? 120 : 80, isCrit ? 0.05 : 0.10);
+        if (isCrit) this.cameras.main.flash(80, 220, 40, 40, false);
+
+        // Phase 4b-12 (E) combo counter bump
+        this.bumpCombo();
 
         // Boss rage transition(HP < threshold,只在還活著時觸發 per Codex review)
         if (data.hp > 0 && data.blueprint.isBoss && data.blueprint.rageThreshold && !data.isRaging) {
@@ -1050,7 +1076,13 @@ export class Game extends Scene
             if (data.blueprint.isBoss) {
                 this.handleBossDefeated(target.x, target.y);
             }
-            target.destroy();
+            // Phase 4b-12 (A) 死亡爆碎屑 + sprite 膨脹消失
+            this.spawnDeathBurst(target.x, target.y, data.blueprint.isBoss === true);
+            this.tweens.add({
+                targets: target, scale: target.scaleX * 1.4, alpha: 0,
+                duration: 180, ease: 'Quad.out',
+                onComplete: () => target.destroy()
+            });
         }
     }
 
@@ -1208,10 +1240,11 @@ export class Game extends Scene
             duration: 700, onComplete: () => expText.destroy()
         });
 
-        // Update exp bar
+        // Update exp bar + text
         const cur = save.get();
         const ratio = cur.exp / save.expToNext();
         this.expBarFill.width = (Game.HP_BAR_WIDTH - 4) * ratio;
+        this.expText.setText(`EXP ${cur.exp} / ${save.expToNext()} (${Math.floor(ratio * 100)}%)`);
 
         if (result.leveled) {
             this.levelText.setText(`Lv ${cur.level}`);
@@ -1232,43 +1265,195 @@ export class Game extends Scene
         SaveService.instance.save();
     }
 
-    private spawnLevelUpEffect(levelsGained: number)
-    {
-        const txt = levelsGained > 1 ? `LEVEL UP ×${levelsGained}!` : 'LEVEL UP!';
-        const popup = this.add.text(this.player.x, this.player.y - 100, txt, {
-            fontFamily: 'sans-serif', fontSize: 56, color: '#ffe0c0', fontStyle: 'bold',
-            stroke: '#ff8830', strokeThickness: 6
-        }).setOrigin(0.5).setDepth(2000).setScale(0.3);
-        this.tweens.add({
-            targets: popup, scale: 1.2, alpha: 0,
-            y: popup.y - 120, duration: 1200,
-            ease: 'Back.out',
-            onComplete: () => popup.destroy()
-        });
-        // 廢土橙光環
-        const ring = this.add.circle(this.player.x, this.player.y, 50, 0xff8830, 0)
-            .setStrokeStyle(6, 0xff8830, 0.9).setDepth(500);
-        this.tweens.add({
-            targets: ring, radius: 220, alpha: 0, duration: 900,
-            onComplete: () => ring.destroy()
-        });
-        this.cameras.main.shake(200, 0.008);
+    // Phase 4b-12 (E) combo counter — 每命中 bump,1.2s 無命中 reset
+    private static readonly COMBO_TIMEOUT_MS = 1200;
+    private bumpCombo() {
+        // 若正在 fade reset,先 cancel
+        if (this.comboResetting && this.comboText) {
+            this.tweens.killTweensOf(this.comboText);
+            this.comboResetting = false;
+        }
+        this.comboCount++;
+        this.comboLastHitMs = Date.now();
+        const txt = `× ${this.comboCount} COMBO`;
+        const fontSize = Math.min(48 + this.comboCount * 2, 120);
+        const color = this.comboCount >= 10 ? '#ff4040' : this.comboCount >= 5 ? '#ffe060' : '#ffe0c0';
+        if (!this.comboText) {
+            this.comboText = this.add.text(VIEW_W - 30, 220, txt, {
+                fontFamily: 'sans-serif', fontSize, color, fontStyle: 'bold',
+                stroke: '#1a1612', strokeThickness: 6
+            }).setOrigin(1, 0).setScrollFactor(0).setDepth(2100);
+        } else {
+            this.comboText.setText(txt);
+            this.comboText.setStyle({ fontSize: `${fontSize}px`, color });
+            this.comboText.setAlpha(1);
+        }
+        this.comboText.setScale(1.3);
+        this.tweens.add({ targets: this.comboText, scale: 1, duration: 150, ease: 'Quad.out' });
+    }
+    private comboResetting = false;
+    private updateComboTimeout() {
+        if (this.comboText && this.comboCount > 0 && !this.comboResetting &&
+            Date.now() - this.comboLastHitMs > Game.COMBO_TIMEOUT_MS) {
+            this.comboResetting = true;
+            this.comboCount = 0;
+            this.tweens.add({
+                targets: this.comboText, alpha: 0, duration: 350,
+                onComplete: () => { this.comboResetting = false; }
+            });
+        }
     }
 
+    // Phase 4b-12 (B) 掉落物磁吸 — < 300px lerp player,< 60px auto-pickup
+    private static readonly MAGNET_RANGE = 300;
+    private static readonly PICKUP_RANGE = 60;
+    private static readonly MAGNET_LERP = 0.08;
+    private updateMagnet() {
+        if (!this.player) return;
+        const px = this.player.x, py = this.player.y;
+        for (let i = this.pendingPickups.length - 1; i >= 0; i--) {
+            const e = this.pendingPickups[i];
+            if (!e.obj.active) { this.pendingPickups.splice(i, 1); continue; }
+            const dx = px - e.obj.x, dy = py - e.obj.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < Game.PICKUP_RANGE) {
+                e.collect();
+                e.obj.destroy();
+                this.pendingPickups.splice(i, 1);
+            } else if (dist < Game.MAGNET_RANGE) {
+                e.obj.x += dx * Game.MAGNET_LERP;
+                e.obj.y += dy * Game.MAGNET_LERP;
+            }
+        }
+    }
+
+    // Phase 4b-12 (A) 怪死亡爆碎屑 — 廢土碎屑粒子 8-12 顆飛濺
+    private spawnDeathBurst(x: number, y: number, isBoss: boolean) {
+        const count = isBoss ? 24 : 10;
+        const palette = [0x4a3018, 0x8b3a1f, 0xb08850, 0x2a2520, 0xa05a30];
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = isBoss ? 60 + Math.random() * 180 : 40 + Math.random() * 110;
+            const size = 2 + Math.random() * (isBoss ? 6 : 4);
+            const color = palette[Math.floor(Math.random() * palette.length)];
+            const p = this.add.rectangle(x, y, size, size, color, 0.95).setDepth(420);
+            this.tweens.add({
+                targets: p,
+                x: x + Math.cos(angle) * dist,
+                y: y + Math.sin(angle) * dist + 30,
+                alpha: 0,
+                angle: (Math.random() - 0.5) * 540,
+                duration: 500 + Math.random() * 300,
+                ease: 'Cubic.out',
+                onComplete: () => p.destroy()
+            });
+        }
+    }
+
+    // Phase 4b-12 (D) Level Up 大特效 — 全屏橙閃 + 大字停 1.5s + HP/MP 全回滿
+    private spawnLevelUpEffect(levelsGained: number)
+    {
+        // 全屏橙白 flash
+        this.cameras.main.flash(220, 255, 200, 80, false);
+        this.cameras.main.shake(300, 0.012);
+
+        // HP / MP 全滿 + bar + text flash
+        this.playerHP = Game.PLAYER_MAX_HP;
+        this.hpBarFill.width = Game.HP_BAR_WIDTH - 4;
+        this.hpText.setText(`${Game.PLAYER_MAX_HP} / ${Game.PLAYER_MAX_HP}`);
+        const maxMp = SaveService.instance.getMaxMp();
+        SaveService.instance.setMp(maxMp);
+        this.mpBarFill.width = Game.HP_BAR_WIDTH - 4;
+        this.mpText.setText(`MP ${maxMp} / ${maxMp}`);
+
+        // 大字「LEVEL UP!」中央停 1.5s
+        const txt = levelsGained > 1 ? `LEVEL UP ×${levelsGained}!` : 'LEVEL UP!';
+        const popup = this.add.text(this.player.x, this.player.y - 120, txt, {
+            fontFamily: 'sans-serif', fontSize: 96, color: '#ffe0c0', fontStyle: 'bold',
+            stroke: '#ff8830', strokeThickness: 10
+        }).setOrigin(0.5).setDepth(2000).setScale(0.2);
+        this.tweens.chain({
+            targets: popup,
+            tweens: [
+                { scale: 1.4, duration: 250, ease: 'Back.out' },
+                { scale: 1.2, duration: 80 },
+                { alpha: 0, y: popup.y - 80, duration: 700, delay: 600 }
+            ],
+            onComplete: () => popup.destroy()
+        });
+
+        // 三道金色光環擴散
+        for (let i = 0; i < 3; i++) {
+            const ring = this.add.circle(this.player.x, this.player.y, 60, 0xff8830, 0)
+                .setStrokeStyle(8, 0xffe060, 0.95).setDepth(500);
+            this.tweens.add({
+                targets: ring, radius: 320, alpha: 0,
+                duration: 1100, delay: i * 180,
+                onComplete: () => ring.destroy()
+            });
+        }
+    }
+
+    // Phase 4b-12 (B) 金幣 啵跳 + 閃光環 + 加進磁吸 queue
     private spawnGoldDrop(x: number, y: number, amount: number)
     {
-        // 簡易視覺:小金圓圈 + tween 飛向 player
-        const coin = this.add.circle(x, y, 14, 0xffe060, 1)
+        void amount; // 不視覺顯示
+        const dropX = x + (Math.random() - 0.5) * 30;
+        const dropY = y + (Math.random() - 0.5) * 30;
+        const coin = this.add.circle(dropX, dropY - 40, 14, 0xffe060, 1)
             .setStrokeStyle(2, 0x8b6020).setDepth(400);
-        this.tweens.add({
+        // 啵跳 — 上升再落下
+        this.tweens.chain({
             targets: coin,
-            x: this.player.x + (Math.random() - 0.5) * 30,
-            y: this.player.y + (Math.random() - 0.5) * 30,
-            duration: 400,
-            ease: 'Cubic.in',
-            onComplete: () => coin.destroy()
+            tweens: [
+                { y: dropY - 80, duration: 180, ease: 'Quad.out' },
+                { y: dropY, duration: 200, ease: 'Bounce.out' }
+            ]
         });
-        // amount 不視覺顯示(避免畫面亂),直接寫進 gold count
-        void amount;
+        // 閃光環
+        const ring = this.add.circle(dropX, dropY, 20, 0xffe060, 0)
+            .setStrokeStyle(3, 0xffe060, 0.8).setDepth(399);
+        this.tweens.add({
+            targets: ring, radius: 60, alpha: 0, duration: 400,
+            onComplete: () => ring.destroy()
+        });
+        // 加進磁吸 queue,player 靠近自動拾取
+        this.pendingPickups.push({
+            obj: coin,
+            collect: () => {} // gold 已在 grantKillReward 加進 save,coin 視覺到手即消
+        });
+    }
+
+    // Phase 4b-12 (B) 通用 dropped item spawn(武器 / 素材)— 啵跳 + 閃環 + 磁吸
+    spawnDropPickup(x: number, y: number, color: number, label: string, onCollect: () => void) {
+        const dropX = x + (Math.random() - 0.5) * 60;
+        const dropY = y + (Math.random() - 0.5) * 30;
+        const icon = this.add.rectangle(dropX, dropY - 40, 24, 24, color, 1)
+            .setStrokeStyle(2, 0xffe0c0, 0.9).setDepth(400);
+        this.tweens.chain({
+            targets: icon,
+            tweens: [
+                { y: dropY - 80, duration: 180, ease: 'Quad.out' },
+                { y: dropY, duration: 220, ease: 'Bounce.out' }
+            ]
+        });
+        const ring = this.add.circle(dropX, dropY, 24, color, 0)
+            .setStrokeStyle(3, color, 0.8).setDepth(399);
+        this.tweens.add({
+            targets: ring, radius: 80, alpha: 0, duration: 500,
+            onComplete: () => ring.destroy()
+        });
+        const tag = this.add.text(dropX, dropY - 32, label, {
+            fontFamily: 'sans-serif', fontSize: 16, color: '#ffe0c0',
+            stroke: '#1a1612', strokeThickness: 2
+        }).setOrigin(0.5).setDepth(401);
+        this.tweens.add({
+            targets: tag, alpha: 0, duration: 600, delay: 800,
+            onComplete: () => tag.destroy()
+        });
+        this.pendingPickups.push({
+            obj: icon,
+            collect: onCollect
+        });
     }
 }
