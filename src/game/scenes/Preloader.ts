@@ -34,11 +34,11 @@ export class Preloader extends Scene
     {
         this.load.setPath('assets');
 
-        // V1 主角 + 3 種 mob
+        // V1 主角 + 3 種 mob + NPC 委託員
         this.load.image('player_scavver', 'characters/player_scavver_portrait.png');
         this.load.image('mob_giantrat', 'mobs/boss_wasteland_giantrat_portrait.png');
         this.load.image('mob_centipede', 'mobs/mob_centipede.png');
-        // scrap drone 暫用 giantrat sprite + 灰紅 tint(沒獨立 sprite)
+        this.load.image('npc_clerk', 'characters/npc_quest_clerk_greenscarf.png');
     }
 
     create ()

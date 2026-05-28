@@ -14,7 +14,10 @@ interface SaveData {
     lastSavedAt: number;
     // Phase 4a-16 新增
     currentWeaponId: string;
-    weaponEnh: Record<string, number>; // weapon id → enh level
+    weaponEnh: Record<string, number>;
+    // Phase 4a-19 quest 狀態
+    questProgress: Record<string, number>;  // questId → 當前進度
+    questCompleted: Record<string, boolean>; // questId → 已領獎
 }
 
 // per Codex review:nested object 必須 deep clone,不能 spread(weaponEnh 會共用 reference)
@@ -34,7 +37,9 @@ function makeDefaultSave(): SaveData {
             weapon_rebar_club: 0,
             weapon_pebble_sling: 0,
             weapon_hand_rag: 0
-        }
+        },
+        questProgress: {},
+        questCompleted: {}
     };
 }
 
@@ -70,6 +75,8 @@ export class SaveService {
             const merged = makeDefaultSave();
             Object.assign(merged, parsed);
             merged.weaponEnh = { ...makeDefaultSave().weaponEnh, ...(parsed.weaponEnh ?? {}) };
+            merged.questProgress = { ...(parsed.questProgress ?? {}) };
+            merged.questCompleted = { ...(parsed.questCompleted ?? {}) };
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -125,6 +132,16 @@ export class SaveService {
     addWeaponEnh(id: string): void {
         this.data.weaponEnh[id] = (this.data.weaponEnh[id] ?? 0) + 1;
     }
+
+    // Quest
+    getQuestProgress(id: string): number { return this.data.questProgress[id] ?? 0; }
+    addQuestProgress(id: string, n: number = 1): number {
+        const cur = (this.data.questProgress[id] ?? 0) + n;
+        this.data.questProgress[id] = cur;
+        return cur;
+    }
+    isQuestCompleted(id: string): boolean { return !!this.data.questCompleted[id]; }
+    markQuestCompleted(id: string): void { this.data.questCompleted[id] = true; }
 
     reset(): void {
         this.data = makeDefaultSave();

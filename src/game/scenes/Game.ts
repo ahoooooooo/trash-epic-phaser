@@ -3,6 +3,7 @@ import { HitStopService } from '../services/HitStopService';
 import { VirtualJoystick } from '../services/VirtualJoystick';
 import { SaveService } from '../services/SaveService';
 import { effectiveDamage, getWeapon, WeaponDef } from '../services/WeaponService';
+import { QUESTS, QuestDef } from '../services/QuestService';
 
 const W = 1080;
 const H = 1920;
@@ -121,6 +122,9 @@ export class Game extends Scene
     private pageHideHandler?: () => void;
     private sessionKills = 0;
     private bossActive = false;
+    private npcClerk!: Phaser.GameObjects.Image;
+    private npcBangMark!: Phaser.GameObjects.Text;
+    private questDialogOpen = false;
 
     private static readonly PERSIST_THROTTLE_MS = 3000; // per Codex review
 
@@ -162,6 +166,25 @@ export class Game extends Scene
         grid.strokePath();
 
         this.player = this.add.image(CX, CY, 'player_scavver').setScale(0.3);
+
+        // NPC 委託員(地圖頂端中央固定位置 — tap-to-open per Codex review)
+        this.npcClerk = this.add.image(CX, 400, 'npc_clerk').setScale(0.32);
+        this.npcClerk.setInteractive({ useHandCursor: true });
+        this.npcClerk.on('pointerdown', () => {
+            // 必須玩家在 110px 內才能接觸(避免遠距點擊)
+            const d = Math.hypot(this.player.x - this.npcClerk.x, this.player.y - this.npcClerk.y);
+            if (d > 160) return;
+            this.joystick.cancel();
+            this.openQuestDialog();
+        });
+        this.npcBangMark = this.add.text(CX, 280, '!', {
+            fontFamily: 'sans-serif', fontSize: 64, color: '#ffe060', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 6
+        }).setOrigin(0.5).setDepth(500);
+        this.tweens.add({
+            targets: this.npcBangMark,
+            y: 270, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.inOut'
+        });
 
         HitStopService.instance.attach(this);
 
@@ -251,6 +274,11 @@ export class Game extends Scene
         }).setOrigin(1, 0).setDepth(1002).setInteractive({ useHandCursor: true });
         invBtn.on('pointerdown', () => this.openInventory());
         this.input.keyboard?.on('keydown-I', () => this.openInventory());
+
+        // 底部 hint(per Codex review:移回 create,不重複 spawn)
+        this.add.text(20, H - 60, '搖桿移動 / WASD / 方向鍵 — 自動攻擊', {
+            fontFamily: 'sans-serif', fontSize: 22, color: '#a05a30'
+        }).setDepth(1000);
     }
 
     private openInventory()
@@ -261,15 +289,12 @@ export class Game extends Scene
         this.joystick.cancel();
         this.scene.launch('Inventory');
         this.scene.pause();
-
-        this.add.text(20, H - 60, '搖桿移動 / WASD / 方向鍵 — 自動攻擊', {
-            fontFamily: 'sans-serif', fontSize: 22, color: '#a05a30'
-        });
     }
 
     update (time: number, delta: number)
     {
         if (this.isGameOver) return;
+        if (this.questDialogOpen) return;
         this.handleMovement(delta);
         this.handleSpawn(time);
         this.trySpawnBoss(time);
@@ -277,6 +302,126 @@ export class Game extends Scene
         this.handleMobContactDamage(time);
         if (this.isGameOver) return;
         this.handleAutoAttack(time, delta);
+        this.updateNpcBangVisibility();
+    }
+
+    // 當前可接 / 可領的 quest(prereq 完成 + 自己未領)
+    private getCurrentQuest(): QuestDef | null {
+        const save = SaveService.instance;
+        for (const q of QUESTS) {
+            if (save.isQuestCompleted(q.id)) continue;
+            if (q.prereqQuestId && !save.isQuestCompleted(q.prereqQuestId)) continue;
+            return q;
+        }
+        return null;
+    }
+
+    private updateNpcBangVisibility()
+    {
+        // 任務可領取(progress >= target)→ 黃 ! 變紅 !!
+        const q = this.getCurrentQuest();
+        if (!q) {
+            this.npcBangMark.setVisible(false);
+            return;
+        }
+        this.npcBangMark.setVisible(true);
+        const progress = SaveService.instance.getQuestProgress(q.id);
+        if (progress >= q.targetCount) {
+            this.npcBangMark.setText('!!').setColor('#ff4040');
+        } else {
+            this.npcBangMark.setText('!').setColor('#ffe060');
+        }
+    }
+
+    private openQuestDialog()
+    {
+        if (this.questDialogOpen) return;
+        const q = this.getCurrentQuest();
+        if (!q) return;
+        this.questDialogOpen = true;
+        const save = SaveService.instance;
+        const progress = save.getQuestProgress(q.id);
+        const isReady = progress >= q.targetCount;
+
+        const bg = this.add.rectangle(W / 2, H / 2, W - 80, 700, 0x1a1612, 0.97)
+            .setStrokeStyle(4, 0xff8830).setDepth(2000);
+        const title = this.add.text(W / 2, H / 2 - 280, `📜 ${q.nameZH}`, {
+            fontFamily: 'sans-serif', fontSize: 56, color: '#ff8830', fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(2001);
+        const desc = this.add.text(W / 2, H / 2 - 160, q.descZH, {
+            fontFamily: 'sans-serif', fontSize: 28, color: '#ffe0c0',
+            wordWrap: { width: W - 160 }, align: 'center'
+        }).setOrigin(0.5).setDepth(2001);
+        const prog = this.add.text(W / 2, H / 2 - 30,
+            `進度:${progress} / ${q.targetCount}`, {
+            fontFamily: 'monospace', fontSize: 36,
+            color: isReady ? '#4a5d3a' : '#b08850'
+        }).setOrigin(0.5).setDepth(2001);
+        const reward = this.add.text(W / 2, H / 2 + 60,
+            `獎勵:💰 ${q.rewardGold} + ${q.rewardExp} EXP`, {
+            fontFamily: 'monospace', fontSize: 28, color: '#ffe060'
+        }).setOrigin(0.5).setDepth(2001);
+
+        // 按鈕:領獎 / 接受 / 關閉
+        let actionBtnLabel: string;
+        let actionFn: () => void;
+        if (isReady) {
+            actionBtnLabel = '✓ 領取獎勵';
+            actionFn = () => this.claimQuestReward(q);
+        } else {
+            actionBtnLabel = '接受任務';
+            actionFn = () => this.closeQuestDialog([bg, title, desc, prog, reward, action, close]);
+        }
+        const action = this.add.text(W / 2 - 130, H / 2 + 200, actionBtnLabel, {
+            fontFamily: 'sans-serif', fontSize: 32, color: '#1a1612', fontStyle: 'bold',
+            backgroundColor: isReady ? '#4a5d3a' : '#ff8830', padding: { x: 24, y: 14 }
+        }).setOrigin(0.5).setDepth(2002).setInteractive({ useHandCursor: true });
+        action.on('pointerdown', () => {
+            actionFn();
+            if (isReady) {
+                // refresh dialog 內容(進入 next quest 或關閉)
+                [bg, title, desc, prog, reward, action, close].forEach(o => o.destroy());
+                this.questDialogOpen = false;
+                this.time.delayedCall(100, () => {
+                    if (this.getCurrentQuest()) this.openQuestDialog();
+                });
+            }
+        });
+
+        const close = this.add.text(W / 2 + 130, H / 2 + 200, '✕ 關閉', {
+            fontFamily: 'sans-serif', fontSize: 32, color: '#ffe0c0',
+            backgroundColor: '#4a3a30', padding: { x: 24, y: 14 }
+        }).setOrigin(0.5).setDepth(2002).setInteractive({ useHandCursor: true });
+        close.on('pointerdown', () => this.closeQuestDialog([bg, title, desc, prog, reward, action, close]));
+    }
+
+    private closeQuestDialog(objs: Phaser.GameObjects.GameObject[])
+    {
+        objs.forEach(o => o.destroy());
+        this.questDialogOpen = false;
+    }
+
+    private claimQuestReward(q: QuestDef)
+    {
+        const save = SaveService.instance;
+        save.addGold(q.rewardGold);
+        const res = save.addExp(q.rewardExp);
+        save.markQuestCompleted(q.id);
+        save.save();
+        this.goldText.setText(`💰 ${save.get().gold}`);
+        if (res.leveled) {
+            this.levelText.setText(`Lv ${save.get().level}`);
+            this.spawnLevelUpEffect(res.levelsGained);
+        }
+        // 完成 popup
+        const t = this.add.text(W / 2, H / 2 - 350, `任務完成!+${q.rewardGold}💰 +${q.rewardExp} EXP`, {
+            fontFamily: 'sans-serif', fontSize: 36, color: '#ffe060', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 5
+        }).setOrigin(0.5).setDepth(3000);
+        this.tweens.add({
+            targets: t, y: t.y - 80, alpha: 0, duration: 1500,
+            onComplete: () => t.destroy()
+        });
     }
 
     public refreshWeaponText() {
@@ -681,6 +826,17 @@ export class Game extends Scene
         save.addGold(bp.goldReward);
         this.goldText.setText(`💰 ${save.get().gold}`);
         if (!bp.isBoss) this.sessionKills++;
+
+        // Quest progress(自動 track 殺怪)
+        const currentQuest = this.getCurrentQuest();
+        if (currentQuest) {
+            const isMatch =
+                (currentQuest.objective === 'kill_mob' && currentQuest.targetMobId === bp.id) ||
+                (currentQuest.objective === 'kill_boss' && currentQuest.targetMobId === bp.id && bp.isBoss);
+            if (isMatch) {
+                save.addQuestProgress(currentQuest.id, 1);
+            }
+        }
 
         const expGain = bp.expReward;
         const result = save.addExp(expGain);
