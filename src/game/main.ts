@@ -7,6 +7,7 @@ import { Gacha } from './scenes/Gacha';
 import { Storage } from './scenes/Storage';
 import { Shop } from './scenes/Shop';
 import { Talent } from './scenes/Talent';
+import { WorldMap } from './scenes/WorldMap';
 import { AUTO, Game, Scale } from 'phaser';
 import { Preloader } from './scenes/Preloader';
 
@@ -35,6 +36,7 @@ const config: Phaser.Types.Core.GameConfig = {
         Storage,
         Shop,
         Talent,
+        WorldMap,
         GameOver
     ]
 };

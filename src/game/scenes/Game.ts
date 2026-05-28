@@ -73,12 +73,37 @@ const MOB_BLUEPRINTS: MobBlueprint[] = [
         contactDamage: 12, expReward: 8, goldReward: 5
     },
     {
-        // Phase 4b-13:scrap_drone 暫用 centipede 染冷藍 + 大小縮(機械感),全灰看起來像 bug 已 fix
-        // 4b-14 將生真機械無人機 sprite 取代
+        // Phase 4b-13:scrap_drone 暫用 centipede 染冷藍 + 大小縮(機械感)
         id: 'scrap_drone', type: 'Robot',
         spriteKey: 'mob_centipede_wave_a', scale: 0.10, tint: 0x4080a0,
         hp: 35, speedChase: 0.14, speedWander: 0.05,
         contactDamage: 6, expReward: 6, goldReward: 4
+    },
+    // Phase 4c-1 乾井路 進階廢土怪(idx 3-5,先 tint 變體,真 sprite Phase 4c-5 生)
+    {
+        id: 'feral_rat', type: 'Rat', spriteKey: 'mob_giantrat_run_a', scale: 0.20, tint: 0xc08850,
+        hp: 140, speedChase: 0.11, speedWander: 0.04, contactDamage: 18, expReward: 14, goldReward: 9
+    },
+    {
+        id: 'rust_centipede', type: 'Insect', spriteKey: 'mob_centipede_wave_a', scale: 0.16, tint: 0xa05030,
+        hp: 200, speedChase: 0.08, speedWander: 0.03, contactDamage: 24, expReward: 20, goldReward: 13
+    },
+    {
+        id: 'sentry_drone', type: 'Robot', spriteKey: 'mob_centipede_wave_a', scale: 0.12, tint: 0x6080a0,
+        hp: 110, speedChase: 0.15, speedWander: 0.05, contactDamage: 15, expReward: 16, goldReward: 11
+    },
+    // Phase 4c-1 爐心門 輻射怪(idx 6-8)
+    {
+        id: 'rad_rat', type: 'Rat', spriteKey: 'mob_giantrat_run_a', scale: 0.24, tint: 0x6a9a40,
+        hp: 420, speedChase: 0.12, speedWander: 0.04, contactDamage: 40, expReward: 55, goldReward: 30
+    },
+    {
+        id: 'rad_worm', type: 'Insect', spriteKey: 'mob_centipede_wave_a', scale: 0.20, tint: 0x80b050,
+        hp: 560, speedChase: 0.09, speedWander: 0.03, contactDamage: 52, expReward: 70, goldReward: 40
+    },
+    {
+        id: 'core_drone', type: 'Robot', spriteKey: 'mob_centipede_wave_a', scale: 0.15, tint: 0x40a060,
+        hp: 340, speedChase: 0.17, speedWander: 0.05, contactDamage: 34, expReward: 60, goldReward: 35
     }
 ];
 
@@ -206,7 +231,8 @@ export class Game extends Scene
         this.cameras.main.setBounds(0, 0, mapW, mapH);
 
         // Phase 4b-9 — GPT-4o painted top-down 廢土地圖(楓谷風,單張 opaque 全鋪滿)
-        const bgKey = this.mapConfig.id === 'guild_hall' ? 'map_guild_hall_topdown' : 'map_wasteland_topdown';
+        // Phase 4c-1:town(公會/廢料鎮/鏽蝕巷)用室內 bg,field/boss 用廢土 bg(先復用,4c-5 各生 painted)
+        const bgKey = this.mapConfig.mapType === 'town' ? 'map_guild_hall_topdown' : 'map_wasteland_topdown';
         const bg = this.add.image(mapW / 2, mapH / 2, bgKey);
         bg.setDisplaySize(mapW, mapH);
         bg.setDepth(-100);
@@ -354,6 +380,14 @@ export class Game extends Scene
             stroke: '#1a1612', strokeThickness: 2
         }).setOrigin(0.5, 0).setDepth(1003).setScrollFactor(0);
         this.minimap = this.add.graphics().setDepth(1002).setScrollFactor(0);
+        // Phase 4c-1:點 minimap 開楓谷風世界全圖(per user)
+        this.add.rectangle(MM_PAD, MM_PAD, MM, MM, 0xffffff, 0.001)
+            .setOrigin(0, 0).setDepth(1004).setScrollFactor(0)
+            .setInteractive({ useHandCursor: true })
+            .on('pointerdown', () => { this.scene.launch('WorldMap'); });
+        this.add.text(MM_PAD + MM / 2, MM_PAD + MM - 22, '🔍 點開全圖', {
+            fontFamily: 'monospace', fontSize: 15, color: '#b08850'
+        }).setOrigin(0.5).setDepth(1004).setScrollFactor(0);
 
         // --- HP + MP 等寬 bar,在 minimap 右側,頂部對齊 minimap 頂 ---
         const barX = MM_PAD + MM + 24;
