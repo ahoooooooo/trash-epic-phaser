@@ -40,15 +40,16 @@ export class MainMenu extends Scene
             fontFamily: 'sans-serif', fontSize: 24, color: '#a05a30'
         }).setOrigin(0.5);
 
-        // 整個 scene 接 pointer + keyboard,雙保險避免 mobile touch event 問題
+        // 整個 scene 接 pointer + keyboard,3 重保險(Phaser 4 pointer events 不同環境表現不同)
         let started = false;
         const start = () => {
             if (started) return;
             started = true;
             this.scene.start('Game');
         };
-        this.input.once('pointerup', start);
-        this.input.keyboard?.once('keydown', start);
+        this.input.on('pointerdown', start);
+        this.input.on('pointerup', start);
+        this.input.keyboard?.on('keydown', start);
 
         // 版本標示
         this.add.text(CX, CY + 700, 'v0.0.1 Phase 4a MVP', {
