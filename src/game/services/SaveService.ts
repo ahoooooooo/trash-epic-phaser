@@ -31,6 +31,9 @@ interface SaveData {
     maxMp: number;
     hpPotions: number;
     mpPotions: number;
+    // Phase 4b-7 掉落物
+    materials: Record<string, number>; // 'strengthen_stone' → count
+    droppedWeapons: { id: string; data: string }[]; // 已掉但未裝備武器(stringified)
 }
 
 // per Codex review:nested object 必須 deep clone,不能 spread(weaponEnh 會共用 reference)
@@ -59,8 +62,10 @@ function makeDefaultSave(): SaveData {
         currentMapId: 'wasteland_outskirts',
         mp: 50,
         maxMp: 50,
-        hpPotions: 3,  // 初始送 3 個
-        mpPotions: 3
+        hpPotions: 3,
+        mpPotions: 3,
+        materials: {},
+        droppedWeapons: []
     };
 }
 
@@ -104,6 +109,8 @@ export class SaveService {
             if (typeof parsed.maxMp !== 'number') merged.maxMp = makeDefaultSave().maxMp;
             if (typeof parsed.hpPotions !== 'number') merged.hpPotions = makeDefaultSave().hpPotions;
             if (typeof parsed.mpPotions !== 'number') merged.mpPotions = makeDefaultSave().mpPotions;
+            merged.materials = { ...(parsed.materials ?? {}) };
+            merged.droppedWeapons = Array.isArray(parsed.droppedWeapons) ? [...parsed.droppedWeapons] : [];
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -230,6 +237,18 @@ export class SaveService {
     }
     addHpPotions(n: number): void { this.data.hpPotions += n; }
     addMpPotions(n: number): void { this.data.mpPotions += n; }
+
+    // Phase 4b-7 掉落物
+    addMaterial(id: string, n: number = 1): void {
+        this.data.materials[id] = (this.data.materials[id] ?? 0) + n;
+    }
+    getMaterial(id: string): number { return this.data.materials[id] ?? 0; }
+    getAllMaterials(): Record<string, number> { return { ...this.data.materials }; }
+    addDroppedWeapon(w: object): void {
+        const id = Math.random().toString(36).slice(2, 10);
+        this.data.droppedWeapons.push({ id, data: JSON.stringify(w) });
+    }
+    getDroppedWeapons(): Array<{ id: string; data: string }> { return [...this.data.droppedWeapons]; }
 
     reset(): void {
         this.data = makeDefaultSave();

@@ -5,6 +5,7 @@ import { SaveService } from '../services/SaveService';
 import { effectiveDamage, getWeapon, WeaponDef } from '../services/WeaponService';
 import { QUESTS, QuestDef } from '../services/QuestService';
 import { getMap, MapConfig, NpcSpec, PortalSpec } from '../services/MapService';
+import { generateRandomWeapon, weaponDisplayName, rarityColor } from '../services/WeaponGenerator';
 
 // 視窗尺寸(Phaser config 內固定 1080×1920 portrait)
 const VIEW_W = 1080;
@@ -1025,11 +1026,47 @@ export class Game extends Scene
             this.mobs = this.mobs.filter(m => m !== target);
             this.spawnGoldDrop(target.x, target.y, data.blueprint.goldReward);
             this.grantKillReward(target.x, target.y, data.blueprint);
+            // Phase 4b-7 掉落物 roll
+            this.rollMobDrops(target.x, target.y, data.blueprint.isBoss === true);
             if (data.blueprint.isBoss) {
                 this.handleBossDefeated(target.x, target.y);
             }
             target.destroy();
         }
+    }
+
+    // Phase 4b-7 掉落系統
+    private rollMobDrops(x: number, y: number, isBoss: boolean) {
+        const save = SaveService.instance;
+        // 強化石(50% / boss 100%)
+        if (isBoss || Math.random() < 0.5) {
+            save.addMaterial('strengthen_stone', isBoss ? 5 : 1);
+            this.spawnFloatingLabel(x, y - 40, isBoss ? '+5 強化石' : '+1 強化石', '#b08850');
+        }
+        // 武器掉落(5% / boss 50%)
+        if (isBoss || Math.random() < 0.05) {
+            const w = generateRandomWeapon();
+            save.addDroppedWeapon(w);
+            this.spawnFloatingLabel(x, y - 80, `掉落:${weaponDisplayName(w)} [${w.tier}]`, '#ff8830');
+            // 視覺 tier color drop circle
+            const circ = this.add.circle(x, y, 30, rarityColor(w.tier), 0.85)
+                .setStrokeStyle(3, 0xffe0c0);
+            this.tweens.add({
+                targets: circ, scale: 1.6, alpha: 0, duration: 800,
+                onComplete: () => circ.destroy()
+            });
+        }
+    }
+
+    private spawnFloatingLabel(x: number, y: number, text: string, color: string) {
+        const t = this.add.text(x, y, text, {
+            fontFamily: 'monospace', fontSize: 22, color, fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 3
+        }).setOrigin(0.5).setDepth(700);
+        this.tweens.add({
+            targets: t, y: t.y - 70, alpha: 0, duration: 1000,
+            onComplete: () => t.destroy()
+        });
     }
 
     private handleBossDefeated(x: number, y: number)
