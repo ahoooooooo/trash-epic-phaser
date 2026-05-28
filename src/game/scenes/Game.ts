@@ -2,6 +2,7 @@ import { Scene } from 'phaser';
 import { HitStopService } from '../services/HitStopService';
 import { VirtualJoystick } from '../services/VirtualJoystick';
 import { SaveService } from '../services/SaveService';
+import { effectiveDamage, getWeapon, WeaponDef } from '../services/WeaponService';
 
 const W = 1080;
 const H = 1920;
@@ -92,15 +93,14 @@ export class Game extends Scene
     private expBarFill!: Phaser.GameObjects.Rectangle;
     private levelText!: Phaser.GameObjects.Text;
     private goldText!: Phaser.GameObjects.Text;
+    private weaponText!: Phaser.GameObjects.Text;
     private sessionStartMs = 0;
     private lastPersistMs = 0;
     private pageHideHandler?: () => void;
 
     private static readonly PERSIST_THROTTLE_MS = 3000; // per Codex review
 
-    private static readonly ATTACK_RANGE = 220;
-    private static readonly ATTACK_INTERVAL_MS = 600;
-    private static readonly ATTACK_DAMAGE = 25;
+    // Attack range / interval / damage 改 per-weapon(WeaponService),這裡只留 crit
     private static readonly CRIT_CHANCE = 0.15;
     private static readonly CRIT_MULT = 1.5;
     private static readonly MOVE_SPEED = 0.4;        // 玩家 px/ms
@@ -210,6 +210,14 @@ export class Game extends Scene
             fontFamily: 'monospace', fontSize: 20, color: '#ffe0c0'
         }).setOrigin(1, 1).setDepth(1002);
 
+        // 當前武器 HUD(exp bar 下方)
+        const w0 = getWeapon(save.currentWeaponId);
+        const enh0 = SaveService.instance.getWeaponEnh(save.currentWeaponId);
+        this.weaponText = this.add.text(barX, expBarY + expBarH + 6, this.formatWeaponLabel(w0, enh0), {
+            fontFamily: 'monospace', fontSize: 18, color: '#b08850'
+        }).setOrigin(0, 0).setDepth(1002);
+        this.refreshWeaponText();
+
         this.add.text(20, H - 60, '搖桿移動 / WASD / 方向鍵 — 自動攻擊', {
             fontFamily: 'sans-serif', fontSize: 22, color: '#a05a30'
         });
@@ -224,6 +232,18 @@ export class Game extends Scene
         this.handleMobContactDamage(time);
         if (this.isGameOver) return;
         this.handleAutoAttack(time, delta);
+    }
+
+    public refreshWeaponText() {
+        const id = SaveService.instance.getCurrentWeaponId();
+        const w = getWeapon(id);
+        const enh = SaveService.instance.getWeaponEnh(id);
+        this.weaponText.setText(this.formatWeaponLabel(w, enh));
+    }
+
+    private formatWeaponLabel(w: WeaponDef, enh: number): string {
+        const dmg = effectiveDamage(w, enh);
+        return enh > 0 ? `⚔ ${w.nameZH} +${enh} [${dmg}]` : `⚔ ${w.nameZH} [${dmg}]`;
     }
 
     private spawnSwingEffect(targetX: number, targetY: number, isCrit: boolean)
@@ -411,12 +431,17 @@ export class Game extends Scene
 
     private handleAutoAttack(time: number, delta: number)
     {
-        if (this.isGameOver) return; // defensive local guard
+        if (this.isGameOver) return;
         this.attackCooldownMs -= delta;
         if (this.attackCooldownMs > 0) return;
 
+        // 用當前武器 spec(per WeaponService)
+        const weapon = getWeapon(SaveService.instance.getCurrentWeaponId());
+        const enh = SaveService.instance.getWeaponEnh(weapon.id);
+        const baseDmg = effectiveDamage(weapon, enh);
+
         let nearest: Phaser.GameObjects.Image | null = null;
-        let nearestDist = Game.ATTACK_RANGE;
+        let nearestDist = weapon.range;
         for (const m of this.mobs) {
             if (!m.active) continue;
             const d = Math.hypot(this.player.x - m.x, this.player.y - m.y);
@@ -424,12 +449,26 @@ export class Game extends Scene
         }
         if (!nearest) return;
 
-        this.attackCooldownMs = Game.ATTACK_INTERVAL_MS;
+        this.attackCooldownMs = weapon.attackIntervalMs;
         const target = nearest;
-
-        // Crit roll
         const isCrit = Math.random() < Game.CRIT_CHANCE;
-        const dmg = Math.round(Game.ATTACK_DAMAGE * (isCrit ? Game.CRIT_MULT : 1));
+        const dmg = Math.round(baseDmg * (isCrit ? Game.CRIT_MULT : 1));
+
+        // Hand Rag recovery — 命中回血 0.5% × baseDmg
+        if (weapon.recoveryPercent && this.playerHP < Game.PLAYER_MAX_HP) {
+            const heal = Math.max(1, Math.round(baseDmg * weapon.recoveryPercent * 100));
+            this.playerHP = Math.min(Game.PLAYER_MAX_HP, this.playerHP + heal);
+            this.hpBarFill.width = (Game.HP_BAR_WIDTH - 4) * (this.playerHP / Game.PLAYER_MAX_HP);
+            this.hpText.setText(`${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
+        }
+        // Pebble Sling knockback — mob 朝玩家反方向位移 + 邊界 clamp(per Codex review)
+        if (weapon.knockbackPx && nearest.active) {
+            const dx = nearest.x - this.player.x;
+            const dy = nearest.y - this.player.y;
+            const len = Math.hypot(dx, dy) || 1;
+            nearest.x = Math.max(60, Math.min(W - 60, nearest.x + (dx / len) * weapon.knockbackPx));
+            nearest.y = Math.max(60, Math.min(H - 60, nearest.y + (dy / len) * weapon.knockbackPx));
+        }
 
         const data = target.getData('mob') as MobData;
         data.hp -= dmg;

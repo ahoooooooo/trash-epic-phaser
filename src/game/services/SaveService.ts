@@ -12,21 +12,35 @@ interface SaveData {
     totalKills: number;
     playtimeSec: number;
     lastSavedAt: number;
+    // Phase 4a-16 新增
+    currentWeaponId: string;
+    weaponEnh: Record<string, number>; // weapon id → enh level
 }
 
-const DEFAULT_SAVE: SaveData = {
-    version: SAVE_VERSION,
-    level: 1,
-    exp: 0,
-    gold: 0,
-    totalKills: 0,
-    playtimeSec: 0,
-    lastSavedAt: 0
-};
+// per Codex review:nested object 必須 deep clone,不能 spread(weaponEnh 會共用 reference)
+function makeDefaultSave(): SaveData {
+    return {
+        version: SAVE_VERSION,
+        level: 1,
+        exp: 0,
+        gold: 0,
+        totalKills: 0,
+        playtimeSec: 0,
+        lastSavedAt: 0,
+        currentWeaponId: 'weapon_wood_stick',
+        weaponEnh: {
+            weapon_wood_stick: 0,
+            weapon_scrap_knife: 0,
+            weapon_rebar_club: 0,
+            weapon_pebble_sling: 0,
+            weapon_hand_rag: 0
+        }
+    };
+}
 
 export class SaveService {
     private static _instance: SaveService | null = null;
-    private data: SaveData = { ...DEFAULT_SAVE };
+    private data: SaveData = makeDefaultSave();
 
     static get instance(): SaveService {
         if (!this._instance) {
@@ -42,19 +56,24 @@ export class SaveService {
         try {
             const raw = localStorage.getItem(STORAGE_KEY);
             if (!raw) {
-                this.data = { ...DEFAULT_SAVE };
+                this.data = makeDefaultSave();
                 return this.data;
             }
             const parsed = JSON.parse(raw) as Partial<SaveData>;
             if (parsed.version !== SAVE_VERSION) {
                 console.warn('[Save] version mismatch — reset');
-                this.data = { ...DEFAULT_SAVE };
+                this.data = makeDefaultSave();
                 return this.data;
             }
-            this.data = { ...DEFAULT_SAVE, ...parsed };
+            // merge:default deep clone 為基底,parsed 覆蓋頂層欄位
+            // weaponEnh 額外 merge 避免新增的 weapon id 在舊 save 沒有 key
+            const merged = makeDefaultSave();
+            Object.assign(merged, parsed);
+            merged.weaponEnh = { ...makeDefaultSave().weaponEnh, ...(parsed.weaponEnh ?? {}) };
+            this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
-            this.data = { ...DEFAULT_SAVE };
+            this.data = makeDefaultSave();
         }
         return this.data;
     }
@@ -89,11 +108,26 @@ export class SaveService {
     }
 
     addGold(amount: number): void { this.data.gold += amount; }
+    spendGold(amount: number): boolean {
+        if (this.data.gold < amount) return false;
+        this.data.gold -= amount;
+        return true;
+    }
     addKill(): void { this.data.totalKills++; }
     addPlaytimeSec(sec: number): void { this.data.playtimeSec += sec; }
 
+    // 武器
+    getCurrentWeaponId(): string { return this.data.currentWeaponId; }
+    setCurrentWeaponId(id: string): void { this.data.currentWeaponId = id; }
+    getWeaponEnh(id: string): number {
+        return this.data.weaponEnh[id] ?? 0;
+    }
+    addWeaponEnh(id: string): void {
+        this.data.weaponEnh[id] = (this.data.weaponEnh[id] ?? 0) + 1;
+    }
+
     reset(): void {
-        this.data = { ...DEFAULT_SAVE };
+        this.data = makeDefaultSave();
         this.save();
     }
 }
