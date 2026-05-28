@@ -132,6 +132,10 @@ export class Game extends Scene
     private npcClerk!: Phaser.GameObjects.Image;
     private npcBangMark!: Phaser.GameObjects.Text;
     private questDialogOpen = false;
+    // 主角動作 state machine — 楓谷風:不同武器類別不同 attack 動作
+    private playerAnimState: 'idle' | 'walking' = 'idle';
+    private playerStateTween?: Phaser.Tweens.Tween;
+    private playerAttackTween?: Phaser.Tweens.TweenChain;
 
     private static readonly PERSIST_THROTTLE_MS = 3000; // per Codex review
 
@@ -181,12 +185,8 @@ export class Game extends Scene
         this.player = this.add.image(CX, CY, 'player_scavver').setScale(0.3);
         // Camera follow player(per 荒野亂鬥)
         this.cameras.main.startFollow(this.player, true, 0.15, 0.15);
-        // Idle 呼吸 animation(scaleY 微微擺動)
-        this.tweens.add({
-            targets: this.player,
-            scaleY: 0.32,
-            duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.inOut'
-        });
+        // 開始 idle 動畫(state machine 控制 idle/walk/attack 切換,force first start)
+        this.setPlayerAnimState('idle', true);
 
         // NPC 委託員 — Phase 4b-3 將移到公會地圖,此處保留但放遠處
         this.npcClerk = this.add.image(CX, 300, 'npc_clerk').setScale(0.32);
@@ -470,6 +470,121 @@ export class Game extends Scene
         return enh > 0 ? `⚔ ${w.nameZH} +${enh} [${dmg}]` : `⚔ ${w.nameZH} [${dmg}]`;
     }
 
+    // 楓谷風 state machine:idle / walking / attacking(by weapon)
+    private setPlayerAnimState(state: 'idle' | 'walking', force = false) {
+        if (!force && this.playerAnimState === state) return;
+        this.playerAnimState = state;
+        if (this.playerStateTween) this.playerStateTween.stop();
+        // 重置 transform(attack 後可能殘留)
+        this.player.angle = 0;
+        this.player.setScale(0.3);
+        if (state === 'idle') {
+            // 站立:輕微呼吸 scaleY
+            this.playerStateTween = this.tweens.add({
+                targets: this.player, scaleY: 0.31,
+                duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.inOut'
+            });
+        } else {
+            // 走路:垂直彈跳 + 輕度搖晃
+            this.playerStateTween = this.tweens.add({
+                targets: this.player, scaleY: 0.28,
+                duration: 180, yoyo: true, repeat: -1, ease: 'Sine.inOut'
+            });
+        }
+    }
+
+    // 攻擊動畫 — 5 武器類別各不同(楓谷風)
+    private playWeaponAttackAnim(weapon: WeaponDef, targetX: number, _targetY: number) {
+        if (this.playerAttackTween?.isPlaying()) this.playerAttackTween.stop();
+        // 攻擊期間 stop 走路/idle tween 避免衝突
+        if (this.playerStateTween) this.playerStateTween.stop();
+        this.player.setScale(0.3);
+        // 朝 target 方向 face
+        if (targetX < this.player.x) this.player.setFlipX(true);
+        else this.player.setFlipX(false);
+        const flip = this.player.flipX ? -1 : 1;
+
+        const restoreState = () => {
+            // 攻擊結束:回復 state machine 動畫
+            const s = this.playerAnimState;
+            // force re-enter same state to restart tween
+            this.playerAnimState = s === 'idle' ? 'walking' : 'idle';
+            this.setPlayerAnimState(s);
+        };
+
+        switch (weapon.category) {
+            case 'Stick': {
+                // 木棍:橫向大揮 ±30°
+                this.playerAttackTween = this.tweens.chain({
+                    targets: this.player,
+                    tweens: [
+                        { angle: -28 * flip, duration: 60, ease: 'Quad.out' },
+                        { angle: 28 * flip, duration: 110, ease: 'Quad.in' },
+                        { angle: 0, duration: 90, ease: 'Quad.out' }
+                    ],
+                    onComplete: restoreState
+                });
+                break;
+            }
+            case 'Blade': {
+                // 刀:快速 lunge stretch(不動 player.x,改 scaleX 拉伸暗示 — per Codex review)
+                void flip;
+                this.playerAttackTween = this.tweens.chain({
+                    targets: this.player,
+                    tweens: [
+                        { scaleX: 0.38, scaleY: 0.28, duration: 60, ease: 'Cubic.out' },
+                        { scaleX: 0.30, scaleY: 0.30, duration: 100, ease: 'Cubic.in' }
+                    ],
+                    onComplete: restoreState
+                });
+                break;
+            }
+            case 'Hammer': {
+                // 鋼筋棒:慢重 overhead 揮(scale grow + 大 rotation)
+                this.playerAttackTween = this.tweens.chain({
+                    targets: this.player,
+                    tweens: [
+                        { angle: -55 * flip, scale: 0.33, duration: 160, ease: 'Sine.in' },
+                        { angle: 50 * flip, duration: 180, ease: 'Quad.in' },
+                        { angle: 0, scale: 0.30, duration: 100, ease: 'Sine.out' }
+                    ],
+                    onComplete: restoreState
+                });
+                break;
+            }
+            case 'Ranged': {
+                // 彈弓:壓縮拉弓 → 釋放(不動 player.x,per Codex review)
+                this.playerAttackTween = this.tweens.chain({
+                    targets: this.player,
+                    tweens: [
+                        { scaleX: 0.26, scaleY: 0.33, duration: 140, ease: 'Quad.out' },
+                        { scaleX: 0.34, scaleY: 0.28, duration: 70, ease: 'Cubic.in' },
+                        { scaleX: 0.30, scaleY: 0.30, duration: 80, ease: 'Sine.out' }
+                    ],
+                    onComplete: restoreState
+                });
+                break;
+            }
+            case 'Special': {
+                // 手套:快速 4-pulse combo
+                this.playerAttackTween = this.tweens.chain({
+                    targets: this.player,
+                    tweens: [
+                        { scale: 0.33, angle: 5 * flip, duration: 45 },
+                        { scale: 0.30, angle: -5 * flip, duration: 45 },
+                        { scale: 0.33, angle: 5 * flip, duration: 45 },
+                        { scale: 0.30, angle: 0, duration: 45 }
+                    ],
+                    onComplete: restoreState
+                });
+                break;
+            }
+            default: {
+                restoreState();
+            }
+        }
+    }
+
     private spawnSwingEffect(targetX: number, targetY: number, isCrit: boolean)
     {
         const angle = Math.atan2(targetY - this.player.y, targetX - this.player.x);
@@ -510,8 +625,10 @@ export class Game extends Scene
         }
         const mag = Math.hypot(dx, dy);
         if (mag < 0.01) {
-            // 靜止 — 角度復位
-            if (this.player.angle !== 0) this.player.angle *= 0.7;
+            // 靜止 — 切回 idle(若不是 attack 中)
+            if (this.playerAnimState !== 'idle' && !this.playerAttackTween?.isPlaying()) {
+                this.setPlayerAnimState('idle');
+            }
             return;
         }
         const normDx = mag > 1 ? dx / mag : dx;
@@ -521,8 +638,10 @@ export class Game extends Scene
         this.player.x = Math.max(60, Math.min(W - 60, nx));
         this.player.y = Math.max(60, Math.min(H - 60, ny));
         if (Math.abs(normDx) > 0.1) this.player.setFlipX(normDx < 0);
-        // 移動時 sprite 輕微抖動(走路動感)± 4°
-        this.player.angle = Math.sin(this.time.now * 0.015) * 4;
+        // state machine:走路時切 walking,讓 walk tween 跑
+        if (this.playerAnimState !== 'walking' && !this.playerAttackTween?.isPlaying()) {
+            this.setPlayerAnimState('walking');
+        }
     }
 
     private handleSpawn(time: number)
@@ -704,6 +823,9 @@ export class Game extends Scene
 
         const data = target.getData('mob') as MobData;
         data.hp -= dmg;
+
+        // 武器類別專屬玩家動作(楓谷風)
+        this.playWeaponAttackAnim(weapon, target.x, target.y);
 
         // 木棍揮砍視覺(廢土橙弧線從 player 朝 target 揮 60°)
         this.spawnSwingEffect(target.x, target.y, isCrit);
