@@ -334,84 +334,153 @@ export class Game extends Scene
 
         // HUD 全部 scrollFactor(0):camera 移動時 UI 不跟著動
         // Phase 4b-13:barY 下移 50→260,避開左上角 minimap(18..238)
+        // R1: 統一鏽板 motif — 三條 bar 共用 #2a2520 炭黑底 + #a05a30 灰橙鏽邊
+        // R3:barY 280 留 minimap 喘息 + Lv/Gold 改廢土徽章
         const barX = (VIEW_W - Game.HP_BAR_WIDTH) / 2;
-        const barY = 260;
-        this.add.rectangle(barX, barY, Game.HP_BAR_WIDTH, Game.HP_BAR_HEIGHT, 0x2a1010)
-            .setOrigin(0, 0).setStrokeStyle(2, 0x8b3a1f).setDepth(1000).setScrollFactor(0);
+        const barY = 285;
+        const HUD_BAR_BG = 0x2a2520;       // 炭黑底
+        const HUD_BAR_STROKE = 0xa05a30;   // 灰橙鏽邊
+        // HP bar 廢土鏽板外框 (HP/MP/EXP 三條 wrap 在一塊大鏽板上)
+        const plateY = barY - 6;
+        const plateH = Game.HP_BAR_HEIGHT + 10 + 30 + 10 + 24 + 12;
+        this.add.rectangle(barX - 8, plateY, Game.HP_BAR_WIDTH + 16, plateH, 0x1a1612, 0.88)
+            .setOrigin(0, 0).setStrokeStyle(3, 0x8b6020, 0.9).setDepth(999).setScrollFactor(0);
+        this.add.rectangle(barX, barY, Game.HP_BAR_WIDTH, Game.HP_BAR_HEIGHT, HUD_BAR_BG)
+            .setOrigin(0, 0).setStrokeStyle(2, HUD_BAR_STROKE).setDepth(1000).setScrollFactor(0);
         this.hpBarFill = this.add.rectangle(barX + 2, barY + 2, Game.HP_BAR_WIDTH - 4, Game.HP_BAR_HEIGHT - 4, 0xc23a1a)
             .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
-        this.hpText = this.add.text(VIEW_W / 2, barY + Game.HP_BAR_HEIGHT / 2, `${this.playerHP} / ${Game.PLAYER_MAX_HP}`, {
+        // R4 金屬高光線(bar 內側上緣 20% 高度,亮一層)
+        this.add.rectangle(barX + 2, barY + 2, Game.HP_BAR_WIDTH - 4, 6, 0xffe0c0, 0.18)
+            .setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
+        this.add.rectangle(barX + 2, barY + Game.HP_BAR_HEIGHT - 6, Game.HP_BAR_WIDTH - 4, 4, 0x1a1612, 0.35)
+            .setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
+        this.hpText = this.add.text(VIEW_W / 2, barY + Game.HP_BAR_HEIGHT / 2, `HP  ${this.playerHP} / ${Game.PLAYER_MAX_HP}`, {
             fontFamily: 'monospace', fontSize: 28, color: '#ffe0c0', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 3
         }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
 
-        // MP bar(HP bar 正下方,藍色)— 放大
+        // MP bar — 廢土能量綠(取代鮮藍,守 palette)
         const mpBarY = barY + Game.HP_BAR_HEIGHT + 10;
         const mpBarH = 30;
-        this.add.rectangle(barX, mpBarY, Game.HP_BAR_WIDTH, mpBarH, 0x10202a)
-            .setOrigin(0, 0).setStrokeStyle(2, 0x4080ff).setDepth(1000).setScrollFactor(0);
+        this.add.rectangle(barX, mpBarY, Game.HP_BAR_WIDTH, mpBarH, HUD_BAR_BG)
+            .setOrigin(0, 0).setStrokeStyle(2, HUD_BAR_STROKE).setDepth(1000).setScrollFactor(0);
         const mpRatio = save.mp / save.maxMp;
-        this.mpBarFill = this.add.rectangle(barX + 2, mpBarY + 2, (Game.HP_BAR_WIDTH - 4) * mpRatio, mpBarH - 4, 0x4080ff)
+        this.mpBarFill = this.add.rectangle(barX + 2, mpBarY + 2, (Game.HP_BAR_WIDTH - 4) * mpRatio, mpBarH - 4, 0x4a5d3a)
             .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
-        this.mpText = this.add.text(VIEW_W / 2, mpBarY + mpBarH / 2, `MP ${save.mp} / ${save.maxMp}`, {
+        // R4 金屬高光
+        this.add.rectangle(barX + 2, mpBarY + 2, Game.HP_BAR_WIDTH - 4, 5, 0xffe0c0, 0.16)
+            .setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
+        this.add.rectangle(barX + 2, mpBarY + mpBarH - 5, Game.HP_BAR_WIDTH - 4, 3, 0x1a1612, 0.3)
+            .setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
+        this.mpText = this.add.text(VIEW_W / 2, mpBarY + mpBarH / 2, `MP  ${save.mp} / ${save.maxMp}`, {
             fontFamily: 'monospace', fontSize: 22, color: '#ffe0c0', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 3
         }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
 
         const expBarY = mpBarY + mpBarH + 10;
         const expBarH = 24;
-        this.add.rectangle(barX, expBarY, Game.HP_BAR_WIDTH, expBarH, 0x2a2010)
-            .setOrigin(0, 0).setStrokeStyle(2, 0x4a5d3a).setDepth(1000).setScrollFactor(0);
+        this.add.rectangle(barX, expBarY, Game.HP_BAR_WIDTH, expBarH, HUD_BAR_BG)
+            .setOrigin(0, 0).setStrokeStyle(2, HUD_BAR_STROKE).setDepth(1000).setScrollFactor(0);
         const expRatio = save.exp / SaveService.instance.expToNext();
         this.expBarFill = this.add.rectangle(barX + 2, expBarY + 2, (Game.HP_BAR_WIDTH - 4) * expRatio, expBarH - 4, 0xb08850)
             .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
+        // R4 金屬高光
+        this.add.rectangle(barX + 2, expBarY + 2, Game.HP_BAR_WIDTH - 4, 4, 0xffe0c0, 0.16)
+            .setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
+        this.add.rectangle(barX + 2, expBarY + expBarH - 4, Game.HP_BAR_WIDTH - 4, 3, 0x1a1612, 0.3)
+            .setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
         // Phase 4b-12 EXP HUD 數字 — 看得到目前 exp / next + %
         this.expText = this.add.text(VIEW_W / 2, expBarY + expBarH / 2, `EXP ${save.exp} / ${SaveService.instance.expToNext()} (${Math.floor(expRatio * 100)}%)`, {
             fontFamily: 'monospace', fontSize: 18, color: '#ffe0c0', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 2
         }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
 
-        this.levelText = this.add.text(barX, barY - 12, `Lv ${save.level}`, {
+        // R3:廢土徽章感 — Lv 圓盾 + Gold 鏽金幣框
+        // Lv 徽章(左上)
+        const lvBadgeX = barX + 50, lvBadgeY = barY - 12;
+        this.add.circle(lvBadgeX, lvBadgeY, 38, 0x1a1612, 0.95)
+            .setStrokeStyle(3, 0xff8830, 1).setDepth(1001).setScrollFactor(0);
+        this.add.circle(lvBadgeX, lvBadgeY, 38, 0x000000, 0)
+            .setStrokeStyle(1, 0x8b6020, 0.7).setDepth(1002).setScrollFactor(0);
+        this.levelText = this.add.text(lvBadgeX, lvBadgeY, `${save.level}`, {
             fontFamily: 'monospace', fontSize: 36, color: '#ff8830', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 4
-        }).setOrigin(0, 1).setDepth(1002).setScrollFactor(0);
-        this.goldText = this.add.text(barX + Game.HP_BAR_WIDTH, barY - 12, `💰 ${save.gold}`, {
+        }).setOrigin(0.5, 0.5).setDepth(1003).setScrollFactor(0);
+        this.add.text(lvBadgeX, lvBadgeY - 30, 'Lv', {
+            fontFamily: 'monospace', fontSize: 14, color: '#b08850', fontStyle: 'bold'
+        }).setOrigin(0.5, 0).setDepth(1003).setScrollFactor(0);
+        // Gold 鏽金幣框(右上)
+        const goldBoxRight = barX + Game.HP_BAR_WIDTH, goldBoxY = barY - 12;
+        this.add.rectangle(goldBoxRight, goldBoxY, 220, 56, 0x1a1612, 0.92)
+            .setOrigin(1, 0.5).setStrokeStyle(2, 0xa05a30, 1).setDepth(1001).setScrollFactor(0);
+        this.goldText = this.add.text(goldBoxRight - 12, goldBoxY, `💰 ${save.gold}`, {
             fontFamily: 'monospace', fontSize: 30, color: '#ffe0c0', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 3
-        }).setOrigin(1, 1).setDepth(1002).setScrollFactor(0);
+        }).setOrigin(1, 0.5).setDepth(1003).setScrollFactor(0);
 
+        // R5 武器名鏽板小框 + HUD plate 四角鉚釘廢土 motif
         const w0 = getWeapon(save.currentWeaponId);
         const enh0 = SaveService.instance.getWeaponEnh(save.currentWeaponId);
-        this.weaponText = this.add.text(barX, expBarY + expBarH + 6, this.formatWeaponLabel(w0, enh0), {
-            fontFamily: 'monospace', fontSize: 18, color: '#b08850'
+        const wpnBoxY = expBarY + expBarH + 8;
+        this.add.rectangle(barX, wpnBoxY - 2, Game.HP_BAR_WIDTH, 36, 0x1a1612, 0.85)
+            .setOrigin(0, 0).setStrokeStyle(2, 0x8b6020, 0.85).setDepth(1000).setScrollFactor(0);
+        this.weaponText = this.add.text(barX + 12, wpnBoxY + 4, this.formatWeaponLabel(w0, enh0), {
+            fontFamily: 'monospace', fontSize: 22, color: '#ffe0c0', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 3
         }).setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
         this.refreshWeaponText();
 
-        // Phase 4b-13 小地圖 — 左上角 220x220,顯示玩家(綠)+ 普通怪(紅)+ boss(橙)+ NPC(藍)
+        // 四角鉚釘(廢土經典 motif)
+        const rivetColor = 0xa05a30, rivetCore = 0x4a3a30;
+        const plateBottom = plateY + plateH;
+        const rivetPositions = [
+            [barX - 4, plateY + 4], [barX + Game.HP_BAR_WIDTH + 4, plateY + 4],
+            [barX - 4, plateBottom - 4], [barX + Game.HP_BAR_WIDTH + 4, plateBottom - 4]
+        ];
+        for (const [rx, ry] of rivetPositions) {
+            this.add.circle(rx, ry, 5, rivetColor).setDepth(1003).setScrollFactor(0);
+            this.add.circle(rx, ry, 2, rivetCore).setDepth(1004).setScrollFactor(0);
+        }
+
+        // Phase 4b-13 小地圖 — 左上角 220x220,廢土鏽板邊框統一 HUD palette
+        // R2:邊框 #8b6020 → #a05a30 鏽橙統一,並改 minimap label 廢土風
         const mmSize = Game.MINIMAP_SIZE;
         const mmPad = Game.MINIMAP_PAD;
-        // bg + border
-        this.add.rectangle(mmPad, mmPad, mmSize, mmSize, 0x1a1612, 0.78)
-            .setOrigin(0, 0).setStrokeStyle(3, 0x8b6020, 0.9)
+        // 雙層鏽板邊框(外暗 + 內鏽橙)
+        this.add.rectangle(mmPad - 4, mmPad - 4, mmSize + 8, mmSize + 8, 0x1a1612, 0.95)
+            .setOrigin(0, 0).setStrokeStyle(2, 0x8b6020, 0.9).setDepth(999).setScrollFactor(0);
+        this.add.rectangle(mmPad, mmPad, mmSize, mmSize, 0x2a2520, 0.85)
+            .setOrigin(0, 0).setStrokeStyle(2, 0xa05a30, 0.95)
             .setDepth(1000).setScrollFactor(0);
-        this.add.text(mmPad + mmSize / 2, mmPad + 8, '◤ MINI-MAP ◢', {
-            fontFamily: 'monospace', fontSize: 14, color: '#b08850'
+        this.add.text(mmPad + mmSize / 2, mmPad + 6, '◤ 廢墟 ◢', {
+            fontFamily: 'monospace', fontSize: 16, color: '#ff8830', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 2
         }).setOrigin(0.5, 0).setDepth(1003).setScrollFactor(0);
         this.minimap = this.add.graphics().setDepth(1002).setScrollFactor(0);
 
-        // HP / MP 藥水 quick button(HUD 右上,避開 minimap 改下移)
-        this.hpPotionText = this.add.text(VIEW_W - 30, 30, `🧪${save.hpPotions}`, {
-            fontFamily: 'monospace', fontSize: 30, color: '#ff4040', fontStyle: 'bold',
-            backgroundColor: '#2a1010', padding: { x: 12, y: 6 }
-        }).setOrigin(1, 0).setDepth(1002).setScrollFactor(0).setInteractive({ useHandCursor: true });
-        this.hpPotionText.on('pointerdown', () => this.useHpPotion());
+        // R1 廢土風藥水 button(炭黑底 + 鏽橙邊 + 廢土色字)
+        // Codex fix:把 rectangle 改成 interactive(48×48 mobile touch target),
+        // 避免 click 落在 padding 卻沒 hit text 的 Phaser quirk
+        const hpBtnX = VIEW_W - 30, hpBtnY = 18;
+        const hpBtnRect = this.add.rectangle(hpBtnX, hpBtnY, 130, 56, 0x1a1612, 0.92)
+            .setOrigin(1, 0).setStrokeStyle(2, 0xa05a30).setDepth(1001).setScrollFactor(0)
+            .setInteractive({ useHandCursor: true });
+        hpBtnRect.on('pointerdown', () => this.useHpPotion());
+        this.hpPotionText = this.add.text(hpBtnX - 8, hpBtnY + 8, `🧪${save.hpPotions}`, {
+            fontFamily: 'monospace', fontSize: 30, color: '#ff8830', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 3
+        }).setOrigin(1, 0).setDepth(1002).setScrollFactor(0);
         this.input.keyboard?.on('keydown-Q', () => this.useHpPotion());
 
-        this.mpPotionText = this.add.text(VIEW_W - 30, 90, `🔮${save.mpPotions}`, {
-            fontFamily: 'monospace', fontSize: 30, color: '#4080ff', fontStyle: 'bold',
-            backgroundColor: '#102030', padding: { x: 12, y: 6 }
-        }).setOrigin(1, 0).setDepth(1002).setScrollFactor(0).setInteractive({ useHandCursor: true });
-        this.mpPotionText.on('pointerdown', () => this.useMpPotion());
+        const mpBtnY = 82;
+        const mpBtnRect = this.add.rectangle(hpBtnX, mpBtnY, 130, 56, 0x1a1612, 0.92)
+            .setOrigin(1, 0).setStrokeStyle(2, 0xa05a30).setDepth(1001).setScrollFactor(0)
+            .setInteractive({ useHandCursor: true });
+        mpBtnRect.on('pointerdown', () => this.useMpPotion());
+        this.mpPotionText = this.add.text(hpBtnX - 8, mpBtnY + 8, `🔮${save.mpPotions}`, {
+            fontFamily: 'monospace', fontSize: 30, color: '#b08850', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 3
+        }).setOrigin(1, 0).setDepth(1002).setScrollFactor(0);
         this.input.keyboard?.on('keydown-E', () => this.useMpPotion());
 
         // 底部 5 tab UI 取代右上 ⚒ / 🎰 button(Phase 4b-5)
@@ -421,22 +490,22 @@ export class Game extends Scene
     private useHpPotion() {
         if (this.isGameOver) return;
         if (!SaveService.instance.useHpPotion()) {
-            this.flashHudMessage('🧪 沒有藥水', 0xff4040);
+            this.flashHudMessage('🧪 沒有藥水', 0xc23a1a);
             return;
         }
         const heal = 50;
         this.playerHP = Math.min(Game.PLAYER_MAX_HP, this.playerHP + heal);
         this.hpBarFill.width = (Game.HP_BAR_WIDTH - 4) * (this.playerHP / Game.PLAYER_MAX_HP);
-        this.hpText.setText(`${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
+        this.hpText.setText(`HP  ${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
         this.hpPotionText.setText(`🧪${SaveService.instance.getHpPotions()}`);
-        this.flashHudMessage(`+${heal} HP`, 0xff4040);
+        this.flashHudMessage(`+${heal} HP`, 0xc23a1a);
         SaveService.instance.save();
     }
 
     private useMpPotion() {
         if (this.isGameOver) return;
         if (!SaveService.instance.useMpPotion()) {
-            this.flashHudMessage('🔮 沒有藥水', 0x4080ff);
+            this.flashHudMessage('🔮 沒有藥水', 0xb08850);
             return;
         }
         const restore = 30;
@@ -444,9 +513,9 @@ export class Game extends Scene
         save.setMp(save.getMp() + restore);
         const cur = save.get();
         this.mpBarFill.width = (Game.HP_BAR_WIDTH - 4) * (cur.mp / cur.maxMp);
-        this.mpText.setText(`MP ${cur.mp} / ${cur.maxMp}`);
+        this.mpText.setText(`MP  ${cur.mp} / ${cur.maxMp}`);
         this.mpPotionText.setText(`🔮${save.getMpPotions()}`);
-        this.flashHudMessage(`+${restore} MP`, 0x4080ff);
+        this.flashHudMessage(`+${restore} MP`, 0x4a5d3a);
         save.save();
     }
 
@@ -565,7 +634,7 @@ export class Game extends Scene
         }
         // NPC clerk
         if (this.npcClerk) {
-            this.minimap.fillStyle(0x4080ff, 1);
+            this.minimap.fillStyle(0xb08850, 1);
             this.minimap.fillCircle(px(this.npcClerk.x), py(this.npcClerk.y), 4);
         }
         // portal(廢土橙環)— per Codex Phase 4a #99 fix:production build 無 global Phaser
@@ -941,7 +1010,7 @@ export class Game extends Scene
         // 血條 + 文字
         const ratio = this.playerHP / Game.PLAYER_MAX_HP;
         this.hpBarFill.width = (Game.HP_BAR_WIDTH - 4) * ratio;
-        this.hpText.setText(`${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
+        this.hpText.setText(`HP  ${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
 
         // HP=0 → GameOver 早退,不放 flash 否則 clearTint 會蓋掉死亡 tint
         if (this.playerHP <= 0) {
@@ -1030,7 +1099,7 @@ export class Game extends Scene
             const heal = Math.max(1, Math.round(baseDmg * weapon.recoveryPercent * 100));
             this.playerHP = Math.min(Game.PLAYER_MAX_HP, this.playerHP + heal);
             this.hpBarFill.width = (Game.HP_BAR_WIDTH - 4) * (this.playerHP / Game.PLAYER_MAX_HP);
-            this.hpText.setText(`${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
+            this.hpText.setText(`HP  ${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
         }
         // Pebble Sling knockback — mob 朝玩家反方向位移 + 邊界 clamp(per Codex review)
         if (weapon.knockbackPx && nearest.active) {
@@ -1364,11 +1433,11 @@ export class Game extends Scene
         // HP / MP 全滿 + bar + text flash
         this.playerHP = Game.PLAYER_MAX_HP;
         this.hpBarFill.width = Game.HP_BAR_WIDTH - 4;
-        this.hpText.setText(`${Game.PLAYER_MAX_HP} / ${Game.PLAYER_MAX_HP}`);
+        this.hpText.setText(`HP  ${Game.PLAYER_MAX_HP} / ${Game.PLAYER_MAX_HP}`);
         const maxMp = SaveService.instance.getMaxMp();
         SaveService.instance.setMp(maxMp);
         this.mpBarFill.width = Game.HP_BAR_WIDTH - 4;
-        this.mpText.setText(`MP ${maxMp} / ${maxMp}`);
+        this.mpText.setText(`MP  ${maxMp} / ${maxMp}`);
 
         // 大字「LEVEL UP!」中央停 1.5s
         const txt = levelsGained > 1 ? `LEVEL UP ×${levelsGained}!` : 'LEVEL UP!';
