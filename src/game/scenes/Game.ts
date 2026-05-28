@@ -181,6 +181,12 @@ export class Game extends Scene
         this.player = this.add.image(CX, CY, 'player_scavver').setScale(0.3);
         // Camera follow player(per 荒野亂鬥)
         this.cameras.main.startFollow(this.player, true, 0.15, 0.15);
+        // Idle 呼吸 animation(scaleY 微微擺動)
+        this.tweens.add({
+            targets: this.player,
+            scaleY: 0.32,
+            duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.inOut'
+        });
 
         // NPC 委託員 — Phase 4b-3 將移到公會地圖,此處保留但放遠處
         this.npcClerk = this.add.image(CX, 300, 'npc_clerk').setScale(0.32);
@@ -503,7 +509,11 @@ export class Game extends Scene
             if (this.cursors.down.isDown  || this.wasd.S.isDown) dy += 1;
         }
         const mag = Math.hypot(dx, dy);
-        if (mag < 0.01) return;
+        if (mag < 0.01) {
+            // 靜止 — 角度復位
+            if (this.player.angle !== 0) this.player.angle *= 0.7;
+            return;
+        }
         const normDx = mag > 1 ? dx / mag : dx;
         const normDy = mag > 1 ? dy / mag : dy;
         const nx = this.player.x + normDx * Game.MOVE_SPEED * delta;
@@ -511,6 +521,8 @@ export class Game extends Scene
         this.player.x = Math.max(60, Math.min(W - 60, nx));
         this.player.y = Math.max(60, Math.min(H - 60, ny));
         if (Math.abs(normDx) > 0.1) this.player.setFlipX(normDx < 0);
+        // 移動時 sprite 輕微抖動(走路動感)± 4°
+        this.player.angle = Math.sin(this.time.now * 0.015) * 4;
     }
 
     private handleSpawn(time: number)
@@ -638,8 +650,9 @@ export class Game extends Scene
     {
         if (this.isGameOver) return;
         this.isGameOver = true;
-        // 死前 persist(等級/金幣/exp 進度不歸零)
+        // per Phase 4b-4:死亡 → 等級保留 / 經驗條歸零(金幣等其他 stat 不動)
         SaveService.instance.addPlaytimeSec(Math.floor((this.time.now - this.sessionStartMs) / 1000));
+        SaveService.instance.resetExpKeepLevel();
         SaveService.instance.save();
         this.player.setTint(0x8b3a1f).setTintMode(TINT_FILL);
         this.cameras.main.shake(400, 0.025);

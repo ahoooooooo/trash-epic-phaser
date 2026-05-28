@@ -151,6 +151,11 @@ export class SaveService {
     isQuestCompleted(id: string): boolean { return !!this.data.questCompleted[id]; }
     markQuestCompleted(id: string): void { this.data.questCompleted[id] = true; }
 
+    // 死亡:per Phase 4b-4 規則,等級保留 / 經驗條歸零
+    resetExpKeepLevel(): void {
+        this.data.exp = 0;
+    }
+
     // Gacha
     getGachaPity(): { pullsSinceSSR: number } {
         return { pullsSinceSSR: this.data.gachaPullsSinceSSR };
