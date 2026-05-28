@@ -34,8 +34,10 @@ export class Preloader extends Scene
     {
         this.load.setPath('assets');
 
-        // V1 主角 + 3 種 mob + NPC 委託員
-        this.load.image('player_scavver', 'characters/player_scavver_portrait.png');
+        // V1 主角 frame anim(Phase 4b-10:side view idle + walk 2-frame loop)
+        this.load.image('player_idle', 'characters/player_scavver_sideview_idle.png');
+        this.load.image('player_walk_r', 'characters/player_scavver_walk_right.png');
+        this.load.image('player_walk_l', 'characters/player_scavver_walk_left.png');
         this.load.image('mob_giantrat', 'mobs/boss_wasteland_giantrat_portrait.png');
         this.load.image('mob_centipede', 'mobs/mob_centipede.png');
         this.load.image('npc_clerk', 'characters/npc_quest_clerk_greenscarf.png');

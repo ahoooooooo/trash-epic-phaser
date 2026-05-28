@@ -112,7 +112,7 @@ interface MobData {
 
 export class Game extends Scene
 {
-    private player!: Phaser.GameObjects.Image;
+    private player!: Phaser.GameObjects.Sprite;
     private playerHP = 100;
     private playerInvulnUntilMs = 0;
     private isGameOver = false;
@@ -198,7 +198,19 @@ export class Game extends Scene
         const enterPos = SaveService.instance.consumeMapEnterPos();
         const startX = enterPos.x ?? this.mapConfig.playerStartX;
         const startY = enterPos.y ?? this.mapConfig.playerStartY;
-        this.player = this.add.image(startX, startY, 'player_scavver').setScale(0.3);
+        this.player = this.add.sprite(startX, startY, 'player_idle').setScale(0.3);
+        // Phase 4b-10 register walk anim 一次性 — frames 跨不同 texture key
+        if (!this.anims.exists('player_walk')) {
+            this.anims.create({
+                key: 'player_walk',
+                frames: [
+                    { key: 'player_walk_r' },
+                    { key: 'player_walk_l' }
+                ],
+                frameRate: 6,
+                repeat: -1
+            });
+        }
         this.cameras.main.startFollow(this.player, true, 0.15, 0.15);
         // 開始 idle 動畫(state machine 控制 idle/walk/attack 切換,force first start)
         this.setPlayerAnimState('idle', true);
@@ -604,26 +616,18 @@ export class Game extends Scene
         this.scene.restart();
     }
 
-    // 楓谷風 state machine:idle / walking / attacking(by weapon)
+    // Phase 4b-10 state machine:真 frame anim,idle 靜態 / walking 跑 2-frame loop
     private setPlayerAnimState(state: 'idle' | 'walking', force = false) {
         if (!force && this.playerAnimState === state) return;
         this.playerAnimState = state;
         if (this.playerStateTween) this.playerStateTween.stop();
-        // 重置 transform(attack 後可能殘留)
         this.player.angle = 0;
         this.player.setScale(0.3);
         if (state === 'idle') {
-            // 站立:輕微呼吸 scaleY
-            this.playerStateTween = this.tweens.add({
-                targets: this.player, scaleY: 0.31,
-                duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.inOut'
-            });
+            this.player.anims.stop();
+            this.player.setTexture('player_idle');
         } else {
-            // 走路:垂直彈跳 + 輕度搖晃
-            this.playerStateTween = this.tweens.add({
-                targets: this.player, scaleY: 0.28,
-                duration: 180, yoyo: true, repeat: -1, ease: 'Sine.inOut'
-            });
+            this.player.play('player_walk', true);
         }
     }
 

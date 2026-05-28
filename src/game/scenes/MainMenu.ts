@@ -15,7 +15,7 @@ export class MainMenu extends Scene
         this.cameras.main.setBackgroundColor('#1a1612');
 
         // 主角立繪正中央上方
-        this.add.image(CX, CY - 300, 'player_scavver').setScale(0.45);
+        this.add.image(CX, CY - 300, 'player_idle').setScale(0.45);
 
         // Title 廢土風
         this.add.text(CX, CY + 80, '破爛史詩', {
