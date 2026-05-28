@@ -5,8 +5,15 @@ import { SaveService } from '../services/SaveService';
 import { effectiveDamage, getWeapon, WeaponDef } from '../services/WeaponService';
 import { QUESTS, QuestDef } from '../services/QuestService';
 
-const W = 1080;
-const H = 1920;
+// 視窗尺寸(Phaser config 內固定 1080×1920 portrait)
+const VIEW_W = 1080;
+const VIEW_H = 1920;
+// 大地圖尺寸(camera follow player,UI 用 scrollFactor(0) 固定)— 荒野亂鬥風
+const MAP_W = 2400;
+const MAP_H = 3200;
+// alias 保留 — 玩家邊界 / 內容定位用 MAP 尺寸
+const W = MAP_W;
+const H = MAP_H;
 const CX = W / 2;
 const CY = H / 2;
 
@@ -157,18 +164,26 @@ export class Game extends Scene
         this.mobs = [];
 
         this.cameras.main.setBackgroundColor('#2a2520');
+        // Camera follow player + bounds = 整張大地圖(per Phase 4b 荒野亂鬥風)
+        this.cameras.main.setBounds(0, 0, MAP_W, MAP_H);
 
-        // 廢墟地面網格
+        // 廢墟地面網格(整張大地圖)
         const grid = this.add.graphics();
         grid.lineStyle(1, 0x4a5d3a, 0.3);
-        for (let x = 0; x <= W; x += 90) { grid.moveTo(x, 0); grid.lineTo(x, H); }
-        for (let y = 0; y <= H; y += 90) { grid.moveTo(0, y); grid.lineTo(W, y); }
+        for (let x = 0; x <= MAP_W; x += 120) { grid.moveTo(x, 0); grid.lineTo(x, MAP_H); }
+        for (let y = 0; y <= MAP_H; y += 120) { grid.moveTo(0, y); grid.lineTo(MAP_W, y); }
         grid.strokePath();
 
-        this.player = this.add.image(CX, CY, 'player_scavver').setScale(0.3);
+        // 地圖邊界(廢墟柵欄概念 — 紅 stroke 框)
+        this.add.rectangle(MAP_W / 2, MAP_H / 2, MAP_W, MAP_H, 0, 0)
+            .setStrokeStyle(8, 0x8b3a1f, 0.5);
 
-        // NPC 委託員(地圖頂端中央固定位置 — tap-to-open per Codex review)
-        this.npcClerk = this.add.image(CX, 400, 'npc_clerk').setScale(0.32);
+        this.player = this.add.image(CX, CY, 'player_scavver').setScale(0.3);
+        // Camera follow player(per 荒野亂鬥)
+        this.cameras.main.startFollow(this.player, true, 0.15, 0.15);
+
+        // NPC 委託員 — Phase 4b-3 將移到公會地圖,此處保留但放遠處
+        this.npcClerk = this.add.image(CX, 300, 'npc_clerk').setScale(0.32);
         this.npcClerk.setInteractive({ useHandCursor: true });
         this.npcClerk.on('pointerdown', () => {
             // 必須玩家在 110px 內才能接觸(避免遠距點擊)
@@ -188,16 +203,20 @@ export class Game extends Scene
 
         HitStopService.instance.attach(this);
 
-        // 8 spawn points,各自固定 blueprint(廢土地圖各區生不同怪)
+        // 16 spawn points 散布大地圖各 region(per Phase 4b 大地圖)
         const points: { x: number; y: number; blueprintIdx: number }[] = [
-            { x: 200, y: 400, blueprintIdx: 0 },  // giantrat
-            { x: 880, y: 400, blueprintIdx: 1 },  // centipede
-            { x: 200, y: 1000, blueprintIdx: 0 }, // giantrat
-            { x: 880, y: 1000, blueprintIdx: 2 }, // scrap drone
-            { x: 200, y: 1500, blueprintIdx: 1 }, // centipede
-            { x: 880, y: 1500, blueprintIdx: 0 }, // giantrat
-            { x: 540, y: 250, blueprintIdx: 2 },  // scrap drone
-            { x: 540, y: 1700, blueprintIdx: 1 }  // centipede
+            // 北區(NPC 周圍少怪)
+            { x: 400, y: 600, blueprintIdx: 0 },   { x: 1200, y: 700, blueprintIdx: 1 },
+            { x: 1800, y: 600, blueprintIdx: 0 },  { x: 2100, y: 800, blueprintIdx: 2 },
+            // 中區
+            { x: 300, y: 1400, blueprintIdx: 1 },  { x: 800, y: 1500, blueprintIdx: 0 },
+            { x: 1700, y: 1400, blueprintIdx: 2 }, { x: 2200, y: 1600, blueprintIdx: 0 },
+            // 中南
+            { x: 400, y: 2000, blueprintIdx: 0 },  { x: 1100, y: 2100, blueprintIdx: 2 },
+            { x: 1800, y: 2000, blueprintIdx: 1 }, { x: 2200, y: 2200, blueprintIdx: 1 },
+            // 南區
+            { x: 500, y: 2700, blueprintIdx: 2 },  { x: 1200, y: 2800, blueprintIdx: 1 },
+            { x: 1700, y: 2700, blueprintIdx: 0 }, { x: 2100, y: 2900, blueprintIdx: 1 }
         ];
         this.spawnPoints = points.map(p => ({
             x: p.x, y: p.y, mob: null, nextSpawnAt: 0, blueprintIdx: p.blueprintIdx
@@ -206,7 +225,8 @@ export class Game extends Scene
         this.cursors = this.input.keyboard!.createCursorKeys();
         this.wasd = this.input.keyboard!.addKeys('W,A,S,D') as typeof this.wasd;
         // 手機虛擬搖桿(bottom-left)— Dash 暫移除,等下次設計
-        this.joystick = new VirtualJoystick(this, { x: 220, y: H - 280, radius: 130 });
+        // Joystick 用 VIEW 尺寸(scrollFactor 0 跟著 camera 不動)
+        this.joystick = new VirtualJoystick(this, { x: 220, y: VIEW_H - 280, radius: 130 });
 
         // Save 載入
         const save = SaveService.instance.get();
@@ -225,68 +245,57 @@ export class Game extends Scene
             if (this.pageHideHandler) window.removeEventListener('pagehide', this.pageHideHandler);
         });
 
-        // HUD — 血條(畫面頂端,UI depth 高於 mob 預設 0)
-        const barX = (W - Game.HP_BAR_WIDTH) / 2;
+        // HUD 全部 scrollFactor(0):camera 移動時 UI 不跟著動
+        const barX = (VIEW_W - Game.HP_BAR_WIDTH) / 2;
         const barY = 50;
         this.add.rectangle(barX, barY, Game.HP_BAR_WIDTH, Game.HP_BAR_HEIGHT, 0x2a1010)
-            .setOrigin(0, 0)
-            .setStrokeStyle(2, 0x8b3a1f)
-            .setDepth(1000);
+            .setOrigin(0, 0).setStrokeStyle(2, 0x8b3a1f).setDepth(1000).setScrollFactor(0);
         this.hpBarFill = this.add.rectangle(barX + 2, barY + 2, Game.HP_BAR_WIDTH - 4, Game.HP_BAR_HEIGHT - 4, 0xc23a1a)
-            .setOrigin(0, 0)
-            .setDepth(1001);
-        this.hpText = this.add.text(W / 2, barY + Game.HP_BAR_HEIGHT / 2, `${this.playerHP} / ${Game.PLAYER_MAX_HP}`, {
+            .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
+        this.hpText = this.add.text(VIEW_W / 2, barY + Game.HP_BAR_HEIGHT / 2, `${this.playerHP} / ${Game.PLAYER_MAX_HP}`, {
             fontFamily: 'monospace', fontSize: 18, color: '#ffe0c0'
-        }).setOrigin(0.5).setDepth(1002);
+        }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
 
-        // Exp bar(HP bar 下方)
         const expBarY = barY + Game.HP_BAR_HEIGHT + 10;
         const expBarH = 14;
         this.add.rectangle(barX, expBarY, Game.HP_BAR_WIDTH, expBarH, 0x2a2010)
-            .setOrigin(0, 0)
-            .setStrokeStyle(2, 0x4a5d3a)
-            .setDepth(1000);
+            .setOrigin(0, 0).setStrokeStyle(2, 0x4a5d3a).setDepth(1000).setScrollFactor(0);
         const expRatio = save.exp / SaveService.instance.expToNext();
         this.expBarFill = this.add.rectangle(barX + 2, expBarY + 2, (Game.HP_BAR_WIDTH - 4) * expRatio, expBarH - 4, 0xb08850)
-            .setOrigin(0, 0)
-            .setDepth(1001);
+            .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
 
-        // Level + Gold 在血條上方左右
         this.levelText = this.add.text(barX, barY - 8, `Lv ${save.level}`, {
             fontFamily: 'monospace', fontSize: 22, color: '#ff8830', fontStyle: 'bold'
-        }).setOrigin(0, 1).setDepth(1002);
+        }).setOrigin(0, 1).setDepth(1002).setScrollFactor(0);
         this.goldText = this.add.text(barX + Game.HP_BAR_WIDTH, barY - 8, `💰 ${save.gold}`, {
             fontFamily: 'monospace', fontSize: 20, color: '#ffe0c0'
-        }).setOrigin(1, 1).setDepth(1002);
+        }).setOrigin(1, 1).setDepth(1002).setScrollFactor(0);
 
-        // 當前武器 HUD(exp bar 下方)
         const w0 = getWeapon(save.currentWeaponId);
         const enh0 = SaveService.instance.getWeaponEnh(save.currentWeaponId);
         this.weaponText = this.add.text(barX, expBarY + expBarH + 6, this.formatWeaponLabel(w0, enh0), {
             fontFamily: 'monospace', fontSize: 18, color: '#b08850'
-        }).setOrigin(0, 0).setDepth(1002);
+        }).setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
         this.refreshWeaponText();
 
-        // Inventory 入口 button(右上方,血條右側)
-        const invBtn = this.add.text(W - 30, 30, '⚒', {
+        // Inventory / Gacha 入口 button(scrollFactor 0)
+        const invBtn = this.add.text(VIEW_W - 30, 30, '⚒', {
             fontFamily: 'sans-serif', fontSize: 44, color: '#ff8830', fontStyle: 'bold',
             backgroundColor: '#2a2520', padding: { x: 18, y: 8 }
-        }).setOrigin(1, 0).setDepth(1002).setInteractive({ useHandCursor: true });
+        }).setOrigin(1, 0).setDepth(1002).setScrollFactor(0).setInteractive({ useHandCursor: true });
         invBtn.on('pointerdown', () => this.openInventory());
         this.input.keyboard?.on('keydown-I', () => this.openInventory());
 
-        // Gacha 入口 button(Inventory 旁邊)
-        const gachaBtn = this.add.text(W - 110, 30, '🎰', {
+        const gachaBtn = this.add.text(VIEW_W - 110, 30, '🎰', {
             fontFamily: 'sans-serif', fontSize: 44, color: '#ff8830', fontStyle: 'bold',
             backgroundColor: '#2a2520', padding: { x: 18, y: 8 }
-        }).setOrigin(1, 0).setDepth(1002).setInteractive({ useHandCursor: true });
+        }).setOrigin(1, 0).setDepth(1002).setScrollFactor(0).setInteractive({ useHandCursor: true });
         gachaBtn.on('pointerdown', () => this.openGacha());
         this.input.keyboard?.on('keydown-G', () => this.openGacha());
 
-        // 底部 hint(per Codex review:移回 create,不重複 spawn)
-        this.add.text(20, H - 60, '搖桿移動 / WASD / 方向鍵 — 自動攻擊', {
+        this.add.text(20, VIEW_H - 60, '搖桿移動 / WASD / 方向鍵 — 自動攻擊', {
             fontFamily: 'sans-serif', fontSize: 22, color: '#a05a30'
-        }).setDepth(1000);
+        }).setDepth(1000).setScrollFactor(0);
     }
 
     private openGacha()
@@ -361,24 +370,25 @@ export class Game extends Scene
         const progress = save.getQuestProgress(q.id);
         const isReady = progress >= q.targetCount;
 
-        const bg = this.add.rectangle(W / 2, H / 2, W - 80, 700, 0x1a1612, 0.97)
-            .setStrokeStyle(4, 0xff8830).setDepth(2000);
-        const title = this.add.text(W / 2, H / 2 - 280, `📜 ${q.nameZH}`, {
+        // Quest dialog viewport-fixed(per Codex review:VIEW_W/H + scrollFactor 0)
+        const bg = this.add.rectangle(VIEW_W / 2, VIEW_H / 2, VIEW_W - 80, 700, 0x1a1612, 0.97)
+            .setStrokeStyle(4, 0xff8830).setDepth(2000).setScrollFactor(0);
+        const title = this.add.text(VIEW_W / 2, VIEW_H / 2 - 280, `📜 ${q.nameZH}`, {
             fontFamily: 'sans-serif', fontSize: 56, color: '#ff8830', fontStyle: 'bold'
-        }).setOrigin(0.5).setDepth(2001);
-        const desc = this.add.text(W / 2, H / 2 - 160, q.descZH, {
+        }).setOrigin(0.5).setDepth(2001).setScrollFactor(0);
+        const desc = this.add.text(VIEW_W / 2, VIEW_H / 2 - 160, q.descZH, {
             fontFamily: 'sans-serif', fontSize: 28, color: '#ffe0c0',
-            wordWrap: { width: W - 160 }, align: 'center'
-        }).setOrigin(0.5).setDepth(2001);
-        const prog = this.add.text(W / 2, H / 2 - 30,
+            wordWrap: { width: VIEW_W - 160 }, align: 'center'
+        }).setOrigin(0.5).setDepth(2001).setScrollFactor(0);
+        const prog = this.add.text(VIEW_W / 2, VIEW_H / 2 - 30,
             `進度:${progress} / ${q.targetCount}`, {
             fontFamily: 'monospace', fontSize: 36,
             color: isReady ? '#4a5d3a' : '#b08850'
-        }).setOrigin(0.5).setDepth(2001);
-        const reward = this.add.text(W / 2, H / 2 + 60,
+        }).setOrigin(0.5).setDepth(2001).setScrollFactor(0);
+        const reward = this.add.text(VIEW_W / 2, VIEW_H / 2 + 60,
             `獎勵:💰 ${q.rewardGold} + ${q.rewardExp} EXP`, {
             fontFamily: 'monospace', fontSize: 28, color: '#ffe060'
-        }).setOrigin(0.5).setDepth(2001);
+        }).setOrigin(0.5).setDepth(2001).setScrollFactor(0);
 
         // 按鈕:領獎 / 接受 / 關閉
         let actionBtnLabel: string;
@@ -390,10 +400,10 @@ export class Game extends Scene
             actionBtnLabel = '接受任務';
             actionFn = () => this.closeQuestDialog([bg, title, desc, prog, reward, action, close]);
         }
-        const action = this.add.text(W / 2 - 130, H / 2 + 200, actionBtnLabel, {
+        const action = this.add.text(VIEW_W / 2 - 130, VIEW_H / 2 + 200, actionBtnLabel, {
             fontFamily: 'sans-serif', fontSize: 32, color: '#1a1612', fontStyle: 'bold',
             backgroundColor: isReady ? '#4a5d3a' : '#ff8830', padding: { x: 24, y: 14 }
-        }).setOrigin(0.5).setDepth(2002).setInteractive({ useHandCursor: true });
+        }).setOrigin(0.5).setDepth(2002).setScrollFactor(0).setInteractive({ useHandCursor: true });
         action.on('pointerdown', () => {
             actionFn();
             if (isReady) {
@@ -406,10 +416,10 @@ export class Game extends Scene
             }
         });
 
-        const close = this.add.text(W / 2 + 130, H / 2 + 200, '✕ 關閉', {
+        const close = this.add.text(VIEW_W / 2 + 130, VIEW_H / 2 + 200, '✕ 關閉', {
             fontFamily: 'sans-serif', fontSize: 32, color: '#ffe0c0',
             backgroundColor: '#4a3a30', padding: { x: 24, y: 14 }
-        }).setOrigin(0.5).setDepth(2002).setInteractive({ useHandCursor: true });
+        }).setOrigin(0.5).setDepth(2002).setScrollFactor(0).setInteractive({ useHandCursor: true });
         close.on('pointerdown', () => this.closeQuestDialog([bg, title, desc, prog, reward, action, close]));
     }
 
@@ -432,10 +442,10 @@ export class Game extends Scene
             this.spawnLevelUpEffect(res.levelsGained);
         }
         // 完成 popup
-        const t = this.add.text(W / 2, H / 2 - 350, `任務完成!+${q.rewardGold}💰 +${q.rewardExp} EXP`, {
+        const t = this.add.text(VIEW_W / 2, VIEW_H / 2 - 350, `任務完成!+${q.rewardGold}💰 +${q.rewardExp} EXP`, {
             fontFamily: 'sans-serif', fontSize: 36, color: '#ffe060', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 5
-        }).setOrigin(0.5).setDepth(3000);
+        }).setOrigin(0.5).setDepth(3000).setScrollFactor(0);
         this.tweens.add({
             targets: t, y: t.y - 80, alpha: 0, duration: 1500,
             onComplete: () => t.destroy()
@@ -755,10 +765,10 @@ export class Game extends Scene
         this.sessionKills = 0; // 下隻 boss 重數
         this.cameras.main.shake(500, 0.025);
         // 大號 BOSS DEFEATED popup
-        const popup = this.add.text(W / 2, H / 2, 'BOSS 擊破!', {
+        const popup = this.add.text(VIEW_W / 2, VIEW_H / 2, 'BOSS 擊破!', {
             fontFamily: 'sans-serif', fontSize: 84, color: '#ffe0c0', fontStyle: 'bold',
             stroke: '#8b3a1f', strokeThickness: 10
-        }).setOrigin(0.5).setDepth(3000).setScale(0.3);
+        }).setOrigin(0.5).setDepth(3000).setScale(0.3).setScrollFactor(0);
         this.tweens.add({
             targets: popup, scale: 1.3, alpha: 0,
             duration: 1500, ease: 'Back.out',
@@ -826,10 +836,10 @@ export class Game extends Scene
 
         // Boss spawn 視覺
         this.cameras.main.shake(400, 0.020);
-        const warn = this.add.text(W / 2, H / 2 - 200, '⚠ BOSS 出現!', {
+        const warn = this.add.text(VIEW_W / 2, VIEW_H / 2 - 200, '⚠ BOSS 出現!', {
             fontFamily: 'sans-serif', fontSize: 64, color: '#ff4040', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 8
-        }).setOrigin(0.5).setDepth(3000);
+        }).setOrigin(0.5).setDepth(3000).setScrollFactor(0);
         this.tweens.add({
             targets: warn, alpha: 0, scale: 1.5, duration: 1500,
             onComplete: () => warn.destroy()

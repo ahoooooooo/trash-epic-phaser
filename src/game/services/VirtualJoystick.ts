@@ -29,13 +29,13 @@ export class VirtualJoystick {
     get active(): boolean { return this.pointerId !== null; }
 
     private create() {
-        // UI depth = 1000+(高於 mob sprite 預設 0)
+        // UI depth = 1000+(高於 mob sprite 預設 0)+ scrollFactor 0(camera follow 不動)
         this.base = this.scene.add.circle(this.baseX, this.baseY, this.radius, 0xff8830, 0.18)
             .setStrokeStyle(3, 0xff8830, 0.6)
-            .setDepth(1000);
+            .setDepth(1000).setScrollFactor(0);
         this.stick = this.scene.add.circle(this.baseX, this.baseY, this.radius * 0.42, 0xff8830, 0.55)
             .setStrokeStyle(2, 0xffffff, 0.4)
-            .setDepth(1001);
+            .setDepth(1001).setScrollFactor(0);
     }
 
     private attach() {
@@ -46,6 +46,8 @@ export class VirtualJoystick {
             if (p.y < scene.scale.height * 0.5) return;
             if (p.x > scene.scale.width * 0.5) return;
             this.pointerId = p.id;
+            // joystick 是 UI(scrollFactor 0),要用 camera 內 screen coord 不是 world coord
+            // Phaser 4:pointer.x/y 已是 viewport 座標(screen pixel)
             this.baseX = p.x;
             this.baseY = p.y;
             this.base.setPosition(this.baseX, this.baseY);
