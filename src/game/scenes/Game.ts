@@ -1,7 +1,7 @@
 import { Scene } from 'phaser';
 import { HitStopService } from '../services/HitStopService';
 import { VirtualJoystick } from '../services/VirtualJoystick';
-import { DashButton } from '../services/DashButton';
+import { SaveService } from '../services/SaveService';
 
 const W = 1080;
 const H = 1920;
@@ -45,13 +45,17 @@ export class Game extends Scene
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
     private wasd!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
     private joystick!: VirtualJoystick;
-    private dashButton!: DashButton;
-    private dashUntilMs = 0;
-    private lastDirX = 0;
-    private lastDirY = -1; // 預設朝上(初次按 Dash 沒 input 時的 fallback)
     private attackCooldownMs = 0;
     private hpBarFill!: Phaser.GameObjects.Rectangle;
     private hpText!: Phaser.GameObjects.Text;
+    private expBarFill!: Phaser.GameObjects.Rectangle;
+    private levelText!: Phaser.GameObjects.Text;
+    private goldText!: Phaser.GameObjects.Text;
+    private sessionStartMs = 0;
+    private lastPersistMs = 0;
+    private pageHideHandler?: () => void;
+
+    private static readonly PERSIST_THROTTLE_MS = 3000; // per Codex review
 
     private static readonly ATTACK_RANGE = 220;
     private static readonly ATTACK_INTERVAL_MS = 600;
@@ -59,9 +63,8 @@ export class Game extends Scene
     private static readonly CRIT_CHANCE = 0.15;
     private static readonly CRIT_MULT = 1.5;
     private static readonly MOVE_SPEED = 0.4;        // 玩家 px/ms
-    private static readonly DASH_DURATION_MS = 400;  // 楓谷風 dash 0.4s
-    private static readonly DASH_SPEED_MULT = 3;     // dash 速度 ×3(280px 位移約等於楓谷一段)
-    private static readonly DASH_CD_MS = 2500;       // dash CD
+    private static readonly MOB_EXP_REWARD = 5;      // 廢料巨鼠 5 exp
+    private static readonly MOB_GOLD_REWARD = 3;     // 廢料巨鼠 3 gold
     private static readonly MOB_SPEED_CHASE = 0.10;  // 怪追擊 px/ms
     private static readonly MOB_SPEED_WANDER = 0.04; // 怪漫遊 px/ms(慢)
     private static readonly MOB_AGGRO_RANGE = 350;   // < 進入 chase
@@ -109,14 +112,25 @@ export class Game extends Scene
 
         this.cursors = this.input.keyboard!.createCursorKeys();
         this.wasd = this.input.keyboard!.addKeys('W,A,S,D') as typeof this.wasd;
-        // 手機虛擬搖桿(bottom-left)
+        // 手機虛擬搖桿(bottom-left)— Dash 暫移除,等下次設計
         this.joystick = new VirtualJoystick(this, { x: 220, y: H - 280, radius: 130 });
-        // Dash 閃招按鈕(bottom-right)
-        this.dashButton = new DashButton(
-            this,
-            { x: W - 220, y: H - 280, radius: 110, cdMs: Game.DASH_CD_MS },
-            () => this.triggerDash()
-        );
+
+        // Save 載入
+        const save = SaveService.instance.get();
+        this.sessionStartMs = this.time.now;
+        this.lastPersistMs = 0;
+
+        // pagehide flush(per Codex review):mobile 切後台 / tab 關閉前最後寫入
+        this.pageHideHandler = () => {
+            SaveService.instance.addPlaytimeSec(Math.floor((this.time.now - this.sessionStartMs) / 1000));
+            SaveService.instance.save();
+            this.sessionStartMs = this.time.now; // reset 避免重複計算
+        };
+        window.addEventListener('pagehide', this.pageHideHandler);
+        // Phaser scene shutdown 時移除 listener
+        this.events.once('shutdown', () => {
+            if (this.pageHideHandler) window.removeEventListener('pagehide', this.pageHideHandler);
+        });
 
         // HUD — 血條(畫面頂端,UI depth 高於 mob 預設 0)
         const barX = (W - Game.HP_BAR_WIDTH) / 2;
@@ -132,6 +146,26 @@ export class Game extends Scene
             fontFamily: 'monospace', fontSize: 18, color: '#ffe0c0'
         }).setOrigin(0.5).setDepth(1002);
 
+        // Exp bar(HP bar 下方)
+        const expBarY = barY + Game.HP_BAR_HEIGHT + 10;
+        const expBarH = 14;
+        this.add.rectangle(barX, expBarY, Game.HP_BAR_WIDTH, expBarH, 0x2a2010)
+            .setOrigin(0, 0)
+            .setStrokeStyle(2, 0x4a5d3a)
+            .setDepth(1000);
+        const expRatio = save.exp / SaveService.instance.expToNext();
+        this.expBarFill = this.add.rectangle(barX + 2, expBarY + 2, (Game.HP_BAR_WIDTH - 4) * expRatio, expBarH - 4, 0xb08850)
+            .setOrigin(0, 0)
+            .setDepth(1001);
+
+        // Level + Gold 在血條上方左右
+        this.levelText = this.add.text(barX, barY - 8, `Lv ${save.level}`, {
+            fontFamily: 'monospace', fontSize: 22, color: '#ff8830', fontStyle: 'bold'
+        }).setOrigin(0, 1).setDepth(1002);
+        this.goldText = this.add.text(barX + Game.HP_BAR_WIDTH, barY - 8, `💰 ${save.gold}`, {
+            fontFamily: 'monospace', fontSize: 20, color: '#ffe0c0'
+        }).setOrigin(1, 1).setDepth(1002);
+
         this.add.text(20, H - 60, '搖桿移動 / WASD / 方向鍵 — 自動攻擊', {
             fontFamily: 'sans-serif', fontSize: 22, color: '#a05a30'
         });
@@ -146,7 +180,6 @@ export class Game extends Scene
         this.handleMobContactDamage(time);
         if (this.isGameOver) return;
         this.handleAutoAttack(time, delta);
-        this.dashButton.update();
     }
 
     private spawnSwingEffect(targetX: number, targetY: number, isCrit: boolean)
@@ -175,36 +208,9 @@ export class Game extends Scene
         });
     }
 
-    private triggerDash()
-    {
-        const now = this.time.now;
-        if (now < this.dashUntilMs) return; // 正在 dash
-        this.dashUntilMs = now + Game.DASH_DURATION_MS;
-        // i-frame 跟 dash 同步(per 楓谷 Hayato/Phantom dash 0.4s 無敵)
-        this.playerInvulnUntilMs = Math.max(this.playerInvulnUntilMs, this.dashUntilMs);
-        // Ghost trail(每 50ms 留一個 fading ghost)
-        const step = 50;
-        const steps = Math.floor(Game.DASH_DURATION_MS / step);
-        for (let i = 0; i < steps; i++) {
-            this.time.delayedCall(i * step, () => {
-                if (this.isGameOver || !this.player.active) return;
-                const ghost = this.add.image(this.player.x, this.player.y, 'player_scavver')
-                    .setScale(0.3).setAlpha(0.5);
-                ghost.setTint(0xff8830).setTintMode(TINT_FILL);
-                if (this.player.flipX) ghost.setFlipX(true);
-                this.tweens.add({
-                    targets: ghost, alpha: 0, duration: 300,
-                    onComplete: () => ghost.destroy()
-                });
-            });
-        }
-    }
-
     private handleMovement(delta: number)
     {
-        const isDashing = this.time.now < this.dashUntilMs;
         let dx = 0, dy = 0;
-        // 優先吃搖桿(手機),沒搖桿才吃鍵盤(電腦)
         if (this.joystick.active) {
             dx = this.joystick.dx;
             dy = this.joystick.dy;
@@ -215,25 +221,11 @@ export class Game extends Scene
             if (this.cursors.down.isDown  || this.wasd.S.isDown) dy += 1;
         }
         const mag = Math.hypot(dx, dy);
-        let normDx: number, normDy: number;
-        if (mag < 0.01) {
-            // 沒輸入時,dash 期間照樣按最後方向衝
-            if (!isDashing) return;
-            normDx = this.lastDirX;
-            normDy = this.lastDirY;
-        } else {
-            normDx = mag > 1 ? dx / mag : dx;
-            normDy = mag > 1 ? dy / mag : dy;
-            // 記住方向給下次 dash 用
-            const dirMag = Math.hypot(normDx, normDy);
-            if (dirMag > 0.05) {
-                this.lastDirX = normDx / dirMag;
-                this.lastDirY = normDy / dirMag;
-            }
-        }
-        const speed = Game.MOVE_SPEED * (isDashing ? Game.DASH_SPEED_MULT : 1);
-        const nx = this.player.x + normDx * speed * delta;
-        const ny = this.player.y + normDy * speed * delta;
+        if (mag < 0.01) return;
+        const normDx = mag > 1 ? dx / mag : dx;
+        const normDy = mag > 1 ? dy / mag : dy;
+        const nx = this.player.x + normDx * Game.MOVE_SPEED * delta;
+        const ny = this.player.y + normDy * Game.MOVE_SPEED * delta;
         this.player.x = Math.max(60, Math.min(W - 60, nx));
         this.player.y = Math.max(60, Math.min(H - 60, ny));
         if (Math.abs(normDx) > 0.1) this.player.setFlipX(normDx < 0);
@@ -356,8 +348,11 @@ export class Game extends Scene
 
     private handleGameOver()
     {
-        if (this.isGameOver) return; // idempotent
+        if (this.isGameOver) return;
         this.isGameOver = true;
+        // 死前 persist(等級/金幣/exp 進度不歸零)
+        SaveService.instance.addPlaytimeSec(Math.floor((this.time.now - this.sessionStartMs) / 1000));
+        SaveService.instance.save();
         this.player.setTint(0x8b3a1f).setTintMode(TINT_FILL);
         this.cameras.main.shake(400, 0.025);
         this.time.delayedCall(800, () => {
@@ -418,13 +413,98 @@ export class Game extends Scene
         this.cameras.main.shake(isCrit ? 120 : 50, isCrit ? 0.012 : 0.005);
         HitStopService.instance.trigger(isCrit ? 100 : 60, isCrit ? 0.03 : 0.05);
 
-        // 死亡 + cycle 重生
+        // 死亡 + cycle 重生 + reward
         if (data.hp <= 0) {
             const sp = data.spawnPoint;
             sp.mob = null;
             sp.nextSpawnAt = time + RESPAWN_CYCLE_MS;
             this.mobs = this.mobs.filter(m => m !== target);
+            this.spawnGoldDrop(target.x, target.y, Game.MOB_GOLD_REWARD);
+            this.grantKillReward(target.x, target.y);
             target.destroy();
         }
+    }
+
+    private grantKillReward(x: number, y: number)
+    {
+        const save = SaveService.instance;
+        save.addKill();
+        save.addGold(Game.MOB_GOLD_REWARD);
+        this.goldText.setText(`💰 ${save.get().gold}`);
+
+        // EXP popup
+        const expGain = Game.MOB_EXP_REWARD;
+        const result = save.addExp(expGain);
+        const expText = this.add.text(x, y - 80, `+${expGain} EXP`, {
+            fontFamily: 'monospace', fontSize: 22, color: '#4a5d3a', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 3
+        }).setOrigin(0.5).setDepth(500);
+        this.tweens.add({
+            targets: expText, y: expText.y - 60, alpha: 0,
+            duration: 700, onComplete: () => expText.destroy()
+        });
+
+        // Update exp bar
+        const cur = save.get();
+        const ratio = cur.exp / save.expToNext();
+        this.expBarFill.width = (Game.HP_BAR_WIDTH - 4) * ratio;
+
+        if (result.leveled) {
+            this.levelText.setText(`Lv ${cur.level}`);
+            this.spawnLevelUpEffect(result.levelsGained);
+            save.save(); // 升級立刻 persist
+            this.lastPersistMs = Date.now();
+        } else {
+            // 普通殺怪 3s throttle persist(per Codex review:防 tab close 丟 exp/gold)
+            this.saveProgressSoon();
+        }
+    }
+
+    private saveProgressSoon()
+    {
+        const now = Date.now();
+        if (now - this.lastPersistMs < Game.PERSIST_THROTTLE_MS) return;
+        this.lastPersistMs = now;
+        SaveService.instance.save();
+    }
+
+    private spawnLevelUpEffect(levelsGained: number)
+    {
+        const txt = levelsGained > 1 ? `LEVEL UP ×${levelsGained}!` : 'LEVEL UP!';
+        const popup = this.add.text(this.player.x, this.player.y - 100, txt, {
+            fontFamily: 'sans-serif', fontSize: 56, color: '#ffe0c0', fontStyle: 'bold',
+            stroke: '#ff8830', strokeThickness: 6
+        }).setOrigin(0.5).setDepth(2000).setScale(0.3);
+        this.tweens.add({
+            targets: popup, scale: 1.2, alpha: 0,
+            y: popup.y - 120, duration: 1200,
+            ease: 'Back.out',
+            onComplete: () => popup.destroy()
+        });
+        // 廢土橙光環
+        const ring = this.add.circle(this.player.x, this.player.y, 50, 0xff8830, 0)
+            .setStrokeStyle(6, 0xff8830, 0.9).setDepth(500);
+        this.tweens.add({
+            targets: ring, radius: 220, alpha: 0, duration: 900,
+            onComplete: () => ring.destroy()
+        });
+        this.cameras.main.shake(200, 0.008);
+    }
+
+    private spawnGoldDrop(x: number, y: number, amount: number)
+    {
+        // 簡易視覺:小金圓圈 + tween 飛向 player
+        const coin = this.add.circle(x, y, 14, 0xffe060, 1)
+            .setStrokeStyle(2, 0x8b6020).setDepth(400);
+        this.tweens.add({
+            targets: coin,
+            x: this.player.x + (Math.random() - 0.5) * 30,
+            y: this.player.y + (Math.random() - 0.5) * 30,
+            duration: 400,
+            ease: 'Cubic.in',
+            onComplete: () => coin.destroy()
+        });
+        // amount 不視覺顯示(避免畫面亂),直接寫進 gold count
+        void amount;
     }
 }
