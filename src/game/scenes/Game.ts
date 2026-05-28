@@ -3,6 +3,7 @@ import { HitStopService } from '../services/HitStopService';
 import { VirtualJoystick } from '../services/VirtualJoystick';
 import { SaveService } from '../services/SaveService';
 import { effectiveDamage, getWeapon, WeaponDef } from '../services/WeaponService';
+import { computeTalentBuff } from '../services/TalentService';
 import { QUESTS, QuestDef } from '../services/QuestService';
 import { getMap, MapConfig, NpcSpec, PortalSpec } from '../services/MapService';
 import { generateRandomWeapon, weaponDisplayName, rarityColor } from '../services/WeaponGenerator';
@@ -140,6 +141,8 @@ export class Game extends Scene
     private pageHideHandler?: () => void;
     private sessionKills = 0;
     private bossActive = false;
+    // Phase 4b-14 player action lock — 'attacking' / 'hurt' 期間禁切 idle/walking
+    private playerActionAnim: 'attacking' | 'hurt' | null = null;
     // Phase 4b-12 (B) 掉落物磁吸 — pending pickups
     private pendingPickups: { obj: Phaser.GameObjects.GameObject & { x: number; y: number; destroy: () => void }; collect: () => void }[] = [];
     // Phase 4b-13 小地圖 — graphics overlay 左上角
@@ -154,7 +157,6 @@ export class Game extends Scene
     // 主角動作 state machine — 楓谷風:不同武器類別不同 attack 動作
     private playerAnimState: 'idle' | 'walking' = 'idle';
     private playerStateTween?: Phaser.Tweens.Tween;
-    private playerAttackTween?: Phaser.Tweens.TweenChain;
 
     private static readonly PERSIST_THROTTLE_MS = 3000; // per Codex review
 
@@ -190,6 +192,7 @@ export class Game extends Scene
         this.npcBangMark = undefined;
         // Phase 4b-12 reset transient state for scene.restart()
         this.pendingPickups = [];
+        this.playerActionAnim = null;
 
         // Phase 4b-3:讀 current map config
         this.mapConfig = getMap(SaveService.instance.getCurrentMapId());
@@ -220,6 +223,27 @@ export class Game extends Scene
                 ],
                 frameRate: 6,
                 repeat: -1
+            });
+        }
+        // Phase 4b-14 attack 2-frame + hurt single frame
+        if (!this.anims.exists('player_attack')) {
+            this.anims.create({
+                key: 'player_attack',
+                frames: [
+                    { key: 'player_atk_windup' },
+                    { key: 'player_atk_impact' }
+                ],
+                frameRate: 12,
+                repeat: 0  // 1 cycle 完就停
+            });
+        }
+        if (!this.anims.exists('player_hurt')) {
+            this.anims.create({
+                key: 'player_hurt',
+                frames: [{ key: 'player_hurt' }],
+                frameRate: 4,
+                repeat: 0,
+                duration: 250
             });
         }
         // Phase 4b-11 mob anims(2-frame loops,scene-scope)
@@ -732,17 +756,21 @@ export class Game extends Scene
         }
     }
 
-    // Phase 4b-13:砍假傾斜 tween(per user「不要以特效解決應該是要設計其他圖片」)
-    // 攻擊期間角色 sprite 完全不動 — angle/scale 全砍。揮擊視覺由 spawnSwingEffect 刀光 arc 處理。
-    // 4b-14 將生 attack_swing frame anim 取代。
+    // Phase 4b-14:真 frame anim 揮擊。action lock 期間 handleMovement 不切 anim,
+    // 防 once listener 累積:每次 play 前 off 同 event 然後 once。
     private playWeaponAttackAnim(weapon: WeaponDef, targetX: number, _targetY: number) {
-        if (this.playerAttackTween?.isPlaying()) this.playerAttackTween.stop();
-        // 朝 target 方向 face(只 flipX,不動 angle / scale)
+        void weapon;
         if (targetX < this.player.x) this.player.setFlipX(true);
         else this.player.setFlipX(false);
-        // weapon category 留作 future frame anim hook(_unused 暫)
-        void weapon;
-        // 4b-14 將呼叫 this.player.play('player_attack_X') 之類
+        this.player.off('animationcomplete-player_attack');
+        this.playerActionAnim = 'attacking';
+        this.player.play('player_attack', true);
+        this.player.once('animationcomplete-player_attack', () => {
+            this.playerActionAnim = null;
+            const s = this.playerAnimState;
+            this.playerAnimState = s === 'idle' ? 'walking' : 'idle';
+            this.setPlayerAnimState(s, true);
+        });
     }
     private spawnSwingEffect(targetX: number, targetY: number, isCrit: boolean)
     {
@@ -784,21 +812,24 @@ export class Game extends Scene
         }
         const mag = Math.hypot(dx, dy);
         if (mag < 0.01) {
-            // 靜止 — 切回 idle(若不是 attack 中)
-            if (this.playerAnimState !== 'idle' && !this.playerAttackTween?.isPlaying()) {
+            // 靜止 — 切回 idle(若不在 action anim 中)
+            if (this.playerAnimState !== 'idle' && !this.playerActionAnim) {
                 this.setPlayerAnimState('idle');
             }
             return;
         }
         const normDx = mag > 1 ? dx / mag : dx;
         const normDy = mag > 1 ? dy / mag : dy;
-        const nx = this.player.x + normDx * Game.MOVE_SPEED * delta;
-        const ny = this.player.y + normDy * Game.MOVE_SPEED * delta;
+        // Phase 4b-15 talent: move speed buff
+        const buff = computeTalentBuff();
+        const speed = Game.MOVE_SPEED * (1 + buff.moveSpeedPct);
+        const nx = this.player.x + normDx * speed * delta;
+        const ny = this.player.y + normDy * speed * delta;
         this.player.x = Math.max(60, Math.min(this.mapConfig.width - 60, nx));
         this.player.y = Math.max(60, Math.min(this.mapConfig.height - 60, ny));
         if (Math.abs(normDx) > 0.1) this.player.setFlipX(normDx < 0);
-        // state machine:走路時切 walking,讓 walk tween 跑
-        if (this.playerAnimState !== 'walking' && !this.playerAttackTween?.isPlaying()) {
+        // state machine:走路時切 walking(若不在 action anim 中)
+        if (this.playerAnimState !== 'walking' && !this.playerActionAnim) {
             this.setPlayerAnimState('walking');
         }
     }
@@ -911,6 +942,16 @@ export class Game extends Scene
             return;
         }
 
+        // Phase 4b-14 真 frame hurt anim — sprite 切到 hurt frame 250ms
+        this.player.off('animationcomplete-player_hurt');
+        this.playerActionAnim = 'hurt';
+        this.player.play('player_hurt', true);
+        this.player.once('animationcomplete-player_hurt', () => {
+            this.playerActionAnim = null;
+            const s = this.playerAnimState;
+            this.playerAnimState = s === 'idle' ? 'walking' : 'idle';
+            this.setPlayerAnimState(s, true);
+        });
         // 受擊 flash + shake(只在還活著時)
         this.player.setTint(0xff4040).setTintMode(TINT_FILL);
         this.time.delayedCall(120, () => {
@@ -953,6 +994,8 @@ export class Game extends Scene
         const weapon = getWeapon(SaveService.instance.getCurrentWeaponId());
         const enh = SaveService.instance.getWeaponEnh(weapon.id);
         const baseDmg = effectiveDamage(weapon, enh);
+        // Phase 4b-15 talent buff apply
+        const buff = computeTalentBuff();
 
         let nearest: Phaser.GameObjects.Image | null = null;
         let nearestDist = weapon.range;
@@ -963,10 +1006,13 @@ export class Game extends Scene
         }
         if (!nearest) return;
 
-        this.attackCooldownMs = weapon.attackIntervalMs;
+        // Talent: 攻擊速度 → 縮短 cooldown
+        this.attackCooldownMs = weapon.attackIntervalMs / (1 + buff.atkSpeedPct);
         const target = nearest;
-        const isCrit = Math.random() < Game.CRIT_CHANCE;
-        const dmg = Math.round(baseDmg * (isCrit ? Game.CRIT_MULT : 1));
+        // Talent: critRate / critDmg / dmgPct buff
+        const isCrit = Math.random() < (Game.CRIT_CHANCE + buff.critRatePct);
+        const totalDmgMult = (1 + buff.dmgPct) * (isCrit ? (Game.CRIT_MULT + buff.critDmgPct) : 1);
+        const dmg = Math.round(baseDmg * totalDmgMult);
 
         // Hand Rag recovery — 命中回血 0.5% × baseDmg
         if (weapon.recoveryPercent && this.playerHP < Game.PLAYER_MAX_HP) {
@@ -1196,8 +1242,10 @@ export class Game extends Scene
     private grantKillReward(x: number, y: number, bp: MobBlueprint)
     {
         const save = SaveService.instance;
+        const buff = computeTalentBuff();
         save.addKill();
-        save.addGold(bp.goldReward);
+        // Phase 4b-15 talent: gold buff
+        save.addGold(Math.round(bp.goldReward * (1 + buff.goldGainPct)));
         this.goldText.setText(`💰 ${save.get().gold}`);
         if (!bp.isBoss) this.sessionKills++;
 
@@ -1212,7 +1260,8 @@ export class Game extends Scene
             }
         }
 
-        const expGain = bp.expReward;
+        // Phase 4b-15 talent: exp buff(buff 已在上面 compute)
+        const expGain = Math.round(bp.expReward * (1 + buff.expGainPct));
         const result = save.addExp(expGain);
         const expText = this.add.text(x, y - 80, `+${expGain} EXP`, {
             fontFamily: 'monospace', fontSize: 22, color: '#4a5d3a', fontStyle: 'bold',

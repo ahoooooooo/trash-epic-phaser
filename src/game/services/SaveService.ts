@@ -34,6 +34,11 @@ interface SaveData {
     // Phase 4b-7 掉落物
     materials: Record<string, number>; // 'strengthen_stone' → count
     droppedWeapons: { id: string; data: string }[]; // 已掉但未裝備武器(stringified)
+    // Phase 4b-15 天賦樹
+    talentPoints: number; // 未花費 TP
+    talentLevels: Record<string, number>; // node id → 已點等級
+    // Phase 4b-16 夥伴碎片
+    familiarShards: Record<string, number>; // familiar id → shard count
 }
 
 // per Codex review:nested object 必須 deep clone,不能 spread(weaponEnh 會共用 reference)
@@ -65,7 +70,10 @@ function makeDefaultSave(): SaveData {
         hpPotions: 3,
         mpPotions: 3,
         materials: {},
-        droppedWeapons: []
+        droppedWeapons: [],
+        talentPoints: 0,
+        talentLevels: {},
+        familiarShards: {}
     };
 }
 
@@ -111,6 +119,16 @@ export class SaveService {
             if (typeof parsed.mpPotions !== 'number') merged.mpPotions = makeDefaultSave().mpPotions;
             merged.materials = { ...(parsed.materials ?? {}) };
             merged.droppedWeapons = Array.isArray(parsed.droppedWeapons) ? [...parsed.droppedWeapons] : [];
+            // Phase 4b-15/4b-16 forward-compat + 既有存檔 talent migration
+            merged.talentLevels = { ...(parsed.talentLevels ?? {}) };
+            if (typeof parsed.talentPoints !== 'number') {
+                // 既有玩家 retroactive:每升 1 級 1 TP,扣掉已花
+                const spent = Object.values(merged.talentLevels).reduce((a, b) => a + (b ?? 0), 0);
+                merged.talentPoints = Math.max(0, merged.level - 1 - spent);
+            } else {
+                merged.talentPoints = parsed.talentPoints;
+            }
+            merged.familiarShards = { ...(parsed.familiarShards ?? {}) };
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -134,7 +152,7 @@ export class SaveService {
         return Math.floor(5 * Math.pow(this.data.level, 1.4));
     }
 
-    // 加 exp,可能跨級。回傳是否升級 + 新等級
+    // 加 exp,可能跨級。回傳是否升級 + 新等級。每升 1 級送 1 TP(per 4b-15)
     addExp(amount: number): { leveled: boolean; newLevel: number; levelsGained: number } {
         this.data.exp += amount;
         let levelsGained = 0;
@@ -142,6 +160,7 @@ export class SaveService {
         while (this.data.exp >= next) {
             this.data.exp -= next;
             this.data.level++;
+            this.data.talentPoints++;
             levelsGained++;
             next = this.expToNext();
         }
@@ -249,6 +268,40 @@ export class SaveService {
         this.data.droppedWeapons.push({ id, data: JSON.stringify(w) });
     }
     getDroppedWeapons(): Array<{ id: string; data: string }> { return [...this.data.droppedWeapons]; }
+
+    // Phase 4b-15 talent
+    getTalentPoints(): number { return this.data.talentPoints; }
+    addTalentPoints(n: number): void { this.data.talentPoints += n; }
+    getTalentLevel(nodeId: string): number { return this.data.talentLevels[nodeId] ?? 0; }
+    // raw 寫入 — TalentService 已驗證,SaveService 不再二次檢查 max/prereq(per Codex review)
+    rawApplyTalentSpend(nodeId: string): void {
+        this.data.talentPoints--;
+        this.data.talentLevels[nodeId] = (this.data.talentLevels[nodeId] ?? 0) + 1;
+    }
+    resetTalents(): void {
+        // 重置歸還所有 TP
+        let refund = 0;
+        for (const k in this.data.talentLevels) refund += this.data.talentLevels[k];
+        this.data.talentLevels = {};
+        this.data.talentPoints += refund;
+    }
+
+    // Phase 4b-16 familiar shards
+    addFamiliarShard(familiarId: string, n: number = 1): void {
+        this.data.familiarShards[familiarId] = (this.data.familiarShards[familiarId] ?? 0) + n;
+    }
+    getFamiliarShard(familiarId: string): number {
+        return this.data.familiarShards[familiarId] ?? 0;
+    }
+    getAllFamiliarShards(): Record<string, number> {
+        return { ...this.data.familiarShards };
+    }
+    consumeFamiliarShards(familiarId: string, n: number): boolean {
+        const cur = this.data.familiarShards[familiarId] ?? 0;
+        if (cur < n) return false;
+        this.data.familiarShards[familiarId] = cur - n;
+        return true;
+    }
 
     reset(): void {
         this.data = makeDefaultSave();

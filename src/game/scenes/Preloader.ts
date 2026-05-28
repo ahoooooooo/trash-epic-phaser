@@ -34,10 +34,13 @@ export class Preloader extends Scene
     {
         this.load.setPath('assets');
 
-        // V1 主角 frame anim(Phase 4b-10:side view idle + walk 2-frame loop)
+        // V1 主角 frame anim(Phase 4b-10:idle/walk + 4b-14:attack/hurt)
         this.load.image('player_idle', 'characters/player_scavver_sideview_idle.png');
         this.load.image('player_walk_r', 'characters/player_scavver_walk_right.png');
         this.load.image('player_walk_l', 'characters/player_scavver_walk_left.png');
+        this.load.image('player_atk_windup', 'characters/player_scavver_attack_windup.png');
+        this.load.image('player_atk_impact', 'characters/player_scavver_attack_impact.png');
+        this.load.image('player_hurt', 'characters/player_scavver_hurt.png');
         // Phase 4b-11 mob frame anims(2-frame gallop / wave loop)
         this.load.image('mob_giantrat_run_a', 'mobs/mob_giantrat_run_a.png');
         this.load.image('mob_giantrat_run_b', 'mobs/mob_giantrat_run_b.png');
