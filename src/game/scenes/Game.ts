@@ -193,6 +193,9 @@ export class Game extends Scene
         // Phase 4b-12 reset transient state for scene.restart()
         this.pendingPickups = [];
         this.playerActionAnim = null;
+        // Phase 4b-16 fix:per Codex audit,questDialogOpen 沒 reset 會卡死 update()
+        // user 報「死後重進不了」根因 — 死亡時若 quest dialog 開,scene restart 後 update 永遠早退
+        this.questDialogOpen = false;
 
         // Phase 4b-3:讀 current map config
         this.mapConfig = getMap(SaveService.instance.getCurrentMapId());
@@ -977,6 +980,10 @@ export class Game extends Scene
         SaveService.instance.addPlaytimeSec(Math.floor((this.time.now - this.sessionStartMs) / 1000));
         SaveService.instance.resetExpKeepLevel();
         SaveService.instance.save();
+        // per Codex audit:死亡時若 overlay scene 在開,要 stop 否則 leak
+        ['Inventory', 'Storage', 'Shop', 'Gacha', 'Talent'].forEach(k => {
+            if (this.scene.isActive(k)) this.scene.stop(k);
+        });
         this.player.setTint(0x8b3a1f).setTintMode(TINT_FILL);
         this.cameras.main.shake(400, 0.025);
         this.time.delayedCall(800, () => {
