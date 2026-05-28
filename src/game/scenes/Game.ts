@@ -33,14 +33,16 @@ interface MobBlueprint {
     id: string;
     type: MobType;
     spriteKey: string;
-    tint?: number;          // 可選 fill tint(scrap drone 用)
+    tint?: number;
     scale: number;
     hp: number;
-    speedChase: number;     // px/ms
+    speedChase: number;
     speedWander: number;
     contactDamage: number;
     expReward: number;
     goldReward: number;
+    isBoss?: boolean;       // boss 不從 spawn point 生,死掉不 cycle 重生
+    rageThreshold?: number; // HP 百分比 < 觸發 rage(boss only)
 }
 
 // Phase 4a 3 種怪
@@ -59,21 +61,41 @@ const MOB_BLUEPRINTS: MobBlueprint[] = [
     },
     {
         id: 'scrap_drone', type: 'Robot',
-        spriteKey: 'mob_giantrat', scale: 0.16, tint: 0x8090a0, // 灰藍金屬色暫代,等獨立 sprite
+        spriteKey: 'mob_giantrat', scale: 0.16, tint: 0x8090a0,
         hp: 35, speedChase: 0.14, speedWander: 0.05,
         contactDamage: 6, expReward: 6, goldReward: 4
     }
 ];
 
+// Phase 4a-18:1 隻 boss(廢料巨鼠 boss 版),殺夠 50 隻普通 mob 後 trigger
+const BOSS_GIANTRAT: MobBlueprint = {
+    id: 'boss_giantrat',
+    type: 'Rat',
+    spriteKey: 'mob_giantrat',
+    scale: 0.40,           // boss 是普通 mob 2× 大
+    tint: 0xff6020,        // 紅 fill(blood-soaked giant)
+    hp: 600,
+    speedChase: 0.09,      // 比 normal rat 稍慢(boss 有距離壓力但不會追到)
+    speedWander: 0,        // boss 從不 wander
+    contactDamage: 25,
+    expReward: 200,
+    goldReward: 100,
+    isBoss: true,
+    rageThreshold: 0.5     // HP < 50% 進入 rage
+};
+
+const BOSS_TRIGGER_KILLS = 50; // 殺 50 mob 觸發 boss
+
 interface MobData {
     blueprint: MobBlueprint;
     hp: number;
-    spawnPoint: SpawnPoint;
+    spawnPoint: SpawnPoint | null; // boss = null(不 cycle)
     lastContactMs: number;
     state: MobState;
     wanderTargetX: number;
     wanderTargetY: number;
     nextWanderAt: number;
+    isRaging?: boolean;
 }
 
 export class Game extends Scene
@@ -97,6 +119,8 @@ export class Game extends Scene
     private sessionStartMs = 0;
     private lastPersistMs = 0;
     private pageHideHandler?: () => void;
+    private sessionKills = 0;
+    private bossActive = false;
 
     private static readonly PERSIST_THROTTLE_MS = 3000; // per Codex review
 
@@ -124,6 +148,8 @@ export class Game extends Scene
         this.playerInvulnUntilMs = 0;
         this.attackCooldownMs = 0;
         this.isGameOver = false;
+        this.sessionKills = 0;
+        this.bossActive = false;
         this.mobs = [];
 
         this.cameras.main.setBackgroundColor('#2a2520');
@@ -246,6 +272,7 @@ export class Game extends Scene
         if (this.isGameOver) return;
         this.handleMovement(delta);
         this.handleSpawn(time);
+        this.trySpawnBoss(time);
         this.handleMobAI(time, delta);
         this.handleMobContactDamage(time);
         if (this.isGameOver) return;
@@ -364,7 +391,8 @@ export class Game extends Scene
                 m.y += (pdy / pd) * data.blueprint.speedChase * delta;
                 if (Math.abs(pdx) > 1) m.setFlipX(pdx < 0);
             } else {
-                // wander:每 MOB_WANDER_INTERVAL_MS 隨機選新 target(spawn point 周圍 MOB_WANDER_RADIUS)
+                // wander:boss 沒 spawnPoint,直接跳過 wander(boss state 永遠 chase)
+                if (!data.spawnPoint) continue;
                 if (time >= data.nextWanderAt) {
                     const a = Math.random() * Math.PI * 2;
                     const r = Math.random() * Game.MOB_WANDER_RADIUS;
@@ -494,12 +522,15 @@ export class Game extends Scene
         // 木棍揮砍視覺(廢土橙弧線從 player 朝 target 揮 60°)
         this.spawnSwingEffect(target.x, target.y, isCrit);
 
-        // Hit flash(白色 fill mode)— 還原時記得保留 blueprint tint(scrap drone 灰藍)
+        // Hit flash + 還原:rage boss 用 0xff2020,普通 用 blueprint.tint(per Codex review)
         target.setTint(0xffffff).setTintMode(TINT_FILL);
         this.time.delayedCall(100, () => {
             if (!target.active) return;
             const tData = target.getData('mob') as MobData | undefined;
-            if (tData?.blueprint.tint !== undefined) {
+            if (!tData) { target.clearTint(); return; }
+            if (tData.isRaging) {
+                target.setTint(0xff2020).setTintMode(TINT_FILL);
+            } else if (tData.blueprint.tint !== undefined) {
                 target.setTint(tData.blueprint.tint).setTintMode(TINT_FILL);
             } else {
                 target.clearTint();
@@ -527,16 +558,120 @@ export class Game extends Scene
         this.cameras.main.shake(isCrit ? 120 : 50, isCrit ? 0.012 : 0.005);
         HitStopService.instance.trigger(isCrit ? 100 : 60, isCrit ? 0.03 : 0.05);
 
-        // 死亡 + cycle 重生 + reward(per blueprint)
+        // Boss rage transition(HP < threshold,只在還活著時觸發 per Codex review)
+        if (data.hp > 0 && data.blueprint.isBoss && data.blueprint.rageThreshold && !data.isRaging) {
+            if (data.hp / data.blueprint.hp < data.blueprint.rageThreshold) {
+                data.isRaging = true;
+                // rage 視覺 + 加速 30%
+                target.setTint(0xff2020).setTintMode(TINT_FILL);
+                this.cameras.main.shake(300, 0.018);
+                this.spawnRageEffect(target.x, target.y);
+            }
+        }
+
+        // 死亡 + cycle 重生(boss 不 cycle)+ reward
         if (data.hp <= 0) {
             const sp = data.spawnPoint;
-            sp.mob = null;
-            sp.nextSpawnAt = time + RESPAWN_CYCLE_MS;
+            if (sp) {
+                sp.mob = null;
+                sp.nextSpawnAt = time + RESPAWN_CYCLE_MS;
+            }
             this.mobs = this.mobs.filter(m => m !== target);
             this.spawnGoldDrop(target.x, target.y, data.blueprint.goldReward);
             this.grantKillReward(target.x, target.y, data.blueprint);
+            if (data.blueprint.isBoss) {
+                this.handleBossDefeated(target.x, target.y);
+            }
             target.destroy();
         }
+    }
+
+    private handleBossDefeated(x: number, y: number)
+    {
+        this.bossActive = false;
+        this.sessionKills = 0; // 下隻 boss 重數
+        this.cameras.main.shake(500, 0.025);
+        // 大號 BOSS DEFEATED popup
+        const popup = this.add.text(W / 2, H / 2, 'BOSS 擊破!', {
+            fontFamily: 'sans-serif', fontSize: 84, color: '#ffe0c0', fontStyle: 'bold',
+            stroke: '#8b3a1f', strokeThickness: 10
+        }).setOrigin(0.5).setDepth(3000).setScale(0.3);
+        this.tweens.add({
+            targets: popup, scale: 1.3, alpha: 0,
+            duration: 1500, ease: 'Back.out',
+            onComplete: () => popup.destroy()
+        });
+        // 大金幣 burst(8 個)
+        for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            const cx = x + Math.cos(a) * 120;
+            const cy = y + Math.sin(a) * 120;
+            this.spawnGoldDrop(cx, cy, 0);
+        }
+    }
+
+    private spawnRageEffect(x: number, y: number)
+    {
+        // 鮮紅光環擴散
+        const ring = this.add.circle(x, y, 40, 0xff2020, 0)
+            .setStrokeStyle(8, 0xff2020, 1).setDepth(500);
+        this.tweens.add({
+            targets: ring, radius: 300, alpha: 0, duration: 700,
+            onComplete: () => ring.destroy()
+        });
+        const txt = this.add.text(x, y - 100, '狂暴!', {
+            fontFamily: 'sans-serif', fontSize: 48, color: '#ff2020', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 6
+        }).setOrigin(0.5).setDepth(2500);
+        this.tweens.add({
+            targets: txt, y: txt.y - 70, alpha: 0, scale: 1.3, duration: 1000,
+            onComplete: () => txt.destroy()
+        });
+    }
+
+    private trySpawnBoss(time: number)
+    {
+        if (this.bossActive) return;
+        if (this.sessionKills < BOSS_TRIGGER_KILLS) return;
+        this.bossActive = true;
+        // Boss 出現:離 player ≥ 400px,角落補償(per Codex review,防角落 clamp 後太近)
+        const MIN_DIST = 400;
+        let bx = this.player.x, by = this.player.y;
+        for (let tries = 0; tries < 16; tries++) {
+            const angle = (tries / 16) * Math.PI * 2 + Math.random() * 0.2;
+            bx = Math.max(120, Math.min(W - 120, this.player.x + Math.cos(angle) * 600));
+            by = Math.max(120, Math.min(H - 120, this.player.y + Math.sin(angle) * 600));
+            if (Math.hypot(bx - this.player.x, by - this.player.y) >= MIN_DIST) break;
+        }
+        const mob = this.add.image(bx, by, BOSS_GIANTRAT.spriteKey).setScale(BOSS_GIANTRAT.scale);
+        if (BOSS_GIANTRAT.tint !== undefined) {
+            mob.setTint(BOSS_GIANTRAT.tint).setTintMode(TINT_FILL);
+        }
+        const data: MobData = {
+            blueprint: BOSS_GIANTRAT,
+            hp: BOSS_GIANTRAT.hp,
+            spawnPoint: null,
+            lastContactMs: -Infinity,
+            state: 'chase', // boss 永遠 chase
+            wanderTargetX: bx,
+            wanderTargetY: by,
+            nextWanderAt: 0,
+            isRaging: false
+        };
+        mob.setData('mob', data);
+        this.mobs.push(mob);
+
+        // Boss spawn 視覺
+        this.cameras.main.shake(400, 0.020);
+        const warn = this.add.text(W / 2, H / 2 - 200, '⚠ BOSS 出現!', {
+            fontFamily: 'sans-serif', fontSize: 64, color: '#ff4040', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 8
+        }).setOrigin(0.5).setDepth(3000);
+        this.tweens.add({
+            targets: warn, alpha: 0, scale: 1.5, duration: 1500,
+            onComplete: () => warn.destroy()
+        });
+        void time;
     }
 
     private grantKillReward(x: number, y: number, bp: MobBlueprint)
@@ -545,6 +680,7 @@ export class Game extends Scene
         save.addKill();
         save.addGold(bp.goldReward);
         this.goldText.setText(`💰 ${save.get().gold}`);
+        if (!bp.isBoss) this.sessionKills++;
 
         const expGain = bp.expReward;
         const result = save.addExp(expGain);
