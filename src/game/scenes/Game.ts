@@ -20,18 +20,59 @@ interface SpawnPoint {
     y: number;
     mob: Phaser.GameObjects.Image | null;
     nextSpawnAt: number;
+    blueprintIdx: number; // 該 spawn point 固定生哪種 mob
 }
 
 type MobState = 'wander' | 'chase';
 
+// per weapons_v1 §4 mob resist matrix:Rat / Mutant / Robot / Plant / Insect / BossArmored
+type MobType = 'Rat' | 'Insect' | 'Robot';
+
+interface MobBlueprint {
+    id: string;
+    type: MobType;
+    spriteKey: string;
+    tint?: number;          // 可選 fill tint(scrap drone 用)
+    scale: number;
+    hp: number;
+    speedChase: number;     // px/ms
+    speedWander: number;
+    contactDamage: number;
+    expReward: number;
+    goldReward: number;
+}
+
+// Phase 4a 3 種怪
+const MOB_BLUEPRINTS: MobBlueprint[] = [
+    {
+        id: 'giantrat', type: 'Rat',
+        spriteKey: 'mob_giantrat', scale: 0.18,
+        hp: 50, speedChase: 0.10, speedWander: 0.04,
+        contactDamage: 8, expReward: 5, goldReward: 3
+    },
+    {
+        id: 'centipede', type: 'Insect',
+        spriteKey: 'mob_centipede', scale: 0.14,
+        hp: 80, speedChase: 0.07, speedWander: 0.03,
+        contactDamage: 12, expReward: 8, goldReward: 5
+    },
+    {
+        id: 'scrap_drone', type: 'Robot',
+        spriteKey: 'mob_giantrat', scale: 0.16, tint: 0x8090a0, // 灰藍金屬色暫代,等獨立 sprite
+        hp: 35, speedChase: 0.14, speedWander: 0.05,
+        contactDamage: 6, expReward: 6, goldReward: 4
+    }
+];
+
 interface MobData {
+    blueprint: MobBlueprint;
     hp: number;
     spawnPoint: SpawnPoint;
     lastContactMs: number;
     state: MobState;
     wanderTargetX: number;
     wanderTargetY: number;
-    nextWanderAt: number; // ms 換 wander target 的下次 timestamp
+    nextWanderAt: number;
 }
 
 export class Game extends Scene
@@ -63,17 +104,13 @@ export class Game extends Scene
     private static readonly CRIT_CHANCE = 0.15;
     private static readonly CRIT_MULT = 1.5;
     private static readonly MOVE_SPEED = 0.4;        // 玩家 px/ms
-    private static readonly MOB_EXP_REWARD = 5;      // 廢料巨鼠 5 exp
-    private static readonly MOB_GOLD_REWARD = 3;     // 廢料巨鼠 3 gold
-    private static readonly MOB_SPEED_CHASE = 0.10;  // 怪追擊 px/ms
-    private static readonly MOB_SPEED_WANDER = 0.04; // 怪漫遊 px/ms(慢)
-    private static readonly MOB_AGGRO_RANGE = 350;   // < 進入 chase
-    private static readonly MOB_LOST_RANGE = 500;    // > 退出 chase(hysteresis 防抖)
-    private static readonly MOB_WANDER_RADIUS = 200; // wander target 範圍(spawn point 周圍)
-    private static readonly MOB_WANDER_INTERVAL_MS = 2500; // 換 wander target 週期
-    private static readonly MOB_CONTACT_RANGE = 65;  // 圓形碰撞半徑(player 中心 vs mob 中心)
-    private static readonly MOB_CONTACT_DAMAGE = 8;
-    private static readonly MOB_CONTACT_COOLDOWN_MS = 800; // 怪 0.8s 才能再打一次
+    // 怪 speed 改 per-blueprint;以下參數仍 global
+    private static readonly MOB_AGGRO_RANGE = 350;
+    private static readonly MOB_LOST_RANGE = 500;
+    private static readonly MOB_WANDER_RADIUS = 200;
+    private static readonly MOB_WANDER_INTERVAL_MS = 2500;
+    private static readonly MOB_CONTACT_RANGE = 65;  // 圓形碰撞半徑
+    private static readonly MOB_CONTACT_COOLDOWN_MS = 800; // 怪 0.8s 才能再打一次同一玩家
     private static readonly PLAYER_INVULN_MS = 500;
     private static readonly PLAYER_MAX_HP = 100;
     private static readonly HP_BAR_WIDTH = 400;
@@ -102,13 +139,20 @@ export class Game extends Scene
 
         HitStopService.instance.attach(this);
 
-        const points = [
-            { x: 200, y: 400 }, { x: 880, y: 400 },
-            { x: 200, y: 1000 }, { x: 880, y: 1000 },
-            { x: 200, y: 1500 }, { x: 880, y: 1500 },
-            { x: 540, y: 250 }, { x: 540, y: 1700 }
+        // 8 spawn points,各自固定 blueprint(廢土地圖各區生不同怪)
+        const points: { x: number; y: number; blueprintIdx: number }[] = [
+            { x: 200, y: 400, blueprintIdx: 0 },  // giantrat
+            { x: 880, y: 400, blueprintIdx: 1 },  // centipede
+            { x: 200, y: 1000, blueprintIdx: 0 }, // giantrat
+            { x: 880, y: 1000, blueprintIdx: 2 }, // scrap drone
+            { x: 200, y: 1500, blueprintIdx: 1 }, // centipede
+            { x: 880, y: 1500, blueprintIdx: 0 }, // giantrat
+            { x: 540, y: 250, blueprintIdx: 2 },  // scrap drone
+            { x: 540, y: 1700, blueprintIdx: 1 }  // centipede
         ];
-        this.spawnPoints = points.map(p => ({ x: p.x, y: p.y, mob: null, nextSpawnAt: 0 }));
+        this.spawnPoints = points.map(p => ({
+            x: p.x, y: p.y, mob: null, nextSpawnAt: 0, blueprintIdx: p.blueprintIdx
+        }));
 
         this.cursors = this.input.keyboard!.createCursorKeys();
         this.wasd = this.input.keyboard!.addKeys('W,A,S,D') as typeof this.wasd;
@@ -235,9 +279,14 @@ export class Game extends Scene
     {
         for (const sp of this.spawnPoints) {
             if (sp.mob === null && time >= sp.nextSpawnAt) {
-                const mob = this.add.image(sp.x, sp.y, 'mob_giantrat').setScale(0.18);
+                const bp = MOB_BLUEPRINTS[sp.blueprintIdx];
+                const mob = this.add.image(sp.x, sp.y, bp.spriteKey).setScale(bp.scale);
+                if (bp.tint !== undefined) {
+                    mob.setTint(bp.tint).setTintMode(TINT_FILL);
+                }
                 const data: MobData = {
-                    hp: 50,
+                    blueprint: bp,
+                    hp: bp.hp,
                     spawnPoint: sp,
                     lastContactMs: -Infinity,
                     state: 'wander',
@@ -273,8 +322,8 @@ export class Game extends Scene
 
             if (data.state === 'chase') {
                 if (pd < 1) continue;
-                m.x += (pdx / pd) * Game.MOB_SPEED_CHASE * delta;
-                m.y += (pdy / pd) * Game.MOB_SPEED_CHASE * delta;
+                m.x += (pdx / pd) * data.blueprint.speedChase * delta;
+                m.y += (pdy / pd) * data.blueprint.speedChase * delta;
                 if (Math.abs(pdx) > 1) m.setFlipX(pdx < 0);
             } else {
                 // wander:每 MOB_WANDER_INTERVAL_MS 隨機選新 target(spawn point 周圍 MOB_WANDER_RADIUS)
@@ -289,8 +338,8 @@ export class Game extends Scene
                 const wdy = data.wanderTargetY - m.y;
                 const wd = Math.hypot(wdx, wdy);
                 if (wd < 5) continue; // 已到 target,等下次換
-                m.x += (wdx / wd) * Game.MOB_SPEED_WANDER * delta;
-                m.y += (wdy / wd) * Game.MOB_SPEED_WANDER * delta;
+                m.x += (wdx / wd) * data.blueprint.speedWander * delta;
+                m.y += (wdy / wd) * data.blueprint.speedWander * delta;
                 if (Math.abs(wdx) > 1) m.setFlipX(wdx < 0);
             }
         }
@@ -306,7 +355,7 @@ export class Game extends Scene
             const d = Math.hypot(this.player.x - m.x, this.player.y - m.y);
             if (d < Game.MOB_CONTACT_RANGE) {
                 data.lastContactMs = time;
-                this.takeDamage(Game.MOB_CONTACT_DAMAGE, time);
+                this.takeDamage(data.blueprint.contactDamage, time);
                 return; // 一個 frame 只扣一次,不疊
             }
         }
@@ -388,9 +437,17 @@ export class Game extends Scene
         // 木棍揮砍視覺(廢土橙弧線從 player 朝 target 揮 60°)
         this.spawnSwingEffect(target.x, target.y, isCrit);
 
-        // Hit flash(白色 fill mode)
+        // Hit flash(白色 fill mode)— 還原時記得保留 blueprint tint(scrap drone 灰藍)
         target.setTint(0xffffff).setTintMode(TINT_FILL);
-        this.time.delayedCall(100, () => target.active && target.clearTint());
+        this.time.delayedCall(100, () => {
+            if (!target.active) return;
+            const tData = target.getData('mob') as MobData | undefined;
+            if (tData?.blueprint.tint !== undefined) {
+                target.setTint(tData.blueprint.tint).setTintMode(TINT_FILL);
+            } else {
+                target.clearTint();
+            }
+        });
 
         // Damage popup(crit 紅大 / 普通橘小)
         const dmgText = this.add.text(target.x, target.y - 50, isCrit ? `${dmg}!` : `${dmg}`, {
@@ -413,27 +470,26 @@ export class Game extends Scene
         this.cameras.main.shake(isCrit ? 120 : 50, isCrit ? 0.012 : 0.005);
         HitStopService.instance.trigger(isCrit ? 100 : 60, isCrit ? 0.03 : 0.05);
 
-        // 死亡 + cycle 重生 + reward
+        // 死亡 + cycle 重生 + reward(per blueprint)
         if (data.hp <= 0) {
             const sp = data.spawnPoint;
             sp.mob = null;
             sp.nextSpawnAt = time + RESPAWN_CYCLE_MS;
             this.mobs = this.mobs.filter(m => m !== target);
-            this.spawnGoldDrop(target.x, target.y, Game.MOB_GOLD_REWARD);
-            this.grantKillReward(target.x, target.y);
+            this.spawnGoldDrop(target.x, target.y, data.blueprint.goldReward);
+            this.grantKillReward(target.x, target.y, data.blueprint);
             target.destroy();
         }
     }
 
-    private grantKillReward(x: number, y: number)
+    private grantKillReward(x: number, y: number, bp: MobBlueprint)
     {
         const save = SaveService.instance;
         save.addKill();
-        save.addGold(Game.MOB_GOLD_REWARD);
+        save.addGold(bp.goldReward);
         this.goldText.setText(`💰 ${save.get().gold}`);
 
-        // EXP popup
-        const expGain = Game.MOB_EXP_REWARD;
+        const expGain = bp.expReward;
         const result = save.addExp(expGain);
         const expText = this.add.text(x, y - 80, `+${expGain} EXP`, {
             fontFamily: 'monospace', fontSize: 22, color: '#4a5d3a', fontStyle: 'bold',
