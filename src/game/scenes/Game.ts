@@ -72,8 +72,10 @@ const MOB_BLUEPRINTS: MobBlueprint[] = [
         contactDamage: 12, expReward: 8, goldReward: 5
     },
     {
+        // Phase 4b-13:scrap_drone 暫用 centipede 染冷藍 + 大小縮(機械感),全灰看起來像 bug 已 fix
+        // 4b-14 將生真機械無人機 sprite 取代
         id: 'scrap_drone', type: 'Robot',
-        spriteKey: 'mob_giantrat_run_a', scale: 0.16, tint: 0x8090a0,
+        spriteKey: 'mob_centipede_wave_a', scale: 0.10, tint: 0x4080a0,
         hp: 35, speedChase: 0.14, speedWander: 0.05,
         contactDamage: 6, expReward: 6, goldReward: 4
     }
@@ -138,12 +140,12 @@ export class Game extends Scene
     private pageHideHandler?: () => void;
     private sessionKills = 0;
     private bossActive = false;
-    // Phase 4b-12 (E) combo counter
-    private comboCount = 0;
-    private comboLastHitMs = 0;
-    private comboText?: Phaser.GameObjects.Text;
     // Phase 4b-12 (B) 掉落物磁吸 — pending pickups
     private pendingPickups: { obj: Phaser.GameObjects.GameObject & { x: number; y: number; destroy: () => void }; collect: () => void }[] = [];
+    // Phase 4b-13 小地圖 — graphics overlay 左上角
+    private minimap!: Phaser.GameObjects.Graphics;
+    private static readonly MINIMAP_SIZE = 220;
+    private static readonly MINIMAP_PAD = 18;
     private npcClerk?: Phaser.GameObjects.Image;
     private npcBangMark?: Phaser.GameObjects.Text;
     private questDialogOpen = false;
@@ -169,8 +171,8 @@ export class Game extends Scene
     private static readonly MOB_CONTACT_COOLDOWN_MS = 800; // 怪 0.8s 才能再打一次同一玩家
     private static readonly PLAYER_INVULN_MS = 500;
     private static readonly PLAYER_MAX_HP = 100;
-    private static readonly HP_BAR_WIDTH = 400;
-    private static readonly HP_BAR_HEIGHT = 24;
+    private static readonly HP_BAR_WIDTH = 700;
+    private static readonly HP_BAR_HEIGHT = 42;
 
     constructor () { super('Game'); }
 
@@ -187,10 +189,6 @@ export class Game extends Scene
         this.npcClerk = undefined;
         this.npcBangMark = undefined;
         // Phase 4b-12 reset transient state for scene.restart()
-        this.comboCount = 0;
-        this.comboLastHitMs = 0;
-        this.comboText = undefined;
-        this.comboResetting = false;
         this.pendingPickups = [];
 
         // Phase 4b-3:讀 current map config
@@ -307,30 +305,33 @@ export class Game extends Scene
         });
 
         // HUD 全部 scrollFactor(0):camera 移動時 UI 不跟著動
+        // Phase 4b-13:barY 下移 50→260,避開左上角 minimap(18..238)
         const barX = (VIEW_W - Game.HP_BAR_WIDTH) / 2;
-        const barY = 50;
+        const barY = 260;
         this.add.rectangle(barX, barY, Game.HP_BAR_WIDTH, Game.HP_BAR_HEIGHT, 0x2a1010)
             .setOrigin(0, 0).setStrokeStyle(2, 0x8b3a1f).setDepth(1000).setScrollFactor(0);
         this.hpBarFill = this.add.rectangle(barX + 2, barY + 2, Game.HP_BAR_WIDTH - 4, Game.HP_BAR_HEIGHT - 4, 0xc23a1a)
             .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
         this.hpText = this.add.text(VIEW_W / 2, barY + Game.HP_BAR_HEIGHT / 2, `${this.playerHP} / ${Game.PLAYER_MAX_HP}`, {
-            fontFamily: 'monospace', fontSize: 18, color: '#ffe0c0'
+            fontFamily: 'monospace', fontSize: 28, color: '#ffe0c0', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 3
         }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
 
-        // MP bar(HP bar 正下方,藍色)
-        const mpBarY = barY + Game.HP_BAR_HEIGHT + 6;
-        const mpBarH = 18;
+        // MP bar(HP bar 正下方,藍色)— 放大
+        const mpBarY = barY + Game.HP_BAR_HEIGHT + 10;
+        const mpBarH = 30;
         this.add.rectangle(barX, mpBarY, Game.HP_BAR_WIDTH, mpBarH, 0x10202a)
             .setOrigin(0, 0).setStrokeStyle(2, 0x4080ff).setDepth(1000).setScrollFactor(0);
         const mpRatio = save.mp / save.maxMp;
         this.mpBarFill = this.add.rectangle(barX + 2, mpBarY + 2, (Game.HP_BAR_WIDTH - 4) * mpRatio, mpBarH - 4, 0x4080ff)
             .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
         this.mpText = this.add.text(VIEW_W / 2, mpBarY + mpBarH / 2, `MP ${save.mp} / ${save.maxMp}`, {
-            fontFamily: 'monospace', fontSize: 14, color: '#ffe0c0'
+            fontFamily: 'monospace', fontSize: 22, color: '#ffe0c0', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 3
         }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
 
-        const expBarY = mpBarY + mpBarH + 8;
-        const expBarH = 14;
+        const expBarY = mpBarY + mpBarH + 10;
+        const expBarH = 24;
         this.add.rectangle(barX, expBarY, Game.HP_BAR_WIDTH, expBarH, 0x2a2010)
             .setOrigin(0, 0).setStrokeStyle(2, 0x4a5d3a).setDepth(1000).setScrollFactor(0);
         const expRatio = save.exp / SaveService.instance.expToNext();
@@ -338,14 +339,17 @@ export class Game extends Scene
             .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
         // Phase 4b-12 EXP HUD 數字 — 看得到目前 exp / next + %
         this.expText = this.add.text(VIEW_W / 2, expBarY + expBarH / 2, `EXP ${save.exp} / ${SaveService.instance.expToNext()} (${Math.floor(expRatio * 100)}%)`, {
-            fontFamily: 'monospace', fontSize: 12, color: '#ffe0c0'
+            fontFamily: 'monospace', fontSize: 18, color: '#ffe0c0', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 2
         }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
 
-        this.levelText = this.add.text(barX, barY - 8, `Lv ${save.level}`, {
-            fontFamily: 'monospace', fontSize: 22, color: '#ff8830', fontStyle: 'bold'
+        this.levelText = this.add.text(barX, barY - 12, `Lv ${save.level}`, {
+            fontFamily: 'monospace', fontSize: 36, color: '#ff8830', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 4
         }).setOrigin(0, 1).setDepth(1002).setScrollFactor(0);
-        this.goldText = this.add.text(barX + Game.HP_BAR_WIDTH, barY - 8, `💰 ${save.gold}`, {
-            fontFamily: 'monospace', fontSize: 20, color: '#ffe0c0'
+        this.goldText = this.add.text(barX + Game.HP_BAR_WIDTH, barY - 12, `💰 ${save.gold}`, {
+            fontFamily: 'monospace', fontSize: 30, color: '#ffe0c0', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 3
         }).setOrigin(1, 1).setDepth(1002).setScrollFactor(0);
 
         const w0 = getWeapon(save.currentWeaponId);
@@ -355,15 +359,27 @@ export class Game extends Scene
         }).setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
         this.refreshWeaponText();
 
-        // HP / MP 藥水 quick button(HUD 右上)
-        this.hpPotionText = this.add.text(VIEW_W - 30, 90, `🧪${save.hpPotions}`, {
+        // Phase 4b-13 小地圖 — 左上角 220x220,顯示玩家(綠)+ 普通怪(紅)+ boss(橙)+ NPC(藍)
+        const mmSize = Game.MINIMAP_SIZE;
+        const mmPad = Game.MINIMAP_PAD;
+        // bg + border
+        this.add.rectangle(mmPad, mmPad, mmSize, mmSize, 0x1a1612, 0.78)
+            .setOrigin(0, 0).setStrokeStyle(3, 0x8b6020, 0.9)
+            .setDepth(1000).setScrollFactor(0);
+        this.add.text(mmPad + mmSize / 2, mmPad + 8, '◤ MINI-MAP ◢', {
+            fontFamily: 'monospace', fontSize: 14, color: '#b08850'
+        }).setOrigin(0.5, 0).setDepth(1003).setScrollFactor(0);
+        this.minimap = this.add.graphics().setDepth(1002).setScrollFactor(0);
+
+        // HP / MP 藥水 quick button(HUD 右上,避開 minimap 改下移)
+        this.hpPotionText = this.add.text(VIEW_W - 30, 30, `🧪${save.hpPotions}`, {
             fontFamily: 'monospace', fontSize: 30, color: '#ff4040', fontStyle: 'bold',
             backgroundColor: '#2a1010', padding: { x: 12, y: 6 }
         }).setOrigin(1, 0).setDepth(1002).setScrollFactor(0).setInteractive({ useHandCursor: true });
         this.hpPotionText.on('pointerdown', () => this.useHpPotion());
         this.input.keyboard?.on('keydown-Q', () => this.useHpPotion());
 
-        this.mpPotionText = this.add.text(VIEW_W - 30, 150, `🔮${save.mpPotions}`, {
+        this.mpPotionText = this.add.text(VIEW_W - 30, 90, `🔮${save.mpPotions}`, {
             fontFamily: 'monospace', fontSize: 30, color: '#4080ff', fontStyle: 'bold',
             backgroundColor: '#102030', padding: { x: 12, y: 6 }
         }).setOrigin(1, 0).setDepth(1002).setScrollFactor(0).setInteractive({ useHandCursor: true });
@@ -485,9 +501,57 @@ export class Game extends Scene
         if (this.isGameOver) return;
         this.handleAutoAttack(time, delta);
         this.updateNpcBangVisibility();
-        // Phase 4b-12 (B + E) 磁吸 + combo timeout
+        // Phase 4b-12 (B) 掉落物磁吸
         this.updateMagnet();
-        this.updateComboTimeout();
+        // Phase 4b-13 小地圖 refresh
+        this.updateMinimap();
+    }
+
+    // Phase 4b-13 小地圖 render — 等比例縮放整張 map,每 mob / player 一個圓點
+    private updateMinimap() {
+        if (!this.minimap || !this.player) return;
+        const mmSize = Game.MINIMAP_SIZE;
+        const mmPad = Game.MINIMAP_PAD;
+        const innerPad = 14;
+        const drawSize = mmSize - innerPad * 2;
+        const mapW = this.mapConfig.width, mapH = this.mapConfig.height;
+        const scale = Math.min(drawSize / mapW, drawSize / mapH);
+        const mapDrawW = mapW * scale, mapDrawH = mapH * scale;
+        const ox = mmPad + (mmSize - mapDrawW) / 2;
+        const oy = mmPad + (mmSize - mapDrawH) / 2;
+        const px = (x: number) => ox + x * scale;
+        const py = (y: number) => oy + y * scale;
+        this.minimap.clear();
+        // map outline
+        this.minimap.lineStyle(2, 0x4a3018, 0.85);
+        this.minimap.strokeRect(ox, oy, mapDrawW, mapDrawH);
+        // mobs
+        for (const m of this.mobs) {
+            if (!m.active) continue;
+            const md = m.getData('mob') as MobData | undefined;
+            if (!md) continue;
+            const color = md.blueprint.isBoss ? 0xff8830 : 0xc23a1a;
+            const r = md.blueprint.isBoss ? 6 : 3;
+            this.minimap.fillStyle(color, 1);
+            this.minimap.fillCircle(px(m.x), py(m.y), r);
+        }
+        // NPC clerk
+        if (this.npcClerk) {
+            this.minimap.fillStyle(0x4080ff, 1);
+            this.minimap.fillCircle(px(this.npcClerk.x), py(this.npcClerk.y), 4);
+        }
+        // portal(廢土橙環)
+        for (const p of this.portals) {
+            if (p instanceof Phaser.GameObjects.Arc && p.fillColor === 0xff8830) {
+                this.minimap.lineStyle(2, 0xff8830, 0.9);
+                this.minimap.strokeCircle(px(p.x), py(p.y), 4);
+            }
+        }
+        // player(綠廢土,大一點)
+        this.minimap.fillStyle(0x4a5d3a, 1);
+        this.minimap.fillCircle(px(this.player.x), py(this.player.y), 5);
+        this.minimap.lineStyle(1.5, 0xffe0c0, 1);
+        this.minimap.strokeCircle(px(this.player.x), py(this.player.y), 5);
     }
 
     // 當前可接 / 可領的 quest(prereq 完成 + 自己未領)
@@ -668,98 +732,18 @@ export class Game extends Scene
         }
     }
 
-    // 攻擊動畫 — 5 武器類別各不同(楓谷風)
+    // Phase 4b-13:砍假傾斜 tween(per user「不要以特效解決應該是要設計其他圖片」)
+    // 攻擊期間角色 sprite 完全不動 — angle/scale 全砍。揮擊視覺由 spawnSwingEffect 刀光 arc 處理。
+    // 4b-14 將生 attack_swing frame anim 取代。
     private playWeaponAttackAnim(weapon: WeaponDef, targetX: number, _targetY: number) {
         if (this.playerAttackTween?.isPlaying()) this.playerAttackTween.stop();
-        // 攻擊期間 stop 走路/idle tween 避免衝突
-        if (this.playerStateTween) this.playerStateTween.stop();
-        this.player.setScale(0.3);
-        // 朝 target 方向 face
+        // 朝 target 方向 face(只 flipX,不動 angle / scale)
         if (targetX < this.player.x) this.player.setFlipX(true);
         else this.player.setFlipX(false);
-        const flip = this.player.flipX ? -1 : 1;
-
-        const restoreState = () => {
-            // 攻擊結束:回復 state machine 動畫
-            const s = this.playerAnimState;
-            // force re-enter same state to restart tween
-            this.playerAnimState = s === 'idle' ? 'walking' : 'idle';
-            this.setPlayerAnimState(s);
-        };
-
-        switch (weapon.category) {
-            case 'Stick': {
-                // 木棍:橫向大揮 ±30°
-                this.playerAttackTween = this.tweens.chain({
-                    targets: this.player,
-                    tweens: [
-                        { angle: -28 * flip, duration: 60, ease: 'Quad.out' },
-                        { angle: 28 * flip, duration: 110, ease: 'Quad.in' },
-                        { angle: 0, duration: 90, ease: 'Quad.out' }
-                    ],
-                    onComplete: restoreState
-                });
-                break;
-            }
-            case 'Blade': {
-                // 刀:快速 lunge stretch(不動 player.x,改 scaleX 拉伸暗示 — per Codex review)
-                void flip;
-                this.playerAttackTween = this.tweens.chain({
-                    targets: this.player,
-                    tweens: [
-                        { scaleX: 0.38, scaleY: 0.28, duration: 60, ease: 'Cubic.out' },
-                        { scaleX: 0.30, scaleY: 0.30, duration: 100, ease: 'Cubic.in' }
-                    ],
-                    onComplete: restoreState
-                });
-                break;
-            }
-            case 'Hammer': {
-                // 鋼筋棒:慢重 overhead 揮(scale grow + 大 rotation)
-                this.playerAttackTween = this.tweens.chain({
-                    targets: this.player,
-                    tweens: [
-                        { angle: -55 * flip, scale: 0.33, duration: 160, ease: 'Sine.in' },
-                        { angle: 50 * flip, duration: 180, ease: 'Quad.in' },
-                        { angle: 0, scale: 0.30, duration: 100, ease: 'Sine.out' }
-                    ],
-                    onComplete: restoreState
-                });
-                break;
-            }
-            case 'Ranged': {
-                // 彈弓:壓縮拉弓 → 釋放(不動 player.x,per Codex review)
-                this.playerAttackTween = this.tweens.chain({
-                    targets: this.player,
-                    tweens: [
-                        { scaleX: 0.26, scaleY: 0.33, duration: 140, ease: 'Quad.out' },
-                        { scaleX: 0.34, scaleY: 0.28, duration: 70, ease: 'Cubic.in' },
-                        { scaleX: 0.30, scaleY: 0.30, duration: 80, ease: 'Sine.out' }
-                    ],
-                    onComplete: restoreState
-                });
-                break;
-            }
-            case 'Special': {
-                // 手套:快速 4-pulse combo
-                this.playerAttackTween = this.tweens.chain({
-                    targets: this.player,
-                    tweens: [
-                        { scale: 0.33, angle: 5 * flip, duration: 45 },
-                        { scale: 0.30, angle: -5 * flip, duration: 45 },
-                        { scale: 0.33, angle: 5 * flip, duration: 45 },
-                        { scale: 0.30, angle: 0, duration: 45 }
-                    ],
-                    onComplete: restoreState
-                });
-                break;
-            }
-            default: {
-                restoreState();
-            }
-        }
+        // weapon category 留作 future frame anim hook(_unused 暫)
+        void weapon;
+        // 4b-14 將呼叫 this.player.play('player_attack_X') 之類
     }
-
     private spawnSwingEffect(targetX: number, targetY: number, isCrit: boolean)
     {
         const angle = Math.atan2(targetY - this.player.y, targetX - this.player.x);
@@ -826,11 +810,12 @@ export class Game extends Scene
                 const bp = MOB_BLUEPRINTS[sp.blueprintIdx];
                 const mob = this.add.sprite(sp.x, sp.y, bp.spriteKey).setScale(bp.scale);
                 if (bp.tint !== undefined) {
-                    mob.setTint(bp.tint).setTintMode(TINT_FILL);
+                    // Phase 4b-13:multiply mode 保留紋路(避免全灰 fill 看起來像 bug)
+                    mob.setTint(bp.tint);
                 }
                 // Phase 4b-11 play frame anim by blueprint id
-                if (bp.id === 'centipede') mob.play('centipede_wave');
-                else mob.play('giantrat_run'); // giantrat + scrap_drone 都用 4-leg gallop
+                if (bp.id === 'centipede' || bp.id === 'scrap_drone') mob.play('centipede_wave');
+                else mob.play('giantrat_run'); // giantrat 用 4-leg gallop
                 const data: MobData = {
                     blueprint: bp,
                     hp: bp.hp,
@@ -1017,7 +1002,8 @@ export class Game extends Scene
             if (tData.isRaging) {
                 target.setTint(0xff2020).setTintMode(TINT_FILL);
             } else if (tData.blueprint.tint !== undefined) {
-                target.setTint(tData.blueprint.tint).setTintMode(TINT_FILL);
+                // multiply mode 保留紋路(per user 全灰怪 bug fix)
+                target.setTint(tData.blueprint.tint);
             } else {
                 target.clearTint();
             }
@@ -1046,9 +1032,6 @@ export class Game extends Scene
         this.cameras.main.shake(isCrit ? 180 : 50, isCrit ? 0.018 : 0.005);
         HitStopService.instance.trigger(isCrit ? 120 : 80, isCrit ? 0.05 : 0.10);
         if (isCrit) this.cameras.main.flash(80, 220, 40, 40, false);
-
-        // Phase 4b-12 (E) combo counter bump
-        this.bumpCombo();
 
         // Boss rage transition(HP < threshold,只在還活著時觸發 per Codex review)
         if (data.hp > 0 && data.blueprint.isBoss && data.blueprint.rageThreshold && !data.isRaging) {
@@ -1180,7 +1163,7 @@ export class Game extends Scene
         }
         const mob = this.add.sprite(bx, by, BOSS_GIANTRAT.spriteKey).setScale(BOSS_GIANTRAT.scale);
         if (BOSS_GIANTRAT.tint !== undefined) {
-            mob.setTint(BOSS_GIANTRAT.tint).setTintMode(TINT_FILL);
+            mob.setTint(BOSS_GIANTRAT.tint); // multiply mode 保留紋路
         }
         mob.play('giantrat_run');
         const data: MobData = {
@@ -1263,45 +1246,6 @@ export class Game extends Scene
         if (now - this.lastPersistMs < Game.PERSIST_THROTTLE_MS) return;
         this.lastPersistMs = now;
         SaveService.instance.save();
-    }
-
-    // Phase 4b-12 (E) combo counter — 每命中 bump,1.2s 無命中 reset
-    private static readonly COMBO_TIMEOUT_MS = 1200;
-    private bumpCombo() {
-        // 若正在 fade reset,先 cancel
-        if (this.comboResetting && this.comboText) {
-            this.tweens.killTweensOf(this.comboText);
-            this.comboResetting = false;
-        }
-        this.comboCount++;
-        this.comboLastHitMs = Date.now();
-        const txt = `× ${this.comboCount} COMBO`;
-        const fontSize = Math.min(48 + this.comboCount * 2, 120);
-        const color = this.comboCount >= 10 ? '#ff4040' : this.comboCount >= 5 ? '#ffe060' : '#ffe0c0';
-        if (!this.comboText) {
-            this.comboText = this.add.text(VIEW_W - 30, 220, txt, {
-                fontFamily: 'sans-serif', fontSize, color, fontStyle: 'bold',
-                stroke: '#1a1612', strokeThickness: 6
-            }).setOrigin(1, 0).setScrollFactor(0).setDepth(2100);
-        } else {
-            this.comboText.setText(txt);
-            this.comboText.setStyle({ fontSize: `${fontSize}px`, color });
-            this.comboText.setAlpha(1);
-        }
-        this.comboText.setScale(1.3);
-        this.tweens.add({ targets: this.comboText, scale: 1, duration: 150, ease: 'Quad.out' });
-    }
-    private comboResetting = false;
-    private updateComboTimeout() {
-        if (this.comboText && this.comboCount > 0 && !this.comboResetting &&
-            Date.now() - this.comboLastHitMs > Game.COMBO_TIMEOUT_MS) {
-            this.comboResetting = true;
-            this.comboCount = 0;
-            this.tweens.add({
-                targets: this.comboText, alpha: 0, duration: 350,
-                onComplete: () => { this.comboResetting = false; }
-            });
-        }
     }
 
     // Phase 4b-12 (B) 掉落物磁吸 — < 300px lerp player,< 60px auto-pickup
