@@ -297,45 +297,64 @@ export class Game extends Scene
         }).setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
         this.refreshWeaponText();
 
-        // Inventory / Gacha 入口 button(scrollFactor 0)
-        const invBtn = this.add.text(VIEW_W - 30, 30, '⚒', {
-            fontFamily: 'sans-serif', fontSize: 44, color: '#ff8830', fontStyle: 'bold',
-            backgroundColor: '#2a2520', padding: { x: 18, y: 8 }
-        }).setOrigin(1, 0).setDepth(1002).setScrollFactor(0).setInteractive({ useHandCursor: true });
-        invBtn.on('pointerdown', () => this.openInventory());
-        this.input.keyboard?.on('keydown-I', () => this.openInventory());
+        // 底部 5 tab UI 取代右上 ⚒ / 🎰 button(Phase 4b-5)
+        this.buildBottomTabs();
+    }
 
-        const gachaBtn = this.add.text(VIEW_W - 110, 30, '🎰', {
-            fontFamily: 'sans-serif', fontSize: 44, color: '#ff8830', fontStyle: 'bold',
-            backgroundColor: '#2a2520', padding: { x: 18, y: 8 }
-        }).setOrigin(1, 0).setDepth(1002).setScrollFactor(0).setInteractive({ useHandCursor: true });
-        gachaBtn.on('pointerdown', () => this.openGacha());
-        this.input.keyboard?.on('keydown-G', () => this.openGacha());
 
-        this.add.text(20, VIEW_H - 60, '搖桿移動 / WASD / 方向鍵 — 自動攻擊', {
-            fontFamily: 'sans-serif', fontSize: 22, color: '#a05a30'
+    private buildBottomTabs() {
+        const tabH = 90;
+        const tabY = VIEW_H - tabH / 2 - 10;
+        const tabs = [
+            { icon: '📦', label: '倉庫', scene: 'Storage', key: 'B' },
+            { icon: '⚒', label: '裝備', scene: 'Inventory', key: 'I' },
+            { icon: '🎰', label: '夥伴', scene: 'Gacha', key: 'G' },
+            { icon: '🛒', label: '商店', scene: 'Shop', key: 'M' },
+            { icon: '🌳', label: '天賦', scene: 'Talent', key: 'T' }
+        ];
+        const tabW = VIEW_W / tabs.length;
+
+        // 底部 bar bg
+        this.add.rectangle(0, tabY - tabH / 2, VIEW_W, tabH, 0x1a1612, 0.92)
+            .setOrigin(0, 0).setDepth(1000).setScrollFactor(0)
+            .setStrokeStyle(2, 0xff8830, 0.6);
+
+        tabs.forEach((t, i) => {
+            const cx = tabW * (i + 0.5);
+            const c = this.add.container(cx, tabY).setDepth(1001).setScrollFactor(0);
+            const bg = this.add.rectangle(0, 0, tabW - 8, tabH - 12, 0x2a2520, 0.7)
+                .setStrokeStyle(1, 0x4a3a30);
+            const icon = this.add.text(0, -18, t.icon, {
+                fontFamily: 'sans-serif', fontSize: 28, color: '#ff8830'
+            }).setOrigin(0.5);
+            const label = this.add.text(0, 22, t.label, {
+                fontFamily: 'sans-serif', fontSize: 18, color: '#ffe0c0', fontStyle: 'bold'
+            }).setOrigin(0.5);
+            c.add([bg, icon, label]);
+            c.setSize(tabW - 8, tabH - 12);
+            c.setInteractive({ useHandCursor: true });
+            c.on('pointerdown', () => this.openTabScene(t.scene));
+            this.input.keyboard?.on(`keydown-${t.key}`, () => this.openTabScene(t.scene));
+        });
+
+        // hint 文字往上推(blocked by tab bar)
+        this.add.text(20, tabY - tabH / 2 - 30, '搖桿移動 / WASD / 方向鍵', {
+            fontFamily: 'sans-serif', fontSize: 18, color: '#a05a30'
         }).setDepth(1000).setScrollFactor(0);
     }
 
-    private openGacha()
-    {
+    private openTabScene(sceneKey: string) {
         if (this.isGameOver) return;
-        if (this.scene.isActive('Gacha')) return;
-        if (this.scene.isActive('Inventory')) return;
+        if (this.scene.isActive(sceneKey)) return;
+        // 任一 tab 開啟時關閉其他 active tab(避免重疊)
+        ['Storage', 'Inventory', 'Gacha', 'Shop', 'Talent'].forEach(k => {
+            if (k !== sceneKey && this.scene.isActive(k)) this.scene.stop(k);
+        });
         this.joystick.cancel();
-        this.scene.launch('Gacha');
+        this.scene.launch(sceneKey);
         this.scene.pause();
     }
 
-    private openInventory()
-    {
-        // per Codex review:雙重開啟 guard + joystick state cancel + isGameOver
-        if (this.isGameOver) return;
-        if (this.scene.isActive('Inventory')) return;
-        this.joystick.cancel();
-        this.scene.launch('Inventory');
-        this.scene.pause();
-    }
 
     update (time: number, delta: number)
     {

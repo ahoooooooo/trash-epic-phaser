@@ -4,6 +4,9 @@ import { Game as MainGame } from './scenes/Game';
 import { MainMenu } from './scenes/MainMenu';
 import { Inventory } from './scenes/Inventory';
 import { Gacha } from './scenes/Gacha';
+import { Storage } from './scenes/Storage';
+import { Shop } from './scenes/Shop';
+import { Talent } from './scenes/Talent';
 import { AUTO, Game, Scale } from 'phaser';
 import { Preloader } from './scenes/Preloader';
 
@@ -29,6 +32,9 @@ const config: Phaser.Types.Core.GameConfig = {
         MainGame,
         Inventory,
         Gacha,
+        Storage,
+        Shop,
+        Talent,
         GameOver
     ]
 };
