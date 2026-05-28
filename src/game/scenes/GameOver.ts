@@ -20,11 +20,23 @@ export class GameOver extends Scene
             fontFamily: 'sans-serif', fontSize: 36, color: '#a05a30'
         }).setOrigin(0.5);
 
-        const btn = this.add.text(CX, CY + 220, '▶ 再來一次', {
+        this.add.text(CX, CY + 220, '▶ 再來一次', {
             fontFamily: 'sans-serif', fontSize: 56, color: '#ff8830',
             backgroundColor: '#2a2520', padding: { x: 40, y: 20 }
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        }).setOrigin(0.5);
 
-        btn.on('pointerdown', () => this.scene.start('MainMenu'));
+        this.add.text(CX, CY + 340, '(點螢幕任何地方回主選單)', {
+            fontFamily: 'sans-serif', fontSize: 22, color: '#a05a30'
+        }).setOrigin(0.5);
+
+        // 整個 scene 接 pointer + keyboard,避免 mobile touch event 問題
+        let restarted = false;
+        const restart = () => {
+            if (restarted) return;
+            restarted = true;
+            this.scene.start('MainMenu');
+        };
+        this.input.once('pointerup', restart);
+        this.input.keyboard?.once('keydown', restart);
     }
 }

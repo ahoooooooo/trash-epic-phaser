@@ -29,16 +29,26 @@ export class MainMenu extends Scene
             align: 'center'
         }).setOrigin(0.5);
 
-        // Start button(暖橙)
-        const startBtn = this.add.text(CX, CY + 360, '▶ 開始刷怪', {
+        // Start 提示(整個畫面點哪都能進,button 是裝飾不是 hit target)
+        this.add.text(CX, CY + 360, '▶ 開始刷怪', {
             fontFamily: 'sans-serif', fontSize: 56, color: '#ff8830',
             backgroundColor: '#2a2520', padding: { x: 40, y: 20 },
             stroke: '#1a1612', strokeThickness: 4
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        }).setOrigin(0.5);
 
-        startBtn.on('pointerover', () => startBtn.setColor('#ffaa50'));
-        startBtn.on('pointerout', () => startBtn.setColor('#ff8830'));
-        startBtn.on('pointerdown', () => this.scene.start('Game'));
+        this.add.text(CX, CY + 480, '(點螢幕任何地方開始)', {
+            fontFamily: 'sans-serif', fontSize: 24, color: '#a05a30'
+        }).setOrigin(0.5);
+
+        // 整個 scene 接 pointer + keyboard,雙保險避免 mobile touch event 問題
+        let started = false;
+        const start = () => {
+            if (started) return;
+            started = true;
+            this.scene.start('Game');
+        };
+        this.input.once('pointerup', start);
+        this.input.keyboard?.once('keydown', start);
 
         // 版本標示
         this.add.text(CX, CY + 700, 'v0.0.1 Phase 4a MVP', {
