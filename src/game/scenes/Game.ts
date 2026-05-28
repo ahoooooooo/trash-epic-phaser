@@ -218,6 +218,24 @@ export class Game extends Scene
         }).setOrigin(0, 0).setDepth(1002);
         this.refreshWeaponText();
 
+        // Inventory 入口 button(右上方,血條右側)
+        const invBtn = this.add.text(W - 30, 30, '⚒', {
+            fontFamily: 'sans-serif', fontSize: 44, color: '#ff8830', fontStyle: 'bold',
+            backgroundColor: '#2a2520', padding: { x: 18, y: 8 }
+        }).setOrigin(1, 0).setDepth(1002).setInteractive({ useHandCursor: true });
+        invBtn.on('pointerdown', () => this.openInventory());
+        this.input.keyboard?.on('keydown-I', () => this.openInventory());
+    }
+
+    private openInventory()
+    {
+        // per Codex review:雙重開啟 guard + joystick state cancel + isGameOver
+        if (this.isGameOver) return;
+        if (this.scene.isActive('Inventory')) return;
+        this.joystick.cancel();
+        this.scene.launch('Inventory');
+        this.scene.pause();
+
         this.add.text(20, H - 60, '搖桿移動 / WASD / 方向鍵 — 自動攻擊', {
             fontFamily: 'sans-serif', fontSize: 22, color: '#a05a30'
         });

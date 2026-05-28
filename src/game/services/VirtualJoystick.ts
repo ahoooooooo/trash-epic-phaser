@@ -87,6 +87,15 @@ export class VirtualJoystick {
         }
     }
 
+    // per Codex review:Inventory 開啟前呼叫,避免 pause 期間 dx/dy 殘留
+    cancel() {
+        this.pointerId = null;
+        this._dx = 0;
+        this._dy = 0;
+        this.stick.setPosition(this.baseX, this.baseY);
+        this.base.setAlpha(0.18);
+    }
+
     destroy() {
         this.base.destroy();
         this.stick.destroy();
