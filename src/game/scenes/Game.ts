@@ -180,6 +180,7 @@ export class Game extends Scene
 
     create ()
     {
+        console.log('[Game] create() entered');
         this.playerHP = Game.PLAYER_MAX_HP;
         this.playerInvulnUntilMs = 0;
         this.attackCooldownMs = 0;

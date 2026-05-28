@@ -88,22 +88,31 @@ export class MainMenu extends Scene
         this.add.text(rowX2, rowY + 4 * rowGap, mapLabel, valueStyle).setOrigin(1, 0.5);
 
         // 5. 兩個 button — 進入 / 新角色(若無存檔只顯示「開始」)
+        // Phase 4b-16 fix:用 rectangle 當 hit area(Phaser 4 Text + padding 的 hit area
+        // 有時不包含 padding 導致 click 沒接到)
         const btnY = 1610;
         const enterLabel = hasSave ? '▶ 繼續廢土' : '▶ 開始刷怪';
-        const enter = this.add.text(W / 2, btnY, enterLabel, {
+        const enterBg = this.add.rectangle(W / 2, btnY, 600, 130, 0xff8830)
+            .setStrokeStyle(4, 0x1a1612)
+            .setInteractive({ useHandCursor: true });
+        enterBg.on('pointerdown', () => {
+            console.log('[MainMenu] 繼續廢土 clicked, starting Game...');
+            this.startGame();
+        });
+        this.add.text(W / 2, btnY, enterLabel, {
             fontFamily: 'sans-serif', fontSize: 64, color: '#1a1612', fontStyle: 'bold',
-            backgroundColor: '#ff8830', padding: { x: 60, y: 26 },
             stroke: '#1a1612', strokeThickness: 4
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-        enter.on('pointerdown', () => this.startGame());
+        }).setOrigin(0.5);
 
         if (hasSave) {
-            const newBtn = this.add.text(W / 2, btnY + 130, '✕ 砍掉重練(新角色)', {
+            const newBg = this.add.rectangle(W / 2, btnY + 130, 500, 70, 0x2a2520)
+                .setStrokeStyle(2, 0x4a3018)
+                .setInteractive({ useHandCursor: true });
+            newBg.on('pointerdown', () => this.confirmReset());
+            this.add.text(W / 2, btnY + 130, '✕ 砍掉重練(新角色)', {
                 fontFamily: 'sans-serif', fontSize: 28, color: '#a05a30',
-                backgroundColor: '#2a2520', padding: { x: 28, y: 12 },
                 stroke: '#1a1612', strokeThickness: 2
-            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-            newBtn.on('pointerdown', () => this.confirmReset());
+            }).setOrigin(0.5);
         }
 
         // 6. 版本標示
@@ -114,8 +123,10 @@ export class MainMenu extends Scene
 
     private starting = false;
     private startGame() {
+        console.log('[MainMenu] startGame() — starting flag:', this.starting);
         if (this.starting) return;
         this.starting = true;
+        console.log('[MainMenu] calling scene.start(Game)');
         this.scene.start('Game');
     }
 
