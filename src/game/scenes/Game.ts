@@ -124,8 +124,11 @@ export class Game extends Scene
         if (this.cursors.down.isDown  || this.wasd.S.isDown) dy += 1;
         if (dx === 0 && dy === 0) return;
         const norm = Math.hypot(dx, dy);
-        this.player.x = Phaser.Math.Clamp(this.player.x + (dx / norm) * Game.MOVE_SPEED * delta, 60, W - 60);
-        this.player.y = Phaser.Math.Clamp(this.player.y + (dy / norm) * Game.MOVE_SPEED * delta, 60, H - 60);
+        // per Codex runtime error 2026-05-28: production build 無 Phaser global namespace,改 Math 原生
+        const nx = this.player.x + (dx / norm) * Game.MOVE_SPEED * delta;
+        const ny = this.player.y + (dy / norm) * Game.MOVE_SPEED * delta;
+        this.player.x = Math.max(60, Math.min(W - 60, nx));
+        this.player.y = Math.max(60, Math.min(H - 60, ny));
         this.player.setFlipX(dx < 0);
     }
 
@@ -163,7 +166,7 @@ export class Game extends Scene
             if (!m.active) continue;
             const data = m.getData('mob') as MobData;
             if (time - data.lastContactMs < Game.MOB_CONTACT_COOLDOWN_MS) continue;
-            const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.x, m.y);
+            const d = Math.hypot(this.player.x - m.x, this.player.y - m.y);
             if (d < Game.MOB_CONTACT_RANGE) {
                 data.lastContactMs = time;
                 this.takeDamage(Game.MOB_CONTACT_DAMAGE, time);
@@ -227,7 +230,7 @@ export class Game extends Scene
         let nearestDist = Game.ATTACK_RANGE;
         for (const m of this.mobs) {
             if (!m.active) continue;
-            const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, m.x, m.y);
+            const d = Math.hypot(this.player.x - m.x, this.player.y - m.y);
             if (d < nearestDist) { nearestDist = d; nearest = m; }
         }
         if (!nearest) return;
