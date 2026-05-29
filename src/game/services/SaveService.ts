@@ -1,6 +1,8 @@
 // 永久存檔 — localStorage(Phase 4a MVP,Phase 4d 再接 Firebase Cloud Save)
 // per GAME_SPEC_V3 §4.4 「死掉不歸零,進度 Save」
 
+import type { EquipSlot } from './ArmorService';
+
 const STORAGE_KEY = 'trash-epic-save-v1';
 const SAVE_VERSION = 1;
 
@@ -39,6 +41,9 @@ interface SaveData {
     talentLevels: Record<string, number>; // node id → 已點等級
     // Phase 4b-16 夥伴碎片
     familiarShards: Record<string, number>; // familiar id → shard count
+    // Phase 4c-F 防具
+    ownedArmor: { id: string; data: string }[];        // 已得防具(stringified ArmorDef)
+    equippedArmor: Partial<Record<EquipSlot, string>>; // paper doll 格位 → ownedArmor wrapper id
 }
 
 // per Codex review:nested object 必須 deep clone,不能 spread(weaponEnh 會共用 reference)
@@ -73,7 +78,9 @@ function makeDefaultSave(): SaveData {
         droppedWeapons: [],
         talentPoints: 0,
         talentLevels: {},
-        familiarShards: {}
+        familiarShards: {},
+        ownedArmor: [],
+        equippedArmor: {}
     };
 }
 
@@ -129,6 +136,9 @@ export class SaveService {
                 merged.talentPoints = parsed.talentPoints;
             }
             merged.familiarShards = { ...(parsed.familiarShards ?? {}) };
+            // Phase 4c-F forward-compat:舊 save 沒防具欄位
+            merged.ownedArmor = Array.isArray(parsed.ownedArmor) ? [...parsed.ownedArmor] : [];
+            merged.equippedArmor = { ...(parsed.equippedArmor ?? {}) };
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -301,6 +311,40 @@ export class SaveService {
         if (cur < n) return false;
         this.data.familiarShards[familiarId] = cur - n;
         return true;
+    }
+
+    // Phase 4c-F 防具
+    addOwnedArmor(a: object): string {
+        const id = Math.random().toString(36).slice(2, 10);
+        this.data.ownedArmor.push({ id, data: JSON.stringify(a) });
+        return id;
+    }
+    getOwnedArmor(): Array<{ id: string; data: string }> { return [...this.data.ownedArmor]; }
+    getEquippedArmor(): Partial<Record<EquipSlot, string>> { return { ...this.data.equippedArmor }; }
+    getEquippedArmorId(slot: EquipSlot): string | undefined { return this.data.equippedArmor[slot]; }
+    equipArmor(slot: EquipSlot, ownedId: string): void {
+        // 同一件防具不可同時佔兩格(尤其飾品 I/II);先從其他格移除
+        for (const key in this.data.equippedArmor) {
+            if (this.data.equippedArmor[key as EquipSlot] === ownedId) {
+                delete this.data.equippedArmor[key as EquipSlot];
+            }
+        }
+        this.data.equippedArmor[slot] = ownedId;
+    }
+    unequipArmor(slot: EquipSlot): void { delete this.data.equippedArmor[slot]; }
+    // 裝備中防具總防禦(takeDamage 減傷用)
+    getTotalArmorDefense(): number {
+        let def = 0;
+        for (const key in this.data.equippedArmor) {
+            const wid = this.data.equippedArmor[key as EquipSlot];
+            const entry = this.data.ownedArmor.find(o => o.id === wid);
+            if (!entry) continue;
+            try {
+                const a = JSON.parse(entry.data) as { defense?: number };
+                def += a.defense ?? 0;
+            } catch { /* 壞資料跳過 */ }
+        }
+        return def;
     }
 
     reset(): void {

@@ -7,6 +7,7 @@ import { computeTalentBuff } from '../services/TalentService';
 import { QUESTS, QuestDef } from '../services/QuestService';
 import { getMap, MapConfig, NpcSpec, PortalSpec } from '../services/MapService';
 import { generateRandomWeapon, weaponDisplayName, rarityColor } from '../services/WeaponGenerator';
+import { generateRandomArmor, armorDisplayName, armorRarityColor } from '../services/ArmorService';
 
 // 視窗尺寸(Phaser config 內固定 1080×1920 portrait)
 const VIEW_W = 1080;
@@ -1040,6 +1041,9 @@ export class Game extends Scene
     private takeDamage(amount: number, time: number)
     {
         if (this.isGameOver) return; // per Codex review
+        // Phase 4c-F 防具減傷:dmg × 100/(100+def),最低 1
+        const def = SaveService.instance.getTotalArmorDefense();
+        amount = def > 0 ? Math.max(1, Math.round(amount * 100 / (100 + def))) : amount;
         this.playerHP = Math.max(0, this.playerHP - amount);
         this.playerInvulnUntilMs = time + Game.PLAYER_INVULN_MS;
 
@@ -1286,6 +1290,18 @@ export class Game extends Scene
             this.tweens.add({
                 targets: circ, scale: 1.6, alpha: 0, duration: 800,
                 onComplete: () => circ.destroy()
+            });
+        }
+        // Phase 4c-F 防具掉落(8% / boss 60%)
+        if (Math.random() < (isBoss ? 0.60 : 0.08)) {
+            const a = generateRandomArmor();
+            save.addOwnedArmor(a);
+            this.spawnFloatingLabel(x, y - 120, `防具:${armorDisplayName(a)} [${a.tier}]`, '#80c0ff');
+            const ac = this.add.circle(x, y, 26, armorRarityColor(a.tier), 0.8)
+                .setStrokeStyle(3, 0xffe0c0);
+            this.tweens.add({
+                targets: ac, scale: 1.5, alpha: 0, duration: 800,
+                onComplete: () => ac.destroy()
             });
         }
     }
