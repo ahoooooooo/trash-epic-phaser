@@ -1,0 +1,43 @@
+# 接力棒 HANDOFF — Codex 接手就讀這個
+
+> **觸發**:user 說「幫我繼續下去 / 繼續 / 接手」→ 你(Codex)就以代理主席身分,讀本檔挑最上面那個未完成項目開始做。
+> 規則全在 `AGENTS.md`(同目錄,你已自動讀到)。完整架構 `docs/AI_COMPANY.md`。
+> **這份檔案 Claude 每次收工會更新**;你做完一個項目也要更新它(把完成的劃掉、補新狀態),下一棒才接得上。
+
+---
+
+## 現在狀態(2026-05-30)
+- 專案:`D:\TrashEpic_Phaser`(Phaser 4 + TS + Vite),live https://ahoooooooo.github.io/trash-epic-phaser/(repo `ahoooooooo/trash-epic-phaser`,8 個 o)。
+- push main → GitHub Actions auto-deploy ~40-60s。
+- Phase 4c 程式 roadmap + user 6 大需求 A-F + 變現 + FTUE + 每日簽到 + 主動技能 + 3 隻真新怪 sprite + 10 特色天賦 **全部已完成上線**。
+- build 狀態:綠(tsc 0 error / vite build 過 / live 200)。
+
+## 你接手做事的鐵律(違背就停)
+1. **改完不准沒實測說「修好了」**:`npx tsc --noEmit` → `npm run build` → `npx vite preview --port 4180` 從 root `/` 開 → Playwright 1080×1920 設假存檔(localStorage)→ click(540,1610) 進 game → 截圖。三者+證據缺一不可。
+2. **你不能自審**:改完 `git add -A` 後 `git diff HEAD` 丟給 `gemini -p`(要 reviewer 第一行只回 `VERDICT: APPROVE` 才 commit)。連 3 次過不了就停下報 user。
+3. **prod-build 禁忌**(build 過但 runtime crash):禁 `new Phaser.X`/`Phaser.Geom`/`Phaser.Math`/`instanceof Phaser`/無 arg `setTintFill()`。改用 `Math.hypot`/`setData`/container rect hit/`setTint(c).setTintMode(1)`,fill 閃完一定 `setTintMode(0)` 還原。
+4. **5 玩法 lock 不准改**:廢土手繪 / 楓谷 7.56s cycle spawn / 楓谷 HitStop 手感 / 廢墟地形 / 直屏 1080×1920。
+5. **重大不可逆**(刪 project / 真實付費 / store publish)停下等 user。push 是 auto-deploy 例行,可自行做。
+6. 廢土 palette:炭黑#1a1612 / 髒黃#b08850 / 灰橙#a05a30 / 暖橙#ff8830 / 鏽紅#8b3a1f / 深綠#4a5d3a。禁鮮藍 / 螢光綠 / 純白。
+
+## 下一步 backlog(由上往下做,挑最上面未劃掉的)
+1. **[ ] UI 直屏擁擠誤觸**(QA 高優先③)— 按鈕觸控區不符 ergonomics,容易誤觸。檢視 Game HUD + 底部 5 tab + 技能/搖桿區,加大 hit area、拉開間距、避免邊緣誤觸。設計參考 `D:\Trash Epic\docs\design\v2\visual_design_system.md`。
+2. **[ ] 留存深化**(QA⑥)— 每日簽到已做;補「週挑戰 / 任務主線」其一。任務敘事目前散亂(QA⑨),可設計一條廢土主線串起現有 quest。
+3. **[ ] 第 4+ 隻真新怪 sprite 或怪的 2-frame 動畫**— pipeline ~3.5min/隻(見下「美術 pipeline」)。目前 3 隻真新怪是單張 wobble,可生 walk frame 做真動畫;或新增廢土飛蟲/變種狗/巨型蠍。
+4. **[ ] 4c-5:6 張 painted 地圖**(GPT-4o)— 廢料鎮/乾井路/鏽蝕巷/爐心門等,目前是純色底。需專門 session 跑 pipeline(quota+慢+逐張接 bgKey),不適合長 loop 尾端硬跑。
+5. **[ ] 核心循環單一**(QA①)— 純掛機刷怪缺策略,可加事件/精英怪/小目標。
+6. **[ ] 防具強化 armorEnh**(可選)— 目前防具 defense-only 無強化系統。
+
+做完一項:更新本檔(劃掉 + 補完成紀錄)→ commit/push → 一句話報告 user + live URL。
+
+## 美術 pipeline(要生 sprite/地圖時)
+在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
+1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)
+2. `python -m tools.image_pipeline.run_pipeline --skip-gate --skip-mirror "絕對路徑candidate_01.png"`(BiRefNet 去白底 ~84s)
+3. cp 到 `public/assets/...` → `python scripts/compress_assets.py`(Pillow quantize 壓 ~16%)→ Preloader load + 接 MOB_BLUEPRINTS/MapService。
+prompt 要點:top-down overhead、廢土 palette、純白底、isolated 易去背。單張 sprite 不 play frame anim,用 idle wobble tween,killMob 要 killTweensOf。
+
+## 設計真相 doc
+- `D:\Trash Epic\docs\design\v2\maplestory_systems_v2.md`(藥水/skin/地圖 spec)
+- `D:\Trash Epic\docs\design\v2\visual_design_system.md`(UI design system)
+- 大批視覺迭代可用 visual-iterate sub-agent。
