@@ -1044,6 +1044,9 @@ export class Game extends Scene
         // Phase 4c-F 防具減傷:dmg × 100/(100+def),最低 1
         const def = SaveService.instance.getTotalArmorDefense();
         amount = def > 0 ? Math.max(1, Math.round(amount * 100 / (100 + def))) : amount;
+        // Phase 4c-D3 天賦減傷(鐵壁/廢土之神 正值減傷;玻璃炮 負值=增傷),上限 80% 減傷
+        const drPct = computeTalentBuff().damageReductionPct;
+        if (drPct !== 0) amount = Math.max(1, Math.round(amount * Math.max(0.2, 1 - drPct)));
         this.playerHP = Math.max(0, this.playerHP - amount);
         this.playerInvulnUntilMs = time + Game.PLAYER_INVULN_MS;
 
@@ -1274,13 +1277,15 @@ export class Game extends Scene
     // Phase 4b-7 掉落系統
     private rollMobDrops(x: number, y: number, isBoss: boolean) {
         const save = SaveService.instance;
+        // Phase 4c-D3 天賦掉落率加成(拾荒者之心/幸運拾荒/囤積之王)
+        const dropMult = 1 + computeTalentBuff().dropRatePct;
         // 強化石(50% / boss 100%)
-        if (isBoss || Math.random() < 0.5) {
+        if (isBoss || Math.random() < 0.5 * dropMult) {
             save.addMaterial('strengthen_stone', isBoss ? 5 : 1);
             this.spawnFloatingLabel(x, y - 40, isBoss ? '+5 強化石' : '+1 強化石', '#b08850');
         }
         // 武器掉落(5% / boss 50%)
-        if (isBoss || Math.random() < 0.05) {
+        if (isBoss || Math.random() < 0.05 * dropMult) {
             const w = generateRandomWeapon();
             save.addDroppedWeapon(w);
             this.spawnFloatingLabel(x, y - 80, `掉落:${weaponDisplayName(w)} [${w.tier}]`, '#ff8830');
@@ -1293,7 +1298,7 @@ export class Game extends Scene
             });
         }
         // Phase 4c-F 防具掉落(8% / boss 60%)
-        if (Math.random() < (isBoss ? 0.60 : 0.08)) {
+        if (Math.random() < (isBoss ? 0.60 : 0.08 * dropMult)) {
             const a = generateRandomArmor();
             save.addOwnedArmor(a);
             this.spawnFloatingLabel(x, y - 120, `防具:${armorDisplayName(a)} [${a.tier}]`, '#80c0ff');
