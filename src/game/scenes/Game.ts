@@ -167,6 +167,8 @@ export class Game extends Scene
     private bossActive = false;
     // Phase 4b-14 player action lock — 'attacking' / 'hurt' 期間禁切 idle/walking
     private playerActionAnim: 'attacking' | 'hurt' | null = null;
+    // Phase 4c B fix:攻擊後此時間內 flipX 鎖朝目標怪,handleMovement 不覆蓋(防往後走背打)
+    private combatFaceUntilMs = 0;
     // Phase 4b-12 (B) 掉落物磁吸 — pending pickups
     private pendingPickups: { obj: Phaser.GameObjects.GameObject & { x: number; y: number; destroy: () => void }; collect: () => void }[] = [];
     // Phase 4b-13 小地圖 — graphics overlay 左上角
@@ -218,6 +220,7 @@ export class Game extends Scene
         // Phase 4b-12 reset transient state for scene.restart()
         this.pendingPickups = [];
         this.playerActionAnim = null;
+        this.combatFaceUntilMs = 0;
         // Phase 4b-16 fix:per Codex audit,questDialogOpen 沒 reset 會卡死 update()
         // user 報「死後重進不了」根因 — 死亡時若 quest dialog 開,scene restart 後 update 永遠早退
         this.questDialogOpen = false;
@@ -252,7 +255,7 @@ export class Game extends Scene
                     { key: 'player_walk_r' },
                     { key: 'player_walk_l' }
                 ],
-                frameRate: 6,
+                frameRate: 8,
                 repeat: -1
             });
         }
@@ -911,7 +914,10 @@ export class Game extends Scene
         const ny = this.player.y + normDy * speed * delta;
         this.player.x = Math.max(60, Math.min(this.mapConfig.width - 60, nx));
         this.player.y = Math.max(60, Math.min(this.mapConfig.height - 60, ny));
-        if (Math.abs(normDx) > 0.1) this.player.setFlipX(normDx < 0);
+        // Phase 4c B fix:戰鬥朝向期間(剛攻擊過)不用移動方向覆蓋 flipX,避免往後走背打
+        if (Math.abs(normDx) > 0.1 && this.time.now > this.combatFaceUntilMs) {
+            this.player.setFlipX(normDx < 0);
+        }
         // state machine:走路時切 walking(若不在 action anim 中)
         if (this.playerAnimState !== 'walking' && !this.playerActionAnim) {
             this.setPlayerAnimState('walking');
@@ -1132,6 +1138,9 @@ export class Game extends Scene
 
         // 武器類別專屬玩家動作(楓谷風)
         this.playWeaponAttackAnim(weapon, target.x, target.y);
+        // Phase 4c B fix:攻擊後 flipX 保持朝怪到下次攻擊(cooldown + 100ms 緩衝),
+        // 涵蓋慢武器(per Codex:用 attackCooldownMs 而非固定 900,所有武器都嚴格連續面怪)
+        this.combatFaceUntilMs = time + this.attackCooldownMs + 100;
 
         // 木棍揮砍視覺(廢土橙弧線從 player 朝 target 揮 60°)
         this.spawnSwingEffect(target.x, target.y, isCrit);
