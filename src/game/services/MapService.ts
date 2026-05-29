@@ -56,9 +56,10 @@ export interface MapConfig {
     playerStartY: number;
 }
 
-// field 獵場 spawn 群。regionBase 決定怪群(per-map 不同怪,per user 2026-05-29):
-//   0 = 廢土外圍怪(巨鼠/蜈蚣/無人機)/ 3 = 乾井路進階怪 / 6 = 爐心輻射怪
-function fieldSpawns(w: number, h: number, count: number, regionBase: number): SpawnPointSpec[] {
+// field 獵場 spawn 群。每張圖用「專屬 signature 怪」(per user 2026-05-29「每張圖一種怪物」):
+//   廢土外圍(起始)=巨鼠+蜈蚣(idx0,1,支援新手 q1/q2 任務)/ 乾井路=鏽蜈蚣(idx4 橙蟲)/ 爐心門=輻射巨鼠(idx6 綠大)
+//   → 各圖剪影/色/大小各異,玩家一眼分辨。真‧獨立新怪 sprite 之後跑 pipeline 生。
+function fieldSpawns(w: number, h: number, count: number, idxs: number[]): SpawnPointSpec[] {
     const pts: SpawnPointSpec[] = [];
     const cols = Math.ceil(Math.sqrt(count));
     const rows = Math.ceil(count / cols);
@@ -68,7 +69,7 @@ function fieldSpawns(w: number, h: number, count: number, regionBase: number): S
         pts.push({
             x: Math.round(w * (0.12 + cx * 0.76)),
             y: Math.round(h * (0.14 + cy * 0.72)),
-            blueprintIdx: regionBase + (i % 3)
+            blueprintIdx: idxs[i % idxs.length]
         });
     }
     return pts;
@@ -110,7 +111,7 @@ const MAPS: Record<string, MapConfig> = {
     wasteland_outskirts: {
         id: 'wasteland_outskirts', nameZH: '廢土外圍', mapType: 'field', levelRange: [1, 40], regionId: 'scrap',
         width: 2400, height: 3200, bgColor: '#2a2520',
-        spawnPoints: fieldSpawns(2400, 3200, 16, 0),
+        spawnPoints: fieldSpawns(2400, 3200, 16, [0, 1]),  // 廢土外圍(起始)= 巨鼠 + 蜈蚣(q1/q2 任務怪)
         npcs: [],
         shopNpcs: [],
         portals: [
@@ -124,7 +125,7 @@ const MAPS: Record<string, MapConfig> = {
     dry_well_road: {
         id: 'dry_well_road', nameZH: '乾井路', mapType: 'field', levelRange: [40, 90], regionId: 'scrap',
         width: 1800, height: 2800, bgColor: '#33291c',
-        spawnPoints: fieldSpawns(1800, 2800, 14, 3),
+        spawnPoints: fieldSpawns(1800, 2800, 14, [4]),  // 乾井路 = 鏽蜈蚣(單一專屬)
         npcs: [],
         shopNpcs: [],
         portals: [
@@ -156,7 +157,7 @@ const MAPS: Record<string, MapConfig> = {
     core_gate: {
         id: 'core_gate', nameZH: '爐心門', mapType: 'boss', levelRange: [180, 300], regionId: 'reactor',
         width: 2000, height: 2400, bgColor: '#241a16',
-        spawnPoints: fieldSpawns(2000, 2400, 6, 6),
+        spawnPoints: fieldSpawns(2000, 2400, 6, [6]),  // 爐心門 = 輻射巨鼠(單一專屬)
         npcs: [],
         shopNpcs: [],
         portals: [
