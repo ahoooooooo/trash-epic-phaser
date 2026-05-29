@@ -62,6 +62,8 @@ interface SaveData {
     monthCardExpiry: number;                   // 月卡到期 timestamp(0 = 無)
     monthCardClaimedAt: number;                // 月卡每日領取日期 timestamp
     dailyCrystalClaimedAt: number;             // 免費每日登入領取日期 timestamp
+    // Phase 4c-7 新手引導 FTUE 是否看過
+    tutorialDone: boolean;
 }
 
 // 同一日曆日判定(每日領取/每日限購用)
@@ -117,7 +119,8 @@ function makeDefaultSave(): SaveData {
         packLastBuyAt: {},
         monthCardExpiry: 0,
         monthCardClaimedAt: 0,
-        dailyCrystalClaimedAt: 0
+        dailyCrystalClaimedAt: 0,
+        tutorialDone: false
     };
 }
 
@@ -200,6 +203,10 @@ export class SaveService {
             merged.monthCardExpiry = typeof parsed.monthCardExpiry === 'number' ? parsed.monthCardExpiry : 0;
             merged.monthCardClaimedAt = typeof parsed.monthCardClaimedAt === 'number' ? parsed.monthCardClaimedAt : 0;
             merged.dailyCrystalClaimedAt = typeof parsed.dailyCrystalClaimedAt === 'number' ? parsed.dailyCrystalClaimedAt : 0;
+            // Phase 4c-7 FTUE:既有玩家(已升級/有擊殺)視為看過,不打擾;全新存檔才跑引導
+            merged.tutorialDone = typeof parsed.tutorialDone === 'boolean'
+                ? parsed.tutorialDone
+                : (merged.lastSavedAt > 0 || merged.level > 1 || merged.totalKills > 0);
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -500,6 +507,10 @@ export class SaveService {
         this.data.crystal += amount;
         return true;
     }
+
+    // Phase 4c-7 新手引導 FTUE
+    isTutorialDone(): boolean { return this.data.tutorialDone; }
+    markTutorialDone(): void { this.data.tutorialDone = true; }
 
     reset(): void {
         this.data = makeDefaultSave();

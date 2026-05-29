@@ -535,6 +535,12 @@ export class Game extends Scene
 
         // 底部 5 tab UI
         this.buildBottomTabs();
+
+        // Phase 4c-7 新手引導 FTUE — 全新存檔首次進 Game 跑一次(看完寫旗標)
+        if (!SaveService.instance.isTutorialDone()) {
+            this.scene.launch('Coachmark');
+            this.scene.pause();
+        }
     }
 
     // Phase 4c-2 Q/E → 用快捷列第一個補血/補魔藥水
