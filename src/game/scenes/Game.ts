@@ -183,6 +183,7 @@ export class Game extends Scene
     private buffAtkPct = 0;
     private buffDefUntilMs = 0;
     private buffDefPct = 0;
+    private potionSlotCountTexts: Phaser.GameObjects.Text[] = [];
     // Phase 4b-12 (B) 掉落物磁吸 — pending pickups
     private pendingPickups: { obj: Phaser.GameObjects.GameObject & { x: number; y: number; destroy: () => void }; collect: () => void }[] = [];
     // Phase 4b-13 小地圖 — graphics overlay 左上角
@@ -448,6 +449,9 @@ export class Game extends Scene
             stroke: '#1a1612', strokeThickness: 3
         }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
 
+        // Phase 4c-2 手機藥水快捷列(右側 3 格,tap 用藥)
+        this.drawPotionHotbar();
+
         // plate 四角鉚釘
         const plateBottom = plateY + plateH;
         for (const [rx, ry] of [[barX - 6, plateY + 4], [barX + barW + 6, plateY + 4], [barX - 6, plateBottom - 4], [barX + barW + 6, plateBottom - 4]]) {
@@ -536,7 +540,46 @@ export class Game extends Scene
         this.potionCdUntilMs = this.time.now + p.cooldownMs;
         this.flashHudMessage(p.nameZH, 0xffe060);
         save.save();
+        this.refreshPotionHotbar();
         return true;
+    }
+
+    // Phase 4c-2 手機藥水快捷列(右側 3 格)
+    private drawPotionHotbar() {
+        const hotbar = SaveService.instance.getPotionHotbar();
+        const x = VIEW_W - 70;
+        const size = 92;
+        const gap = 16;
+        const startY = 700;
+        this.potionSlotCountTexts = [];
+        for (let i = 0; i < 3; i++) {
+            const id = hotbar[i];
+            const y = startY + i * (size + gap);
+            const bg = this.add.rectangle(x, y, size, size, 0x2a2520, 0.92)
+                .setStrokeStyle(3, id ? 0x8b6020 : 0x4a3a30, id ? 1 : 0.5)
+                .setDepth(1100).setScrollFactor(0);
+            const p = id ? getPotion(id) : undefined;
+            this.add.text(x, y - 14, p ? p.nameZH.slice(0, 2) : '—', {
+                fontFamily: 'sans-serif', fontSize: 26, color: id ? '#ffe0c0' : '#5a4a38', fontStyle: 'bold'
+            }).setOrigin(0.5).setDepth(1101).setScrollFactor(0);
+            const cnt = this.add.text(x, y + 22, id ? `×${SaveService.instance.getPotionCount(id)}` : '', {
+                fontFamily: 'monospace', fontSize: 22, color: '#ffe060', fontStyle: 'bold'
+            }).setOrigin(0.5).setDepth(1101).setScrollFactor(0);
+            this.potionSlotCountTexts[i] = cnt;
+            if (id) {
+                bg.setInteractive({ useHandCursor: true });
+                bg.on('pointerdown', () => { this.usePotion(id); });
+            }
+        }
+    }
+
+    private refreshPotionHotbar() {
+        const hotbar = SaveService.instance.getPotionHotbar();
+        for (let i = 0; i < this.potionSlotCountTexts.length; i++) {
+            const id = hotbar[i];
+            const t = this.potionSlotCountTexts[i];
+            if (t && id) t.setText(`×${SaveService.instance.getPotionCount(id)}`);
+        }
     }
 
     // auto-pot + HoT tick(update 每幀呼叫)
