@@ -149,6 +149,10 @@ export class Game extends Scene
     private playerHP = 100;
     private playerInvulnUntilMs = 0;
     private spawnGraceArmed = false;  // ④ 出生無敵在首個 update tick(FTUE resume 後)才 arm,用 update 的 global time
+    private skillReadyAt = 0;         // ⑤ 主動技能下次可用時間(update 的 global time 基準)
+    private skillRequested = false;   // 按鈕/F 設旗標,update 用同一 time 處理(CD 判定與視覺同源)
+    private skillBtnBg!: Phaser.GameObjects.Rectangle;
+    private skillCdText!: Phaser.GameObjects.Text;
     private isGameOver = false;
     private spawnPoints: SpawnPoint[] = [];
     private mobs: Phaser.GameObjects.Sprite[] = [];
@@ -219,6 +223,12 @@ export class Game extends Scene
     private static readonly PLAYER_INVULN_MS = 500;
     private static readonly SPAWN_GRACE_MS = 2500;   // 進場/復活後無敵緩衝(防新手一進場被圍毆秒死)
     private static readonly SPAWN_SAFE_RADIUS = 240; // 怪不在玩家此半徑內 spawn(避免點臉刷出)
+    // ⑤ 戰鬥深度:主動技能「廢土震波」(AoE,耗 MP,CD)
+    private static readonly SKILL_MP_COST = 25;
+    private static readonly SKILL_CD_MS = 5000;
+    private static readonly SKILL_RADIUS = 320;
+    private static readonly SKILL_DMG_MULT = 2.4;   // 對範圍內每怪 = 武器有效傷害 × 此倍率
+    private static readonly SKILL_KNOCKBACK = 90;
     // Phase 4c 設計修正:maxHP 隨等級成長(每級 +20)+ 天賦厚皮硬骨
     private playerMaxHp = 100;
     private computeMaxHp(level: number): number {
@@ -247,6 +257,7 @@ export class Game extends Scene
         this.events.on('resume', () => this.refreshMaxHp());
         this.playerInvulnUntilMs = 0;
         this.spawnGraceArmed = false;
+        this.skillReadyAt = 0;
         this.attackCooldownMs = 0;
         this.isGameOver = false;
         this.sessionKills = 0;
@@ -495,6 +506,7 @@ export class Game extends Scene
 
         // Phase 4c-2 手機藥水快捷列(右側 3 格,tap 用藥)
         this.drawPotionHotbar();
+        this.drawSkillButton();
 
         // plate 四角鉚釘
         const plateBottom = plateY + plateH;
@@ -595,6 +607,101 @@ export class Game extends Scene
     }
 
     // Phase 4c-2 手機藥水快捷列(右側 3 格)
+    // ⑤ 主動技能按鈕(右側,藥水快捷列下方)
+    private drawSkillButton() {
+        const x = VIEW_W - 70;
+        const y = 1230;
+        const size = 116;
+        this.skillBtnBg = this.add.rectangle(x, y, size, size, 0x8b3a1f, 0.95)
+            .setStrokeStyle(4, 0xff8830, 1).setDepth(1100).setScrollFactor(0)
+            .setInteractive({ useHandCursor: true });
+        this.add.text(x, y - 22, '震波', {
+            fontFamily: 'sans-serif', fontSize: 32, color: '#ffe0c0', fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(1101).setScrollFactor(0);
+        this.add.text(x, y + 20, `${Game.SKILL_MP_COST} MP`, {
+            fontFamily: 'monospace', fontSize: 20, color: '#9bd0ff', fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(1101).setScrollFactor(0);
+        // CD 倒數覆蓋文字(grace 時顯示秒數)
+        this.skillCdText = this.add.text(x, y, '', {
+            fontFamily: 'monospace', fontSize: 40, color: '#ffe060', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 4
+        }).setOrigin(0.5).setDepth(1102).setScrollFactor(0);
+        this.skillBtnBg.on('pointerdown', () => { this.skillRequested = true; });
+        this.input.keyboard?.on('keydown-F', () => { this.skillRequested = true; });
+    }
+
+    // 技能按鈕 CD 視覺(update 每 tick 刷)
+    private refreshSkillButton(time: number) {
+        if (!this.skillBtnBg) return;
+        const remain = this.skillReadyAt - time;
+        if (remain > 0) {
+            this.skillBtnBg.setFillStyle(0x2a2520, 0.92).setStrokeStyle(4, 0x5a4a38, 1);
+            this.skillCdText.setText(Math.ceil(remain / 1000).toString());
+        } else {
+            this.skillBtnBg.setFillStyle(0x8b3a1f, 0.95).setStrokeStyle(4, 0xff8830, 1);
+            this.skillCdText.setText('');
+        }
+    }
+
+    // ⑤ 廢土震波:範圍 AoE,耗 MP,CD。給玩家主動操作層(緩解純掛機)
+    private useSkill(time: number) {
+        if (this.isGameOver) return;
+        if (time < this.skillReadyAt) { this.flashHudMessage('技能冷卻中', 0xb08850); return; }
+        const save = SaveService.instance;
+        if (!save.spendMp(Game.SKILL_MP_COST)) { this.flashHudMessage('MP 不足', 0x8b3a1f); return; }
+        this.skillReadyAt = time + Game.SKILL_CD_MS;
+        // MP HUD 同步
+        const c = save.get();
+        this.mpBarFill.width = (this.hudPlateBarW - 4) * (c.mp / c.maxMp);
+        this.mpText.setText(`MP  ${c.mp} / ${c.maxMp}`);
+
+        // 傷害:武器有效傷害 × 倍率 × 天賦
+        const weapon = getWeapon(save.getCurrentWeaponId());
+        const buff = computeTalentBuff();
+        const skillDmg = Math.max(1, Math.round(
+            effectiveDamage(weapon, save.getWeaponEnh(weapon.id)) * Game.SKILL_DMG_MULT * (1 + buff.dmgPct + this.potionAtkPct())
+        ));
+
+        // 震波視覺:橙環擴張到 SKILL_RADIUS
+        const wave = this.add.circle(this.player.x, this.player.y, Game.SKILL_RADIUS, 0xff8830, 0.16)
+            .setStrokeStyle(8, 0xffe060, 0.9).setDepth(450).setScale(0.12);
+        this.tweens.add({
+            targets: wave, scale: 1, alpha: 0,
+            duration: 360, ease: 'Quad.out', onComplete: () => wave.destroy()
+        });
+        this.cameras.main.shake(160, 0.012);
+        HitStopService.instance.trigger(90, 0.08);
+
+        // 對範圍內每隻怪施加傷害 + 擊退
+        for (const m of [...this.mobs]) {
+            if (!m.active) continue;
+            const dx = m.x - this.player.x;
+            const dy = m.y - this.player.y;
+            const d = Math.hypot(dx, dy);
+            if (d > Game.SKILL_RADIUS) continue;
+            const data = m.getData('mob') as MobData;
+            data.hp -= skillDmg;
+            // 擊退
+            const len = d || 1;
+            m.x = Math.max(60, Math.min(this.mapConfig.width - 60, m.x + (dx / len) * Game.SKILL_KNOCKBACK));
+            m.y = Math.max(60, Math.min(this.mapConfig.height - 60, m.y + (dy / len) * Game.SKILL_KNOCKBACK));
+            // hit flash
+            m.setTint(0xffffff).setTintMode(TINT_FILL);
+            this.time.delayedCall(100, () => {
+                if (!m.active) return;
+                const td = m.getData('mob') as MobData | undefined;
+                if (td?.blueprint.tint !== undefined) m.setTint(td.blueprint.tint); else m.clearTint();
+            });
+            // 傷害數字
+            const t = this.add.text(m.x, m.y - 54, `${skillDmg}`, {
+                fontFamily: 'sans-serif', fontSize: 44, color: '#ffe060',
+                stroke: '#8b3a1f', strokeThickness: 6, fontStyle: 'bold'
+            }).setOrigin(0.5).setDepth(460);
+            this.tweens.add({ targets: t, y: t.y - 90, alpha: 0, duration: 620, ease: 'Quad.out', onComplete: () => t.destroy() });
+            if (data.hp <= 0) this.killMob(m, time);
+        }
+    }
+
     private drawPotionHotbar() {
         const hotbar = SaveService.instance.getPotionHotbar();
         const x = VIEW_W - 70;
@@ -805,6 +912,8 @@ export class Game extends Scene
         if (this.vendorShopOpen) return;
         // ④ 出生無敵:首個真正 gameplay tick(FTUE pause→resume 後才跑到這)才 arm,用 update 的 global time 與傷害判定同源
         if (!this.spawnGraceArmed) { this.spawnGraceArmed = true; this.startSpawnGrace(time); }
+        if (this.skillRequested) { this.skillRequested = false; this.useSkill(time); }
+        this.refreshSkillButton(time);
         // VFX-A:玩家陰影跟腳(origin 中心,腳在下方 ~ displayHeight*0.42)
         if (this.playerShadow) {
             this.playerShadow.x = this.player.x;
@@ -1481,35 +1590,38 @@ export class Game extends Scene
 
         // 死亡 + cycle 重生(boss 不 cycle)+ reward
         if (data.hp <= 0) {
-            const sp = data.spawnPoint;
-            if (sp) {
-                sp.mob = null;
-                sp.nextSpawnAt = time + RESPAWN_CYCLE_MS;
-            }
-            this.mobs = this.mobs.filter(m => m !== target);
-            this.spawnGoldDrop(target.x, target.y, data.blueprint.goldReward);
-            this.grantKillReward(target.x, target.y, data.blueprint);
-            // Phase 4b-7 掉落物 roll
-            this.rollMobDrops(target.x, target.y, data.blueprint.isBoss === true);
-            if (data.blueprint.isBoss) {
-                this.handleBossDefeated(target.x, target.y);
-            }
-            // Phase 4b-12 (A) 死亡爆碎屑 + sprite 膨脹消失
-            this.spawnDeathBurst(target.x, target.y, data.blueprint.isBoss === true);
-            // VFX-A:陰影同步淡出消失
-            const deadShadow = target.getData('shadow') as Phaser.GameObjects.Ellipse | undefined;
-            if (deadShadow) {
-                this.tweens.add({
-                    targets: deadShadow, alpha: 0, scaleX: 1.3, scaleY: 1.3,
-                    duration: 180, onComplete: () => deadShadow.destroy()
-                });
-            }
+            this.killMob(target, time);
+        }
+    }
+
+    // 怪死亡處理(cycle 重生 + reward + 掉落 + 死亡 VFX)— handleAutoAttack 與主動技能共用
+    private killMob(target: Phaser.GameObjects.Image, time: number) {
+        const data = target.getData('mob') as MobData;
+        const sp = data.spawnPoint;
+        if (sp) {
+            sp.mob = null;
+            sp.nextSpawnAt = time + RESPAWN_CYCLE_MS;
+        }
+        this.mobs = this.mobs.filter(m => m !== target);
+        this.spawnGoldDrop(target.x, target.y, data.blueprint.goldReward);
+        this.grantKillReward(target.x, target.y, data.blueprint);
+        this.rollMobDrops(target.x, target.y, data.blueprint.isBoss === true);
+        if (data.blueprint.isBoss) {
+            this.handleBossDefeated(target.x, target.y);
+        }
+        this.spawnDeathBurst(target.x, target.y, data.blueprint.isBoss === true);
+        const deadShadow = target.getData('shadow') as Phaser.GameObjects.Ellipse | undefined;
+        if (deadShadow) {
             this.tweens.add({
-                targets: target, scale: target.scaleX * 1.4, alpha: 0,
-                duration: 180, ease: 'Quad.out',
-                onComplete: () => target.destroy()
+                targets: deadShadow, alpha: 0, scaleX: 1.3, scaleY: 1.3,
+                duration: 180, onComplete: () => deadShadow.destroy()
             });
         }
+        this.tweens.add({
+            targets: target, scale: target.scaleX * 1.4, alpha: 0,
+            duration: 180, ease: 'Quad.out',
+            onComplete: () => target.destroy()
+        });
     }
 
     // Phase 4b-7 掉落系統
