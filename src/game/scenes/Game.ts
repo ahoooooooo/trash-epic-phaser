@@ -148,6 +148,7 @@ export class Game extends Scene
     private player!: Phaser.GameObjects.Sprite;
     private playerHP = 100;
     private playerInvulnUntilMs = 0;
+    private spawnGraceArmed = false;  // ④ 出生無敵在首個 update tick(FTUE resume 後)才 arm,用 update 的 global time
     private isGameOver = false;
     private spawnPoints: SpawnPoint[] = [];
     private mobs: Phaser.GameObjects.Sprite[] = [];
@@ -216,6 +217,8 @@ export class Game extends Scene
     private static readonly MOB_CONTACT_RANGE = 65;  // 圓形碰撞半徑
     private static readonly MOB_CONTACT_COOLDOWN_MS = 800; // 怪 0.8s 才能再打一次同一玩家
     private static readonly PLAYER_INVULN_MS = 500;
+    private static readonly SPAWN_GRACE_MS = 2500;   // 進場/復活後無敵緩衝(防新手一進場被圍毆秒死)
+    private static readonly SPAWN_SAFE_RADIUS = 240; // 怪不在玩家此半徑內 spawn(避免點臉刷出)
     // Phase 4c 設計修正:maxHP 隨等級成長(每級 +20)+ 天賦厚皮硬骨
     private playerMaxHp = 100;
     private computeMaxHp(level: number): number {
@@ -243,6 +246,7 @@ export class Game extends Scene
         // Phase 4c 設計修正:從天賦/裝備頁 resume 回來時重算 maxHP(thick_hide 等即時反映)
         this.events.on('resume', () => this.refreshMaxHp());
         this.playerInvulnUntilMs = 0;
+        this.spawnGraceArmed = false;
         this.attackCooldownMs = 0;
         this.isGameOver = false;
         this.sessionKills = 0;
@@ -799,6 +803,8 @@ export class Game extends Scene
         if (this.isGameOver) return;
         if (this.questDialogOpen) return;
         if (this.vendorShopOpen) return;
+        // ④ 出生無敵:首個真正 gameplay tick(FTUE pause→resume 後才跑到這)才 arm,用 update 的 global time 與傷害判定同源
+        if (!this.spawnGraceArmed) { this.spawnGraceArmed = true; this.startSpawnGrace(time); }
         // VFX-A:玩家陰影跟腳(origin 中心,腳在下方 ~ displayHeight*0.42)
         if (this.playerShadow) {
             this.playerShadow.x = this.player.x;
@@ -1158,6 +1164,11 @@ export class Game extends Scene
     {
         for (const sp of this.spawnPoints) {
             if (sp.mob === null && time >= sp.nextSpawnAt) {
+                // ④ 安全半徑:玩家就在 spawn point 旁時不點臉刷出,延後 0.8s 重試(楓谷 cycle 仍維持)
+                if (Math.hypot(sp.x - this.player.x, sp.y - this.player.y) < Game.SPAWN_SAFE_RADIUS) {
+                    sp.nextSpawnAt = time + 800;
+                    continue;
+                }
                 const bp = MOB_BLUEPRINTS[sp.blueprintIdx];
                 const mob = this.add.sprite(sp.x, sp.y, bp.spriteKey).setScale(bp.scale);
                 if (bp.tint !== undefined) {
@@ -1252,6 +1263,17 @@ export class Game extends Scene
                 return; // 一個 frame 只扣一次,不疊
             }
         }
+    }
+
+    // ④ 出生無敵緩衝:防新手一進場/復活被圍毆秒死。now 用 update 的 global time(與 takeDamage 同源)
+    private startSpawnGrace(now: number)
+    {
+        this.playerInvulnUntilMs = now + Game.SPAWN_GRACE_MS;
+        const blink = this.tweens.add({ targets: this.player, alpha: 0.45, duration: 200, yoyo: true, repeat: -1 });
+        this.time.delayedCall(Game.SPAWN_GRACE_MS, () => {
+            blink.stop();
+            if (this.player.active) this.player.setAlpha(1);
+        });
     }
 
     private takeDamage(amount: number, time: number)
