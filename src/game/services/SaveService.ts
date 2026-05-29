@@ -55,7 +55,22 @@ interface SaveData {
     // Phase 4c-4 商店 skin(純外觀)
     ownedSkinIds: string[];
     equippedSkins: Partial<Record<SkinSlot, string>>;
+    // Phase 4c-6 變現:廢土晶體(付費幣)+ 禮包 + 月卡 + 每日領取
+    crystal: number;
+    purchasedPacks: Record<string, number>;  // packId → 累計購買次數(限購用)
+    packLastBuyAt: Record<string, number>;    // packId → 上次購買 timestamp(daily/weekly 冷卻)
+    monthCardExpiry: number;                   // 月卡到期 timestamp(0 = 無)
+    monthCardClaimedAt: number;                // 月卡每日領取日期 timestamp
+    dailyCrystalClaimedAt: number;             // 免費每日登入領取日期 timestamp
 }
+
+// 同一日曆日判定(每日領取/每日限購用)
+function isSameDay(a: number, b: number): boolean {
+    if (!a || !b) return false;
+    const da = new Date(a), db = new Date(b);
+    return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
+}
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // per Codex review:nested object 必須 deep clone,不能 spread(weaponEnh 會共用 reference)
 function makeDefaultSave(): SaveData {
@@ -96,7 +111,13 @@ function makeDefaultSave(): SaveData {
         potionHotbar: ['rust_water', 'dry_cell', null, null],
         autoPot: { enabled: false, hpThresholdPct: 0.4, mpThresholdPct: 0.3, hpPotionId: 'rust_water', mpPotionId: 'dry_cell' },
         ownedSkinIds: [],
-        equippedSkins: {}
+        equippedSkins: {},
+        crystal: 0,
+        purchasedPacks: {},
+        packLastBuyAt: {},
+        monthCardExpiry: 0,
+        monthCardClaimedAt: 0,
+        dailyCrystalClaimedAt: 0
     };
 }
 
@@ -172,6 +193,13 @@ export class SaveService {
             // Phase 4c-4 skin forward-compat
             merged.ownedSkinIds = Array.isArray(parsed.ownedSkinIds) ? [...parsed.ownedSkinIds] : [];
             merged.equippedSkins = { ...(parsed.equippedSkins ?? {}) };
+            // Phase 4c-6 變現 forward-compat
+            merged.crystal = typeof parsed.crystal === 'number' ? parsed.crystal : 0;
+            merged.purchasedPacks = { ...(parsed.purchasedPacks ?? {}) };
+            merged.packLastBuyAt = { ...(parsed.packLastBuyAt ?? {}) };
+            merged.monthCardExpiry = typeof parsed.monthCardExpiry === 'number' ? parsed.monthCardExpiry : 0;
+            merged.monthCardClaimedAt = typeof parsed.monthCardClaimedAt === 'number' ? parsed.monthCardClaimedAt : 0;
+            merged.dailyCrystalClaimedAt = typeof parsed.dailyCrystalClaimedAt === 'number' ? parsed.dailyCrystalClaimedAt : 0;
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -412,6 +440,66 @@ export class SaveService {
     addSkin(id: string): void { if (!this.data.ownedSkinIds.includes(id)) this.data.ownedSkinIds.push(id); }
     getEquippedSkin(slot: SkinSlot): string | undefined { return this.data.equippedSkins[slot]; }
     equipSkin(slot: SkinSlot, id: string): void { this.data.equippedSkins[slot] = id; }
+
+    // Phase 4c-6 變現:廢土晶體(付費幣)— 邊界守門,負值/非有限不可動付費幣
+    getCrystal(): number { return this.data.crystal; }
+    addCrystal(n: number): void {
+        if (!Number.isFinite(n) || n <= 0) return;
+        this.data.crystal += n;
+    }
+    spendCrystal(n: number): boolean {
+        if (!Number.isFinite(n) || n <= 0) return false;
+        if (this.data.crystal < n) return false;
+        this.data.crystal -= n;
+        return true;
+    }
+
+    // 禮包限購判定(once/daily/weekly/monthcard)
+    getPurchasedPackCount(id: string): number { return this.data.purchasedPacks[id] ?? 0; }
+    canBuyPack(id: string, limit: 'once' | 'daily' | 'weekly' | 'monthcard'): boolean {
+        const now = Date.now();
+        const last = this.data.packLastBuyAt[id] ?? 0;
+        switch (limit) {
+            case 'once': return (this.data.purchasedPacks[id] ?? 0) < 1;
+            case 'daily': return !isSameDay(now, last);
+            case 'weekly': return now - last >= WEEK_MS;
+            case 'monthcard': return true;  // 月卡可重複購買(疊加到期)
+        }
+    }
+    recordPackPurchase(id: string): void {
+        this.data.purchasedPacks[id] = (this.data.purchasedPacks[id] ?? 0) + 1;
+        this.data.packLastBuyAt[id] = Date.now();
+    }
+
+    // 月卡:購買延長到期 + 期間每日領晶體
+    getMonthCardExpiry(): number { return this.data.monthCardExpiry; }
+    isMonthCardActive(): boolean { return this.data.monthCardExpiry > Date.now(); }
+    extendMonthCard(days: number): void {
+        if (!Number.isFinite(days) || days <= 0) return;
+        const now = Date.now();
+        const base = this.data.monthCardExpiry > now ? this.data.monthCardExpiry : now;
+        this.data.monthCardExpiry = base + days * 24 * 60 * 60 * 1000;
+    }
+    canClaimMonthCardDaily(): boolean {
+        return this.isMonthCardActive() && !isSameDay(Date.now(), this.data.monthCardClaimedAt);
+    }
+    claimMonthCardDaily(amount: number): boolean {
+        if (!Number.isFinite(amount) || amount <= 0) return false;
+        if (!this.canClaimMonthCardDaily()) return false;
+        this.data.monthCardClaimedAt = Date.now();
+        this.data.crystal += amount;
+        return true;
+    }
+
+    // 免費每日登入領晶體
+    canClaimDailyCrystal(): boolean { return !isSameDay(Date.now(), this.data.dailyCrystalClaimedAt); }
+    claimDailyCrystal(amount: number): boolean {
+        if (!Number.isFinite(amount) || amount <= 0) return false;
+        if (!this.canClaimDailyCrystal()) return false;
+        this.data.dailyCrystalClaimedAt = Date.now();
+        this.data.crystal += amount;
+        return true;
+    }
 
     reset(): void {
         this.data = makeDefaultSave();
