@@ -5,7 +5,7 @@ import { SaveService } from '../services/SaveService';
 import { effectiveDamage, getWeapon, WeaponDef } from '../services/WeaponService';
 import { computeTalentBuff } from '../services/TalentService';
 import { QUESTS, QuestDef } from '../services/QuestService';
-import { getMap, MapConfig, NpcSpec, PortalSpec } from '../services/MapService';
+import { getMap, MapConfig, NpcSpec, PortalSpec, ShopNpcSpec } from '../services/MapService';
 import { generateRandomWeapon, weaponDisplayName, rarityColor } from '../services/WeaponGenerator';
 import { generateRandomArmor, armorDisplayName, armorRarityColor } from '../services/ArmorService';
 import { getPotion, computePotionEffect } from '../services/PotionService';
@@ -193,6 +193,7 @@ export class Game extends Scene
     private npcClerk?: Phaser.GameObjects.Image;
     private npcBangMark?: Phaser.GameObjects.Text;
     private questDialogOpen = false;
+    private vendorShopOpen = false;
     private mapConfig!: MapConfig;
     private portals: Phaser.GameObjects.GameObject[] = [];
     // 主角動作 state machine — 楓谷風:不同武器類別不同 attack 動作
@@ -239,6 +240,7 @@ export class Game extends Scene
         // Phase 4b-16 fix:per Codex audit,questDialogOpen 沒 reset 會卡死 update()
         // user 報「死後重進不了」根因 — 死亡時若 quest dialog 開,scene restart 後 update 永遠早退
         this.questDialogOpen = false;
+        this.vendorShopOpen = false;
 
         // Phase 4b-3:讀 current map config
         this.mapConfig = getMap(SaveService.instance.getCurrentMapId());
@@ -332,6 +334,26 @@ export class Game extends Scene
                     this.openQuestDialog();
                 });
             }
+        });
+        // Phase 4c-3 各地商販:town 地圖的 potion vendor 攤位
+        this.mapConfig.shopNpcs.forEach((v: ShopNpcSpec) => {
+            if (v.shopType !== 'potion') return; // skin vendor 留 4c-4
+            this.add.rectangle(v.x, v.y, 96, 96, 0x4a3a2a, 0.96).setStrokeStyle(3, 0x8b6020).setDepth(5);
+            const stall = this.add.rectangle(v.x, v.y, 96, 96, 0xffffff, 0.001).setDepth(8)
+                .setInteractive({ useHandCursor: true });
+            this.add.text(v.x, v.y, '🧪', { fontFamily: 'sans-serif', fontSize: 46 }).setOrigin(0.5).setDepth(6);
+            this.add.text(v.x, v.y + 66, v.nameZH, {
+                fontFamily: 'sans-serif', fontSize: 22, color: '#ffe0c0', fontStyle: 'bold',
+                stroke: '#1a1612', strokeThickness: 4, align: 'center', wordWrap: { width: 240 }
+            }).setOrigin(0.5, 0).setDepth(6);
+            const bang = this.add.text(v.x, v.y - 72, '🛒', { fontFamily: 'sans-serif', fontSize: 30 }).setOrigin(0.5).setDepth(7);
+            this.tweens.add({ targets: bang, y: v.y - 82, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+            stall.on('pointerdown', () => {
+                const d = Math.hypot(this.player.x - v.x, this.player.y - v.y);
+                if (d > 140) { this.flashHudMessage('走近商販才能買', 0xb08850); return; }
+                this.joystick.cancel();
+                this.openVendorShop(v);
+            });
         });
         // Portals 從 mapConfig.portals(傳送門)
         this.mapConfig.portals.forEach((p: PortalSpec) => this.spawnPortal(p));
@@ -582,6 +604,63 @@ export class Game extends Scene
         }
     }
 
+    // Phase 4c-3 各地商販藥水購買面板
+    private openVendorShop(v: ShopNpcSpec) {
+        if (this.vendorShopOpen) return;
+        this.vendorShopOpen = true;
+        const ids = v.sellsPotionIds ?? [];
+        const layer = this.add.container(0, 0).setScrollFactor(0).setDepth(3000);
+        layer.add(this.add.rectangle(0, 0, VIEW_W, VIEW_H, 0x120c0a, 0.92).setOrigin(0, 0).setInteractive());
+        const panelH = 390 + ids.length * 130;
+        layer.add(this.add.rectangle(VIEW_W / 2, VIEW_H / 2, VIEW_W - 110, panelH, 0x241c16, 0.99)
+            .setStrokeStyle(4, 0x8b6020).setInteractive());
+        const top = (VIEW_H - panelH) / 2;
+        layer.add(this.add.text(VIEW_W / 2, top + 42, `🧪 ${v.nameZH}`, {
+            fontFamily: 'sans-serif', fontSize: 40, color: '#ffe060', fontStyle: 'bold', stroke: '#1a1612', strokeThickness: 5
+        }).setOrigin(0.5));
+        const goldT = this.add.text(VIEW_W / 2, top + 96, `💰 ${SaveService.instance.get().gold}`, {
+            fontFamily: 'monospace', fontSize: 28, color: '#ffe0c0', fontStyle: 'bold'
+        }).setOrigin(0.5);
+        layer.add(goldT);
+        // 面板內 feedback(在 modal 之上,避免 flashHudMessage depth 2000 被 3000 面板蓋住)
+        const fb = this.add.text(VIEW_W / 2, top + 128, '', {
+            fontFamily: 'sans-serif', fontSize: 24, color: '#ffe060', fontStyle: 'bold'
+        }).setOrigin(0.5);
+        layer.add(fb);
+        let y = top + 220;
+        for (const id of ids) {
+            const p = getPotion(id);
+            if (!p) continue;
+            const price = p.priceGold ?? 0;
+            const eff = p.kind === 'fixed' ? `${p.target === 'mp' ? 'MP' : 'HP'} +${p.amount}`
+                : p.kind === 'percent' ? `${p.target === 'mp' ? 'MP' : p.target === 'both' ? 'HP/MP' : 'HP'} +${Math.round((p.percent ?? 0) * 100)}%`
+                : p.kind === 'full' ? '全恢復' : p.kind === 'hot' ? '持續回血' : 'Buff';
+            const row = this.add.rectangle(VIEW_W / 2, y, VIEW_W - 200, 108, 0x1a1612, 0.95)
+                .setStrokeStyle(3, 0x8b6020).setInteractive({ useHandCursor: true });
+            const t = this.add.text(VIEW_W / 2, y, `${p.nameZH}  (${eff})    💰 ${price}`, {
+                fontFamily: 'sans-serif', fontSize: 26, color: '#ffe0c0', fontStyle: 'bold'
+            }).setOrigin(0.5);
+            row.on('pointerdown', () => {
+                if (!SaveService.instance.spendGold(price)) { fb.setText('💰 金幣不足').setColor('#e2542a'); return; }
+                SaveService.instance.addPotion(id, 1);
+                SaveService.instance.save();
+                goldT.setText(`💰 ${SaveService.instance.get().gold}`);
+                this.refreshPotionHotbar();
+                fb.setText(`+1 ${p.nameZH}  (持有 ×${SaveService.instance.getPotionCount(id)})`).setColor('#ffe060');
+            });
+            layer.add([row, t]);
+            y += 130;
+        }
+        const closeY = VIEW_H / 2 + panelH / 2 - 66;
+        const closeBtn = this.add.rectangle(VIEW_W / 2, closeY, 320, 84, 0xff8830)
+            .setStrokeStyle(4, 0x1a1612).setInteractive({ useHandCursor: true });
+        layer.add(closeBtn);
+        layer.add(this.add.text(VIEW_W / 2, closeY, '關閉', {
+            fontFamily: 'sans-serif', fontSize: 36, color: '#1a1612', fontStyle: 'bold'
+        }).setOrigin(0.5));
+        closeBtn.on('pointerdown', () => { layer.destroy(); this.vendorShopOpen = false; });
+    }
+
     // auto-pot + HoT tick(update 每幀呼叫)
     private updatePotions(time: number) {
         if (time < this.hotUntilMs && time - this.hotLastTickMs >= 1000 && this.playerHP > 0) {
@@ -675,6 +754,7 @@ export class Game extends Scene
     {
         if (this.isGameOver) return;
         if (this.questDialogOpen) return;
+        if (this.vendorShopOpen) return;
         // VFX-A:玩家陰影跟腳(origin 中心,腳在下方 ~ displayHeight*0.42)
         if (this.playerShadow) {
             this.playerShadow.x = this.player.x;
