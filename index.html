@@ -2,9 +2,14 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8" />
+    <!-- HTML 每次重新驗證,避免 deploy 後瀏覽器/CDN 快取舊 index.html 指向已不存在的 JS hash 造成登入畫面卡住(hashed JS 本身仍可長快取) -->
+    <meta http-equiv="Cache-Control" content="no-cache, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#1a1612" />
     <link rel="stylesheet" href="/style.css">
     <title>破爛史詩 — Trash Epic</title>
