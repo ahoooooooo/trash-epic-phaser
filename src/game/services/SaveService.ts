@@ -2,6 +2,7 @@
 // per GAME_SPEC_V3 §4.4 「死掉不歸零,進度 Save」
 
 import type { EquipSlot } from './ArmorService';
+import type { SkinSlot } from './SkinService';
 
 const STORAGE_KEY = 'trash-epic-save-v1';
 const SAVE_VERSION = 1;
@@ -51,6 +52,9 @@ interface SaveData {
     potions: Record<string, number>;                   // potionId → 持有數
     potionHotbar: (string | null)[];                   // 快捷列 4 格 → potionId
     autoPot: { enabled: boolean; hpThresholdPct: number; mpThresholdPct: number; hpPotionId: string | null; mpPotionId: string | null };
+    // Phase 4c-4 商店 skin(純外觀)
+    ownedSkinIds: string[];
+    equippedSkins: Partial<Record<SkinSlot, string>>;
 }
 
 // per Codex review:nested object 必須 deep clone,不能 spread(weaponEnh 會共用 reference)
@@ -90,7 +94,9 @@ function makeDefaultSave(): SaveData {
         equippedArmor: {},
         potions: { rust_water: 5, dry_cell: 5 },
         potionHotbar: ['rust_water', 'dry_cell', null, null],
-        autoPot: { enabled: false, hpThresholdPct: 0.4, mpThresholdPct: 0.3, hpPotionId: 'rust_water', mpPotionId: 'dry_cell' }
+        autoPot: { enabled: false, hpThresholdPct: 0.4, mpThresholdPct: 0.3, hpPotionId: 'rust_water', mpPotionId: 'dry_cell' },
+        ownedSkinIds: [],
+        equippedSkins: {}
     };
 }
 
@@ -163,6 +169,9 @@ export class SaveService {
             // Phase 4c 設計修正:maxMp 隨等級衍生(舊存檔也修正),mp 夾住
             merged.maxMp = computeMaxMp(merged.level);
             merged.mp = Math.min(merged.mp, merged.maxMp);
+            // Phase 4c-4 skin forward-compat
+            merged.ownedSkinIds = Array.isArray(parsed.ownedSkinIds) ? [...parsed.ownedSkinIds] : [];
+            merged.equippedSkins = { ...(parsed.equippedSkins ?? {}) };
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -396,6 +405,13 @@ export class SaveService {
     setAutoPot(cfg: Partial<SaveData['autoPot']>): void {
         this.data.autoPot = { ...this.data.autoPot, ...cfg };
     }
+
+    // Phase 4c-4 skin
+    getOwnedSkinIds(): string[] { return [...this.data.ownedSkinIds]; }
+    hasSkin(id: string): boolean { return this.data.ownedSkinIds.includes(id); }
+    addSkin(id: string): void { if (!this.data.ownedSkinIds.includes(id)) this.data.ownedSkinIds.push(id); }
+    getEquippedSkin(slot: SkinSlot): string | undefined { return this.data.equippedSkins[slot]; }
+    equipSkin(slot: SkinSlot, id: string): void { this.data.equippedSkins[slot] = id; }
 
     reset(): void {
         this.data = makeDefaultSave();
