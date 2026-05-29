@@ -49,17 +49,17 @@ export const TALENT_NODES: TalentNode[] = [
     { id: 'rusty_fangs', route: 'attack', tier: 3, kind: 'minor', nameZH: '鏽牙獠齒', maxLevel: 100, requires: [{ nodeId: 'brute_path', minLevel: 2 }], tierGateReq: 0,
       descZH: l => `暴擊率 +${(l * 0.8).toFixed(1)}%`, wired: true },
     { id: 'berserk', route: 'attack', tier: 3, kind: 'keystone', nameZH: '嗜血狂亂', maxLevel: 1, requires: [{ nodeId: 'brute_path', minLevel: 3 }], tierGateReq: 0,
-      descZH: () => `HP 越低傷害越高(滿血 +0% → 瀕死 +30%)`, wired: false },
+      descZH: () => `HP 越低傷害越高(滿血 +0% → 瀕死 +30%)`, wired: true },
 
     { id: 'thick_hide', route: 'defense', tier: 3, kind: 'minor', nameZH: '厚皮硬骨', maxLevel: 100, requires: [{ nodeId: 'iron_path', minLevel: 2 }], tierGateReq: 0,
       descZH: l => `最大 HP +${l * 40}`, wired: true },
     { id: 'bulwark', route: 'defense', tier: 3, kind: 'keystone', nameZH: '鋼鐵壁壘', maxLevel: 1, requires: [{ nodeId: 'iron_path', minLevel: 3 }], tierGateReq: 0,
-      descZH: () => `免疫擊退 + 受擊反彈 15% 傷害`, wired: false },
+      descZH: () => `免疫擊退 + 受擊反彈 15% 傷害`, wired: true },
 
     { id: 'quick_fingers', route: 'support', tier: 3, kind: 'minor', nameZH: '快手拆解', maxLevel: 100, requires: [{ nodeId: 'cunning_path', minLevel: 2 }], tierGateReq: 0,
-      descZH: l => `撿取範圍 +${l * 6}%`, wired: false },
+      descZH: l => `撿取範圍 +${l * 6}%`, wired: true },
     { id: 'scrap_magnet', route: 'support', tier: 3, kind: 'keystone', nameZH: '廢料磁吸', maxLevel: 1, requires: [{ nodeId: 'cunning_path', minLevel: 3 }], tierGateReq: 0,
-      descZH: () => `自動吸取全螢幕掉落物`, wired: false },
+      descZH: () => `自動吸取全螢幕掉落物`, wired: true },
 
     // ===== tier4:各分支 2 minor 深化 =====
     { id: 'exposed_nerve', route: 'attack', tier: 4, kind: 'minor', nameZH: '裸露神經', maxLevel: 100, requires: [{ nodeId: 'rusty_fangs', minLevel: 3 }], tierGateReq: 0,
@@ -68,9 +68,9 @@ export const TALENT_NODES: TalentNode[] = [
       descZH: l => `攻速 +${(l * 1.5).toFixed(1)}%`, wired: true },
 
     { id: 'scar_tissue', route: 'defense', tier: 4, kind: 'minor', nameZH: '疤痕組織', maxLevel: 100, requires: [{ nodeId: 'thick_hide', minLevel: 3 }], tierGateReq: 0,
-      descZH: l => `每秒回血 +${l * 2}`, wired: false },
+      descZH: l => `每秒回血 +${l * 2}`, wired: true },
     { id: 'rust_thorns', route: 'defense', tier: 4, kind: 'minor', nameZH: '鏽刺反甲', maxLevel: 100, requires: [{ nodeId: 'bulwark', minLevel: 1 }], tierGateReq: 0,
-      descZH: l => `反傷 +${l * 3}%`, wired: false },
+      descZH: l => `反傷 +${l * 3}%`, wired: true },
 
     { id: 'gold_tooth', route: 'support', tier: 4, kind: 'minor', nameZH: '金牙', maxLevel: 100, requires: [{ nodeId: 'quick_fingers', minLevel: 3 }], tierGateReq: 0,
       descZH: l => `金幣 +${l * 2}%`, wired: true },
@@ -81,15 +81,15 @@ export const TALENT_NODES: TalentNode[] = [
     { id: 'glass_cannon', route: 'attack', tier: 5, kind: 'keystone', nameZH: '玻璃炮', maxLevel: 1, requires: [{ nodeId: 'exposed_nerve', minLevel: 3 }], tierGateReq: 0,
       descZH: () => `傷害 +50%,但受到傷害 +25%`, wired: true },
     { id: 'last_stand', route: 'defense', tier: 5, kind: 'keystone', nameZH: '背水一戰', maxLevel: 1, requires: [{ nodeId: 'scar_tissue', minLevel: 3 }], tierGateReq: 0,
-      descZH: () => `HP < 30% 時 減傷 +40%`, wired: false },
+      descZH: () => `HP < 30% 時 減傷 +40%`, wired: true },
     { id: 'alchemist', route: 'support', tier: 5, kind: 'keystone', nameZH: '廢土煉金', maxLevel: 1, requires: [{ nodeId: 'gold_tooth', minLevel: 3 }], tierGateReq: 0,
-      descZH: () => `撿到素材 25% 機率翻倍`, wired: false },
+      descZH: () => `撿到素材 25% 機率翻倍`, wired: true },
 
     // ===== tier6:分支終極 KEYSTONE =====
     { id: 'reaper', route: 'attack', tier: 6, kind: 'keystone', nameZH: '死神鐮刀', maxLevel: 1, requires: [{ nodeId: 'glass_cannon', minLevel: 1 }], tierGateReq: 0,
-      descZH: () => `對 HP < 15% 的敵人 直接處決`, wired: false },
+      descZH: () => `對 HP < 15% 的敵人 直接處決`, wired: true },
     { id: 'immortal', route: 'defense', tier: 6, kind: 'keystone', nameZH: '不朽之軀', maxLevel: 1, requires: [{ nodeId: 'last_stand', minLevel: 1 }], tierGateReq: 0,
-      descZH: () => `致死時 留 1 HP 並無敵 2s(180s CD)`, wired: false },
+      descZH: () => `致死時 留 1 HP 並無敵 2s(180s CD)`, wired: true },
     { id: 'hoarder_king', route: 'support', tier: 6, kind: 'keystone', nameZH: '囤積之王', maxLevel: 1, requires: [{ nodeId: 'alchemist', minLevel: 1 }], tierGateReq: 0,
       descZH: () => `金幣 / 掉落 / 經驗 全 +15%`, wired: true },
 
@@ -116,6 +116,13 @@ export interface TalentBuff {
     goldGainPct: number;
     materialGainPct: number;
     dropRatePct: number;
+    // 特色 keystone(質變,接 Game 戰鬥邏輯)
+    berserkLowHpDmg: number;   // 嗜血狂亂:HP 越低額外傷害(0→此值,線性)
+    lowHpDrBonus: number;      // 背水一戰:HP<30% 額外減傷
+    executeThreshold: number;  // 死神鐮刀:敵 HP 比例 < 此值直接處決(boss 無效)
+    cheatDeath: boolean;       // 不朽之軀:致死留 1HP + 無敵(CD)
+    autoMagnetAll: boolean;    // 廢料磁吸:全螢幕自動吸取
+    doubleMatChance: number;   // 廢土煉金:撿素材翻倍機率
 }
 
 function wiredLv(id: string): number {
@@ -123,6 +130,8 @@ function wiredLv(id: string): number {
     if (!node || !node.wired) return 0;
     return SaveService.instance.getTalentLevel(id);
 }
+
+function has(id: string): boolean { return wiredLv(id) > 0; }
 
 export function computeTalentBuff(): TalentBuff {
     return {
@@ -132,15 +141,22 @@ export function computeTalentBuff(): TalentBuff {
         atkSpeedPct: wiredLv('carnage') * 0.015,
         maxHpFlat: wiredLv('thick_hide') * 40,
         damageReductionPct: wiredLv('iron_path') * 0.015 - wiredLv('glass_cannon') * 0.25 + wiredLv('wasteland_god') * 0.1,
-        hpRegenPerSec: wiredLv('scar_tissue') * 2,   // 預覽(Game.ts 未消費,scar_tissue wired:false)
+        hpRegenPerSec: wiredLv('scar_tissue') * 2,
         dodgePct: 0,
-        thornPct: wiredLv('rust_thorns') * 0.03,      // 預覽(未消費,rust_thorns wired:false)
+        thornPct: wiredLv('rust_thorns') * 0.03 + (has('bulwark') ? 0.15 : 0),
         moveSpeedPct: wiredLv('wasteland_god') * 0.1,
-        pickupRangePct: 0,                            // 預覽(未消費;quick_fingers wired:false)
+        pickupRangePct: wiredLv('quick_fingers') * 0.06,
         expGainPct: wiredLv('cunning_path') * 0.015 + wiredLv('hoarder_king') * 0.15,
         goldGainPct: wiredLv('gold_tooth') * 0.02 + wiredLv('hoarder_king') * 0.15,
         materialGainPct: 0,
-        dropRatePct: wiredLv('survivor_root') * 0.02 + wiredLv('lucky_scav') * 0.015 + wiredLv('hoarder_king') * 0.15
+        dropRatePct: wiredLv('survivor_root') * 0.02 + wiredLv('lucky_scav') * 0.015 + wiredLv('hoarder_king') * 0.15,
+        // 特色 keystone
+        berserkLowHpDmg: has('berserk') ? 0.30 : 0,
+        lowHpDrBonus: has('last_stand') ? 0.40 : 0,
+        executeThreshold: has('reaper') ? 0.15 : 0,
+        cheatDeath: has('immortal'),
+        autoMagnetAll: has('scrap_magnet'),
+        doubleMatChance: has('alchemist') ? 0.25 : 0
     };
 }
 

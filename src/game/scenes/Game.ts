@@ -149,6 +149,8 @@ export class Game extends Scene
     private playerHP = 100;
     private playerInvulnUntilMs = 0;
     private spawnGraceArmed = false;  // ④ 出生無敵在首個 update tick(FTUE resume 後)才 arm,用 update 的 global time
+    private immortalReadyAt = 0;      // 不朽之軀 cheatDeath 下次可用(180s CD)
+    private hpRegenCarry = 0;         // 疤痕組織 每秒回血累積(不足 1 點累進)
     private skillReadyAt = 0;         // ⑤ 主動技能下次可用時間(update 的 global time 基準)
     private skillRequested = false;   // 按鈕/F 設旗標,update 用同一 time 處理(CD 判定與視覺同源)
     private skillBtnBg!: Phaser.GameObjects.Rectangle;
@@ -257,6 +259,8 @@ export class Game extends Scene
         this.events.on('resume', () => this.refreshMaxHp());
         this.playerInvulnUntilMs = 0;
         this.spawnGraceArmed = false;
+        this.immortalReadyAt = 0;
+        this.hpRegenCarry = 0;
         this.skillReadyAt = 0;
         this.attackCooldownMs = 0;
         this.isGameOver = false;
@@ -930,6 +934,7 @@ export class Game extends Scene
         if (this.isGameOver) return;
         this.handleAutoAttack(time, delta);
         this.updatePotions(time);
+        this.updateHpRegen(delta);
         this.updateNpcBangVisibility();
         // Phase 4b-12 (B) 掉落物磁吸
         this.updateMagnet();
@@ -1391,22 +1396,36 @@ export class Game extends Scene
     private takeDamage(amount: number, time: number)
     {
         if (this.isGameOver) return; // per Codex review
+        const buff = computeTalentBuff();
         // Phase 4c-F 防具減傷:dmg × 100/(100+def),最低 1
         const def = SaveService.instance.getTotalArmorDefense();
         amount = def > 0 ? Math.max(1, Math.round(amount * 100 / (100 + def))) : amount;
-        // Phase 4c-D3 天賦減傷(鐵壁/廢土之神 正值減傷;玻璃炮 負值=增傷),上限 80% 減傷
-        const drPct = computeTalentBuff().damageReductionPct + this.potionDefPct();  // + 鐵肺針 buff
+        // 天賦減傷(鐵壁/廢土之神 正;玻璃炮 負)+ 背水一戰(HP<30% 額外減傷),上限 80%
+        let drPct = buff.damageReductionPct + this.potionDefPct();
+        if (this.playerHP / this.playerMaxHp < 0.30) drPct += buff.lowHpDrBonus;
         if (drPct !== 0) amount = Math.max(1, Math.round(amount * Math.max(0.2, 1 - drPct)));
         this.playerHP = Math.max(0, this.playerHP - amount);
         this.playerInvulnUntilMs = time + Game.PLAYER_INVULN_MS;
+
+        // 鏽刺反甲 / 鋼鐵壁壘:反彈傷害給最近的怪
+        if (buff.thornPct > 0) this.reflectThorns(Math.max(1, Math.round(amount * buff.thornPct)), time);
 
         // 血條 + 文字
         const ratio = this.playerHP / this.playerMaxHp;
         this.hpBarFill.width = (this.hudPlateBarW - 4) * ratio;
         this.hpText.setText(`HP  ${this.playerHP} / ${this.playerMaxHp}`);
 
-        // HP=0 → GameOver 早退,不放 flash 否則 clearTint 會蓋掉死亡 tint
+        // HP=0 → 不朽之軀(CD 內)留 1HP + 無敵 2s;否則 GameOver
         if (this.playerHP <= 0) {
+            if (buff.cheatDeath && time >= this.immortalReadyAt) {
+                this.playerHP = 1;
+                this.immortalReadyAt = time + 180000;
+                this.playerInvulnUntilMs = time + 2000;
+                this.hpBarFill.width = (this.hudPlateBarW - 4) * (1 / this.playerMaxHp);
+                this.hpText.setText(`HP  1 / ${this.playerMaxHp}`);
+                this.flashHudMessage('不朽之軀!留 1 HP', 0xffe060);
+                return;
+            }
             this.handleGameOver();
             return;
         }
@@ -1485,7 +1504,9 @@ export class Game extends Scene
         const target = nearest;
         // Talent: critRate / critDmg / dmgPct buff
         const isCrit = Math.random() < (Game.CRIT_CHANCE + buff.critRatePct);
-        const totalDmgMult = (1 + buff.dmgPct + this.potionAtkPct()) * (isCrit ? (Game.CRIT_MULT + buff.critDmgPct) : 1);
+        // 嗜血狂亂:HP 越低額外傷害(滿血+0 → 瀕死 +berserkLowHpDmg)
+        const berserkBonus = buff.berserkLowHpDmg * (1 - this.playerHP / this.playerMaxHp);
+        const totalDmgMult = (1 + buff.dmgPct + this.potionAtkPct() + berserkBonus) * (isCrit ? (Game.CRIT_MULT + buff.critDmgPct) : 1);
         const dmg = Math.round(baseDmg * totalDmgMult);
 
         // Hand Rag recovery — 命中回血 0.5% × baseDmg
@@ -1506,6 +1527,10 @@ export class Game extends Scene
 
         const data = target.getData('mob') as MobData;
         data.hp -= dmg;
+        // 死神鐮刀:殘血(< executeThreshold)非 boss 直接處決
+        if (buff.executeThreshold > 0 && data.hp > 0 && !data.blueprint.isBoss && data.hp < data.blueprint.hp * buff.executeThreshold) {
+            data.hp = 0;
+        }
 
         // 武器類別專屬玩家動作(楓谷風)
         this.playWeaponAttackAnim(weapon, target.x, target.y);
@@ -1630,11 +1655,14 @@ export class Game extends Scene
     private rollMobDrops(x: number, y: number, isBoss: boolean) {
         const save = SaveService.instance;
         // Phase 4c-D3 天賦掉落率加成(拾荒者之心/幸運拾荒/囤積之王)
-        const dropMult = 1 + computeTalentBuff().dropRatePct;
-        // 強化石(50% / boss 100%)
+        const buff = computeTalentBuff();
+        const dropMult = 1 + buff.dropRatePct;
+        // 強化石(50% / boss 100%)+ 廢土煉金:doubleMatChance 機率翻倍
         if (isBoss || Math.random() < 0.5 * dropMult) {
-            save.addMaterial('strengthen_stone', isBoss ? 5 : 1);
-            this.spawnFloatingLabel(x, y - 40, isBoss ? '+5 強化石' : '+1 強化石', '#b08850');
+            let mat = isBoss ? 5 : 1;
+            if (buff.doubleMatChance > 0 && Math.random() < buff.doubleMatChance) mat *= 2;
+            save.addMaterial('strengthen_stone', mat);
+            this.spawnFloatingLabel(x, y - 40, `+${mat} 強化石`, '#b08850');
         }
         // 武器掉落(5% / boss 50%)
         if (isBoss || Math.random() < 0.05 * dropMult) {
@@ -1829,21 +1857,61 @@ export class Game extends Scene
     private static readonly MAGNET_LERP = 0.08;
     private updateMagnet() {
         if (!this.player) return;
+        // 天賦:快手拆解(撿取範圍 +)/ 廢料磁吸(全螢幕自動吸)
+        const buff = computeTalentBuff();
+        const pickupR = Game.PICKUP_RANGE * (1 + buff.pickupRangePct);
+        const magnetR = buff.autoMagnetAll ? 99999 : Game.MAGNET_RANGE * (1 + buff.pickupRangePct);
+        const lerp = buff.autoMagnetAll ? 0.16 : Game.MAGNET_LERP;
         const px = this.player.x, py = this.player.y;
         for (let i = this.pendingPickups.length - 1; i >= 0; i--) {
             const e = this.pendingPickups[i];
             if (!e.obj.active) { this.pendingPickups.splice(i, 1); continue; }
             const dx = px - e.obj.x, dy = py - e.obj.y;
             const dist = Math.hypot(dx, dy);
-            if (dist < Game.PICKUP_RANGE) {
+            if (dist < pickupR) {
                 e.collect();
                 e.obj.destroy();
                 this.pendingPickups.splice(i, 1);
-            } else if (dist < Game.MAGNET_RANGE) {
-                e.obj.x += dx * Game.MAGNET_LERP;
-                e.obj.y += dy * Game.MAGNET_LERP;
+            } else if (dist < magnetR) {
+                e.obj.x += dx * lerp;
+                e.obj.y += dy * lerp;
             }
         }
+    }
+
+    // 疤痕組織:每秒回血(不足 1 點累進 hpRegenCarry)
+    private updateHpRegen(delta: number) {
+        if (this.isGameOver) return;
+        const rps = computeTalentBuff().hpRegenPerSec;
+        if (rps <= 0 || this.playerHP >= this.playerMaxHp) { this.hpRegenCarry = 0; return; }
+        this.hpRegenCarry += rps * (delta / 1000);
+        if (this.hpRegenCarry >= 1) {
+            const heal = Math.floor(this.hpRegenCarry);
+            this.hpRegenCarry -= heal;
+            this.playerHP = Math.min(this.playerMaxHp, this.playerHP + heal);
+            this.hpBarFill.width = (this.hudPlateBarW - 4) * (this.playerHP / this.playerMaxHp);
+            this.hpText.setText(`HP  ${this.playerHP} / ${this.playerMaxHp}`);
+        }
+    }
+
+    // 鏽刺反甲 / 鋼鐵壁壘:受擊反彈傷害給最近的怪
+    private reflectThorns(dmg: number, time: number) {
+        if (dmg <= 0) return;
+        let nearest: Phaser.GameObjects.Sprite | null = null;
+        let nd = 360;  // 反彈只打附近的怪
+        for (const m of this.mobs) {
+            if (!m.active) continue;
+            const d = Math.hypot(this.player.x - m.x, this.player.y - m.y);
+            if (d < nd) { nd = d; nearest = m; }
+        }
+        if (!nearest) return;
+        const data = nearest.getData('mob') as MobData;
+        data.hp -= dmg;
+        const t = this.add.text(nearest.x, nearest.y - 50, `${dmg}`, {
+            fontFamily: 'sans-serif', fontSize: 30, color: '#9bd0ff', stroke: '#1a1612', strokeThickness: 4, fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(460);
+        this.tweens.add({ targets: t, y: t.y - 60, alpha: 0, duration: 500, onComplete: () => t.destroy() });
+        if (data.hp <= 0) this.killMob(nearest, time);
     }
 
     // Phase 4b-12 (A) 怪死亡爆碎屑 — 廢土碎屑粒子 8-12 顆飛濺
