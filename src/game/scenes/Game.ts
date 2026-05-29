@@ -1427,7 +1427,7 @@ export class Game extends Scene
         this.time.delayedCall(120, () => {
             if (!this.isGameOver && this.player.active) this.player.clearTint();
         });
-        this.cameras.main.shake(150, 0.012);
+        this.cameras.main.shake(90, 0.006);  // 視覺暈感修正:玩家受擊在怪群中很頻繁,降震幅防暈(紅閃 tint 仍提示)
 
         const text = this.add.text(this.player.x, this.player.y - 60, `-${amount}`, {
             fontFamily: 'sans-serif', fontSize: 36, color: '#ff4040',
@@ -1574,11 +1574,10 @@ export class Game extends Scene
         }
 
         // per Codex review:shake 必須在 HitStop 之前,否則 shake duration 被 timescale 拉長變黏膩
-        // Phase 4b-12 (F) HitStop tweak — 0.05 too frozen, 0.10 feels more "snap"
-        // Phase 4b-12 (C) 暴擊增強 — bigger shake + camera red flash
-        this.cameras.main.shake(isCrit ? 180 : 50, isCrit ? 0.018 : 0.005);
+        // 視覺暈感修正(user 報):普通命中不 shake(連打螢幕一直晃會暈),只暴擊輕震;移除暴擊全螢幕紅閃(連續閃最暈)。
+        // 打擊感改靠 HitStop(lock)+ hit flash + damage popup,不靠晃螢幕。
+        if (isCrit) this.cameras.main.shake(110, 0.009);
         HitStopService.instance.trigger(isCrit ? 120 : 80, isCrit ? 0.05 : 0.10);
-        if (isCrit) this.cameras.main.flash(80, 220, 40, 40, false);
 
         // Boss rage transition(HP < threshold,只在還活著時觸發 per Codex review)
         if (data.hp > 0 && data.blueprint.isBoss && data.blueprint.rageThreshold && !data.isRaging) {
