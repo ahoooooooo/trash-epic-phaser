@@ -28,6 +28,9 @@ const RESPAWN_CYCLE_MS = 7560;
 
 // Phaser 4 TintModes.FILL enum value(production build 無 Phaser global namespace,hardcode 1)
 const TINT_FILL = 1;
+// Phase 4c C-fix:玩家各 frame PNG 尺寸不一(BiRefNet crop bbox 852~1209 寬 1043~1254 高),
+// fixed setScale(0.3) 讓 render 高度脈動(頭忽大忽小)。改鎖固定 display 高度,scale 依 frame 動態算。
+const PLAYER_DISPLAY_H = 376;
 
 interface SpawnPoint {
     x: number;
@@ -246,7 +249,10 @@ export class Game extends Scene
         const startY = enterPos.y ?? this.mapConfig.playerStartY;
         // VFX-A:玩家落地陰影(在 player 下方,depth -10 蓋在地圖上、躲在 sprite 下)
         this.playerShadow = this.makeGroundShadow(startX, startY, 70);
-        this.player = this.add.sprite(startX, startY, 'player_idle').setScale(0.3);
+        this.player = this.add.sprite(startX, startY, 'player_idle');
+        this.lockPlayerScale();
+        // 跨 texture 動畫(walk/attack/hurt)每 frame 尺寸不同,逐 frame 重鎖 display 高度
+        this.player.on('animationupdate', () => this.lockPlayerScale());
         // Phase 4b-10 register walk anim 一次性 — frames 跨不同 texture key
         if (!this.anims.exists('player_walk')) {
             this.anims.create({
@@ -797,18 +803,24 @@ export class Game extends Scene
     }
 
     // Phase 4b-10 state machine:真 frame anim,idle 靜態 / walking 跑 2-frame loop
+    // Phase 4c C-fix:依當前 frame 原始高度反推 scale,讓 render 高度恆為 PLAYER_DISPLAY_H
+    private lockPlayerScale() {
+        const h = this.player.height;
+        if (h > 0) this.player.setScale(PLAYER_DISPLAY_H / h);
+    }
+
     private setPlayerAnimState(state: 'idle' | 'walking', force = false) {
         if (!force && this.playerAnimState === state) return;
         this.playerAnimState = state;
         if (this.playerStateTween) this.playerStateTween.stop();
         this.player.angle = 0;
-        this.player.setScale(0.3);
         if (state === 'idle') {
             this.player.anims.stop();
             this.player.setTexture('player_idle');
         } else {
             this.player.play('player_walk', true);
         }
+        this.lockPlayerScale();
     }
 
     // Phase 4b-14:真 frame anim 揮擊。action lock 期間 handleMovement 不切 anim,
@@ -820,6 +832,7 @@ export class Game extends Scene
         this.player.off('animationcomplete-player_attack');
         this.playerActionAnim = 'attacking';
         this.player.play('player_attack', true);
+        this.lockPlayerScale();  // animationupdate 不觸發首 frame,手動鎖一次
         this.player.once('animationcomplete-player_attack', () => {
             this.playerActionAnim = null;
             const s = this.playerAnimState;
@@ -1045,6 +1058,7 @@ export class Game extends Scene
         this.player.off('animationcomplete-player_hurt');
         this.playerActionAnim = 'hurt';
         this.player.play('player_hurt', true);
+        this.lockPlayerScale();  // hurt 單 frame,animationupdate 永不觸發,必手動鎖
         this.player.once('animationcomplete-player_hurt', () => {
             this.playerActionAnim = null;
             const s = this.playerAnimState;
