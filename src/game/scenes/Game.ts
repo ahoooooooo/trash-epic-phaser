@@ -45,7 +45,7 @@ interface SpawnPoint {
 type MobState = 'wander' | 'chase';
 
 // per weapons_v1 §4 mob resist matrix:Rat / Mutant / Robot / Plant / Insect / BossArmored
-type MobType = 'Rat' | 'Insect' | 'Robot';
+type MobType = 'Rat' | 'Insect' | 'Robot' | 'Plant';
 
 interface MobBlueprint {
     id: string;
@@ -119,6 +119,11 @@ const MOB_BLUEPRINTS: MobBlueprint[] = [
     {
         id: 'reactor_crawler', type: 'Robot', spriteKey: 'mob_reactor_crawler', scale: 0.16,
         hp: 420, speedChase: 0.10, speedWander: 0.03, contactDamage: 40, expReward: 55, goldReward: 30
+    },
+    // Phase 4c-19 真‧獨立新怪(變異食人花)— idx 11,廢土外圍 signature(取代舊 centipede,q2 任務目標)
+    {
+        id: 'mutant_creeper', type: 'Plant', spriteKey: 'mob_mutant_creeper', scale: 0.13,
+        hp: 80, speedChase: 0.06, speedWander: 0.02, contactDamage: 12, expReward: 8, goldReward: 5
     }
 ];
 
@@ -1308,7 +1313,7 @@ export class Game extends Scene
                 }
                 // Phase 4b-11 play frame anim by blueprint id
                 // 真‧獨立新怪是單張 sprite(無 run frames)→ 不 play frame anim(否則會換到 giantrat/centipede 貼圖),改腳步輕微縮放抖動
-                if (bp.spriteKey === 'mob_rust_spider' || bp.spriteKey === 'mob_reactor_crawler') {
+                if (bp.spriteKey === 'mob_rust_spider' || bp.spriteKey === 'mob_reactor_crawler' || bp.spriteKey === 'mob_mutant_creeper') {
                     this.tweens.add({ targets: mob, scaleX: bp.scale * 1.06, scaleY: bp.scale * 0.96, duration: 380, yoyo: true, repeat: -1 });
                 } else if (bp.id === 'centipede' || bp.id === 'scrap_drone') {
                     mob.play('centipede_wave');

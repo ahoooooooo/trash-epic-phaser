@@ -24,9 +24,9 @@ export const QUESTS: QuestDef[] = [
     },
     {
         id: 'q2_centipede',
-        nameZH: '蝕骨清剿',
-        descZH: '排水溝的蝕骨蜈蚣會啃骨頭,殺 5 隻。',
-        objective: 'kill_mob', targetMobId: 'centipede', targetCount: 5,
+        nameZH: '剷除毒花',
+        descZH: '廢土外圍長出變異食人花,會咬人,殺 5 株。',
+        objective: 'kill_mob', targetMobId: 'mutant_creeper', targetCount: 5,
         rewardGold: 80, rewardExp: 80,
         prereqQuestId: 'q1_clear_rats'
     },

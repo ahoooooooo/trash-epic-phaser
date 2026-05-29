@@ -111,7 +111,7 @@ const MAPS: Record<string, MapConfig> = {
     wasteland_outskirts: {
         id: 'wasteland_outskirts', nameZH: '廢土外圍', mapType: 'field', levelRange: [1, 40], regionId: 'scrap',
         width: 2400, height: 3200, bgColor: '#2a2520',
-        spawnPoints: fieldSpawns(2400, 3200, 16, [0, 1]),  // 廢土外圍(起始)= 巨鼠 + 蜈蚣(q1/q2 任務怪)
+        spawnPoints: fieldSpawns(2400, 3200, 16, [0, 11]),  // 廢土外圍(起始)= 巨鼠 + 變異食人花(真新怪,q1 巨鼠 / q2 食人花)
         npcs: [],
         shopNpcs: [],
         portals: [
