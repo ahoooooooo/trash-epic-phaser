@@ -64,6 +64,15 @@ interface SaveData {
     dailyCrystalClaimedAt: number;             // 免費每日登入領取日期 timestamp
     // Phase 4c-7 新手引導 FTUE 是否看過
     tutorialDone: boolean;
+    // Phase 4c-16 每日登入簽到
+    loginStreak: number;       // 連續登入天數(領取時累進)
+    lastLoginClaimAt: number;  // 上次領取登入獎勵 timestamp
+}
+
+// 以本地日曆日為單位的整數天數(連續登入判定)
+function dayNumber(t: number): number {
+    const d = new Date(t);
+    return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
 }
 
 // 同一日曆日判定(每日領取/每日限購用)
@@ -120,7 +129,9 @@ function makeDefaultSave(): SaveData {
         monthCardExpiry: 0,
         monthCardClaimedAt: 0,
         dailyCrystalClaimedAt: 0,
-        tutorialDone: false
+        tutorialDone: false,
+        loginStreak: 0,
+        lastLoginClaimAt: 0
     };
 }
 
@@ -207,6 +218,9 @@ export class SaveService {
             merged.tutorialDone = typeof parsed.tutorialDone === 'boolean'
                 ? parsed.tutorialDone
                 : (merged.lastSavedAt > 0 || merged.level > 1 || merged.totalKills > 0);
+            // Phase 4c-16 每日登入 forward-compat
+            merged.loginStreak = typeof parsed.loginStreak === 'number' ? parsed.loginStreak : 0;
+            merged.lastLoginClaimAt = typeof parsed.lastLoginClaimAt === 'number' ? parsed.lastLoginClaimAt : 0;
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -511,6 +525,30 @@ export class SaveService {
     // Phase 4c-7 新手引導 FTUE
     isTutorialDone(): boolean { return this.data.tutorialDone; }
     markTutorialDone(): void { this.data.tutorialDone = true; }
+
+    // Phase 4c-16 每日登入簽到
+    getLoginStreak(): number { return this.data.loginStreak; }
+    canClaimDailyLogin(): boolean { return dayNumber(Date.now()) !== dayNumber(this.data.lastLoginClaimAt) || this.data.lastLoginClaimAt === 0; }
+    // 非破壞性預覽:本次領取「會」變成的 streak / cycle 日(與 claimDailyLogin 同邏輯,給彈窗顯示用)
+    getNextDailyLoginPreview(): { streak: number; cycleDay: number } {
+        const now = Date.now();
+        const last = this.data.lastLoginClaimAt;
+        const nextStreak = (last !== 0 && dayNumber(now) - dayNumber(last) === 1) ? this.data.loginStreak + 1 : 1;
+        return { streak: nextStreak, cycleDay: ((nextStreak - 1) % 7) + 1 };
+    }
+    // 領取登入獎勵,回傳本次簽到的 cycle 日(1-7);若今日已領回 0
+    claimDailyLogin(): number {
+        const now = Date.now();
+        if (this.data.lastLoginClaimAt !== 0 && dayNumber(now) === dayNumber(this.data.lastLoginClaimAt)) return 0;
+        // 上次領取是昨天 → 連續 +1;否則(中斷或首次)重置為 1
+        if (this.data.lastLoginClaimAt !== 0 && dayNumber(now) - dayNumber(this.data.lastLoginClaimAt) === 1) {
+            this.data.loginStreak += 1;
+        } else {
+            this.data.loginStreak = 1;
+        }
+        this.data.lastLoginClaimAt = now;
+        return ((this.data.loginStreak - 1) % 7) + 1;  // 7 天循環
+    }
 
     reset(): void {
         this.data = makeDefaultSave();

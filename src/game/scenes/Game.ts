@@ -557,8 +557,12 @@ export class Game extends Scene
         this.buildBottomTabs();
 
         // Phase 4c-7 新手引導 FTUE — 全新存檔首次進 Game 跑一次(看完寫旗標)
+        // Phase 4c-16 每日登入簽到 — 既有玩家(已過 FTUE)進場且今日未領則彈出(避免與 FTUE 同場衝突)
         if (!SaveService.instance.isTutorialDone()) {
             this.scene.launch('Coachmark');
+            this.scene.pause();
+        } else if (SaveService.instance.canClaimDailyLogin()) {
+            this.scene.launch('DailyReward');
             this.scene.pause();
         }
     }
