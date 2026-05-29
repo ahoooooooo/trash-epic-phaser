@@ -690,7 +690,10 @@ export class Game extends Scene
             this.time.delayedCall(100, () => {
                 if (!m.active) return;
                 const td = m.getData('mob') as MobData | undefined;
-                if (td?.blueprint.tint !== undefined) m.setTint(td.blueprint.tint); else m.clearTint();
+                if (!td) { m.clearTint(); return; }
+                if (td.isRaging) m.setTint(0xff2020).setTintMode(TINT_FILL);              // 暴怒怪保留紅 fill
+                else if (td.blueprint.tint !== undefined) m.setTint(td.blueprint.tint).setTintMode(0);  // multiply 保留紋路
+                else m.clearTint();
             });
             // 傷害數字
             const t = this.add.text(m.x, m.y - 54, `${skillDmg}`, {
@@ -1531,8 +1534,8 @@ export class Game extends Scene
             if (tData.isRaging) {
                 target.setTint(0xff2020).setTintMode(TINT_FILL);
             } else if (tData.blueprint.tint !== undefined) {
-                // multiply mode 保留紋路(per user 全灰怪 bug fix)
-                target.setTint(tData.blueprint.tint);
+                // multiply mode 保留紋路 — 必須 setTintMode(0) 切回 multiply,否則白閃的 fill mode 殘留→怪變純色剪影失去紋路(user 報「打擊後失去顏色」)
+                target.setTint(tData.blueprint.tint).setTintMode(0);
             } else {
                 target.clearTint();
             }
