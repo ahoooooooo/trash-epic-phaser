@@ -8,6 +8,7 @@ import { QUESTS, QuestDef } from '../services/QuestService';
 import { getMap, MapConfig, NpcSpec, PortalSpec } from '../services/MapService';
 import { generateRandomWeapon, weaponDisplayName, rarityColor } from '../services/WeaponGenerator';
 import { generateRandomArmor, armorDisplayName, armorRarityColor } from '../services/ArmorService';
+import { getPotion, computePotionEffect } from '../services/PotionService';
 
 // 視窗尺寸(Phaser config 內固定 1080×1920 portrait)
 const VIEW_W = 1080;
@@ -173,6 +174,15 @@ export class Game extends Scene
     private playerActionAnim: 'attacking' | 'hurt' | null = null;
     // Phase 4c B fix:攻擊後此時間內 flipX 鎖朝目標怪,handleMovement 不覆蓋(防往後走背打)
     private combatFaceUntilMs = 0;
+    // Phase 4c-2 楓谷藥水:CD / HoT / buff 計時
+    private potionCdUntilMs = 0;
+    private hotUntilMs = 0;
+    private hotPerSec = 0;
+    private hotLastTickMs = 0;
+    private buffAtkUntilMs = 0;
+    private buffAtkPct = 0;
+    private buffDefUntilMs = 0;
+    private buffDefPct = 0;
     // Phase 4b-12 (B) 掉落物磁吸 — pending pickups
     private pendingPickups: { obj: Phaser.GameObjects.GameObject & { x: number; y: number; destroy: () => void }; collect: () => void }[] = [];
     // Phase 4b-13 小地圖 — graphics overlay 左上角
@@ -483,35 +493,73 @@ export class Game extends Scene
         this.buildBottomTabs();
     }
 
-    private useHpPotion() {
-        if (this.isGameOver) return;
-        if (!SaveService.instance.useHpPotion()) {
-            this.flashHudMessage('🧪 沒有藥水', 0xc23a1a);
-            return;
+    // Phase 4c-2 Q/E → 用快捷列第一個補血/補魔藥水
+    private useHpPotion() { this.usePotionFromHotbar('hp'); }
+    private useMpPotion() { this.usePotionFromHotbar('mp'); }
+
+    private usePotionFromHotbar(target: 'hp' | 'mp') {
+        for (const id of SaveService.instance.getPotionHotbar()) {
+            if (!id) continue;
+            const p = getPotion(id);
+            if (!p) continue;
+            const m = target === 'hp' ? (p.target === 'hp' || p.target === 'both') : (p.target === 'mp' || p.target === 'both');
+            if (m && SaveService.instance.getPotionCount(id) > 0) { this.usePotion(id); return; }
         }
-        const heal = 50;
-        this.playerHP = Math.min(Game.PLAYER_MAX_HP, this.playerHP + heal);
-        this.hpBarFill.width = (this.hudPlateBarW - 4) * (this.playerHP / Game.PLAYER_MAX_HP);
-        this.hpText.setText(`HP  ${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
-        this.flashHudMessage(`+${heal} HP`, 0xc23a1a);
-        SaveService.instance.save();
+        this.flashHudMessage(target === 'hp' ? '🧪 沒有補血藥水' : '🔮 沒有補魔藥水', target === 'hp' ? 0xc23a1a : 0x4a5d3a);
     }
 
-    private useMpPotion() {
-        if (this.isGameOver) return;
-        if (!SaveService.instance.useMpPotion()) {
-            this.flashHudMessage('🔮 沒有藥水', 0xb08850);
-            return;
-        }
-        const restore = 30;
+    // 用一瓶藥水(isAuto = auto-pot 觸發,不顯示提示音)
+    private usePotion(id: string, isAuto = false): boolean {
+        if (this.isGameOver) return false;
+        const p = getPotion(id);
+        if (!p) return false;
+        if (this.time.now < this.potionCdUntilMs) { if (!isAuto) this.flashHudMessage('藥水冷卻中', 0xb08850); return false; }
+        if (!SaveService.instance.consumePotion(id)) { if (!isAuto) this.flashHudMessage('🧪 沒有藥水', 0xc23a1a); return false; }
         const save = SaveService.instance;
-        save.setMp(save.getMp() + restore);
-        const cur = save.get();
-        this.mpBarFill.width = (this.hudPlateBarW - 4) * (cur.mp / cur.maxMp);
-        this.mpText.setText(`MP  ${cur.mp} / ${cur.maxMp}`);
-        this.flashHudMessage(`+${restore} MP`, 0x4a5d3a);
+        const eff = computePotionEffect(p, Game.PLAYER_MAX_HP, save.getMaxMp());
+        if (eff.hpHeal > 0) {
+            this.playerHP = Math.min(Game.PLAYER_MAX_HP, this.playerHP + eff.hpHeal);
+            this.hpBarFill.width = (this.hudPlateBarW - 4) * (this.playerHP / Game.PLAYER_MAX_HP);
+            this.hpText.setText(`HP  ${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
+        }
+        if (eff.mpRestore > 0) {
+            save.setMp(save.getMp() + eff.mpRestore);
+            const c = save.get();
+            this.mpBarFill.width = (this.hudPlateBarW - 4) * (c.mp / c.maxMp);
+            this.mpText.setText(`MP  ${c.mp} / ${c.maxMp}`);
+        }
+        if (eff.hot) { this.hotUntilMs = this.time.now + eff.hot.durationMs; this.hotPerSec = eff.hot.perSec; this.hotLastTickMs = this.time.now; }
+        if (eff.buff) {
+            if (eff.buff.stat === 'atk') { this.buffAtkUntilMs = this.time.now + eff.buff.durationMs; this.buffAtkPct = eff.buff.pct; }
+            else { this.buffDefUntilMs = this.time.now + eff.buff.durationMs; this.buffDefPct = eff.buff.pct; }
+        }
+        this.potionCdUntilMs = this.time.now + p.cooldownMs;
+        this.flashHudMessage(p.nameZH, 0xffe060);
         save.save();
+        return true;
     }
+
+    // auto-pot + HoT tick(update 每幀呼叫)
+    private updatePotions(time: number) {
+        if (time < this.hotUntilMs && time - this.hotLastTickMs >= 1000 && this.playerHP > 0) {
+            this.hotLastTickMs = time;
+            this.playerHP = Math.min(Game.PLAYER_MAX_HP, this.playerHP + Math.round(Game.PLAYER_MAX_HP * this.hotPerSec));
+            this.hpBarFill.width = (this.hudPlateBarW - 4) * (this.playerHP / Game.PLAYER_MAX_HP);
+            this.hpText.setText(`HP  ${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
+        }
+        const ap = SaveService.instance.getAutoPot();
+        if (ap.enabled && time >= this.potionCdUntilMs && this.playerHP > 0) {
+            if (ap.hpPotionId && this.playerHP / Game.PLAYER_MAX_HP <= ap.hpThresholdPct && SaveService.instance.getPotionCount(ap.hpPotionId) > 0) {
+                this.usePotion(ap.hpPotionId, true);
+            } else if (ap.mpPotionId) {
+                const c = SaveService.instance.get();
+                if (c.mp / c.maxMp <= ap.mpThresholdPct && SaveService.instance.getPotionCount(ap.mpPotionId) > 0) this.usePotion(ap.mpPotionId, true);
+            }
+        }
+    }
+
+    private potionAtkPct(): number { return this.time.now < this.buffAtkUntilMs ? this.buffAtkPct : 0; }
+    private potionDefPct(): number { return this.time.now < this.buffDefUntilMs ? this.buffDefPct : 0; }
 
     private flashHudMessage(msg: string, color: number) {
         const t = this.add.text(VIEW_W / 2, 220, msg, {
@@ -596,6 +644,7 @@ export class Game extends Scene
         this.handleMobContactDamage(time);
         if (this.isGameOver) return;
         this.handleAutoAttack(time, delta);
+        this.updatePotions(time);
         this.updateNpcBangVisibility();
         // Phase 4b-12 (B) 掉落物磁吸
         this.updateMagnet();
@@ -1045,7 +1094,7 @@ export class Game extends Scene
         const def = SaveService.instance.getTotalArmorDefense();
         amount = def > 0 ? Math.max(1, Math.round(amount * 100 / (100 + def))) : amount;
         // Phase 4c-D3 天賦減傷(鐵壁/廢土之神 正值減傷;玻璃炮 負值=增傷),上限 80% 減傷
-        const drPct = computeTalentBuff().damageReductionPct;
+        const drPct = computeTalentBuff().damageReductionPct + this.potionDefPct();  // + 鐵肺針 buff
         if (drPct !== 0) amount = Math.max(1, Math.round(amount * Math.max(0.2, 1 - drPct)));
         this.playerHP = Math.max(0, this.playerHP - amount);
         this.playerInvulnUntilMs = time + Game.PLAYER_INVULN_MS;
@@ -1135,7 +1184,7 @@ export class Game extends Scene
         const target = nearest;
         // Talent: critRate / critDmg / dmgPct buff
         const isCrit = Math.random() < (Game.CRIT_CHANCE + buff.critRatePct);
-        const totalDmgMult = (1 + buff.dmgPct) * (isCrit ? (Game.CRIT_MULT + buff.critDmgPct) : 1);
+        const totalDmgMult = (1 + buff.dmgPct + this.potionAtkPct()) * (isCrit ? (Game.CRIT_MULT + buff.critDmgPct) : 1);
         const dmg = Math.round(baseDmg * totalDmgMult);
 
         // Hand Rag recovery — 命中回血 0.5% × baseDmg

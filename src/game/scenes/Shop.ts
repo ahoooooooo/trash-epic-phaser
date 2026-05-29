@@ -94,7 +94,7 @@ export class Shop extends Scene {
     private goldDisplay?: Phaser.GameObjects.Text;
     private renderGoldText() {
         const save = SaveService.instance.get();
-        const text = `💰 ${save.gold}    🧪 ${save.hpPotions}    🔮 ${save.mpPotions}`;
+        const text = `💰 ${save.gold}    🧪 ${SaveService.instance.getPotionCount('rust_water')}    🔮 ${SaveService.instance.getPotionCount('dry_cell')}`;
         if (this.goldDisplay) {
             this.goldDisplay.setText(text);
         } else {
@@ -112,8 +112,9 @@ export class Shop extends Scene {
             this.flashMsg('💰 金幣不足', 0x8b3a1f);
             return;
         }
-        if (action.startsWith('buyHp')) save.addHpPotions(count);
-        else if (action.startsWith('buyMp')) save.addMpPotions(count);
+        // Phase 4c-2:餵 typed 藥水系統(基礎 HP=鏽水瓶 / MP=乾電池液),非舊 legacy 計數
+        if (action.startsWith('buyHp')) save.addPotion('rust_water', count);
+        else if (action.startsWith('buyMp')) save.addPotion('dry_cell', count);
         save.save();
         this.renderGoldText();
         this.flashMsg(`+${count} 入手`, 0x4a5d3a);

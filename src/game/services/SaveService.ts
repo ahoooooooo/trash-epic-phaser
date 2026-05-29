@@ -44,6 +44,10 @@ interface SaveData {
     // Phase 4c-F 防具
     ownedArmor: { id: string; data: string }[];        // 已得防具(stringified ArmorDef)
     equippedArmor: Partial<Record<EquipSlot, string>>; // paper doll 格位 → ownedArmor wrapper id
+    // Phase 4c-2 楓谷藥水
+    potions: Record<string, number>;                   // potionId → 持有數
+    potionHotbar: (string | null)[];                   // 快捷列 4 格 → potionId
+    autoPot: { enabled: boolean; hpThresholdPct: number; mpThresholdPct: number; hpPotionId: string | null; mpPotionId: string | null };
 }
 
 // per Codex review:nested object 必須 deep clone,不能 spread(weaponEnh 會共用 reference)
@@ -80,7 +84,10 @@ function makeDefaultSave(): SaveData {
         talentLevels: {},
         familiarShards: {},
         ownedArmor: [],
-        equippedArmor: {}
+        equippedArmor: {},
+        potions: { rust_water: 5, dry_cell: 5 },
+        potionHotbar: ['rust_water', 'dry_cell', null, null],
+        autoPot: { enabled: false, hpThresholdPct: 0.4, mpThresholdPct: 0.3, hpPotionId: 'rust_water', mpPotionId: 'dry_cell' }
     };
 }
 
@@ -139,6 +146,17 @@ export class SaveService {
             // Phase 4c-F forward-compat:舊 save 沒防具欄位
             merged.ownedArmor = Array.isArray(parsed.ownedArmor) ? [...parsed.ownedArmor] : [];
             merged.equippedArmor = { ...(parsed.equippedArmor ?? {}) };
+            // Phase 4c-2 forward-compat:有 typed 藥水就用;舊 save 沒 → 把 legacy hpPotions/mpPotions 折算成鏽水瓶/乾電池液
+            if (parsed.potions) {
+                merged.potions = { ...makeDefaultSave().potions, ...parsed.potions };
+            } else {
+                merged.potions = {
+                    rust_water: typeof parsed.hpPotions === 'number' ? parsed.hpPotions : makeDefaultSave().potions.rust_water,
+                    dry_cell: typeof parsed.mpPotions === 'number' ? parsed.mpPotions : makeDefaultSave().potions.dry_cell
+                };
+            }
+            merged.potionHotbar = Array.isArray(parsed.potionHotbar) ? [...parsed.potionHotbar] : makeDefaultSave().potionHotbar;
+            merged.autoPot = { ...makeDefaultSave().autoPot, ...(parsed.autoPot ?? {}) };
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -345,6 +363,27 @@ export class SaveService {
             } catch { /* 壞資料跳過 */ }
         }
         return def;
+    }
+
+    // Phase 4c-2 楓谷藥水
+    getPotionCount(id: string): number { return this.data.potions[id] ?? 0; }
+    getAllPotions(): Record<string, number> { return { ...this.data.potions }; }
+    addPotion(id: string, n: number = 1): void {
+        this.data.potions[id] = (this.data.potions[id] ?? 0) + n;
+    }
+    consumePotion(id: string): boolean {
+        const cur = this.data.potions[id] ?? 0;
+        if (cur <= 0) return false;
+        this.data.potions[id] = cur - 1;
+        return true;
+    }
+    getPotionHotbar(): (string | null)[] { return [...this.data.potionHotbar]; }
+    setPotionHotbarSlot(slot: number, id: string | null): void {
+        if (slot >= 0 && slot < this.data.potionHotbar.length) this.data.potionHotbar[slot] = id;
+    }
+    getAutoPot(): Readonly<SaveData['autoPot']> { return this.data.autoPot; }
+    setAutoPot(cfg: Partial<SaveData['autoPot']>): void {
+        this.data.autoPot = { ...this.data.autoPot, ...cfg };
     }
 
     reset(): void {
