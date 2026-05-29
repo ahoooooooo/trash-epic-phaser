@@ -24,8 +24,44 @@ const TIER_GLOW_ALPHA: Record<Rarity, number> = {
 };
 
 // Phase 4a-20 抽卡 banner UI(Phase 4b-17 視覺升級)
+// 14 隻立繪檔名(Phase 4c-11:從 Preloader 移來,只在開抽卡時 lazy-load 省開機 28MB)
+const FAM_FILES: Record<string, string> = {
+    fam_pip: 'familiar_r_scavver_kid_pip',
+    fam_mira: 'familiar_r_gather_rat_mira',
+    fam_grub: 'familiar_r_goblin_underling_grub',
+    fam_zix: 'familiar_r_pickpocket_goblin_zix',
+    fam_neek: 'familiar_r_oilamp_lighter_neek',
+    fam_dorl: 'familiar_r_pot_dishwasher_dorl',
+    fam_fire_imp: 'familiar_sr_fire_imp',
+    fam_ironguard: 'familiar_sr_ironguard_portrait',
+    fam_frost_witch: 'familiar_sr_frost_tongue_witch',
+    fam_axe_brothers: 'familiar_sr_axe_brothers',
+    fam_blackmarket_fox: 'familiar_ssr_blackmarket_fox',
+    fam_wasteland_prophet: 'familiar_ssr_wasteland_prophet',
+    fam_shadow_hunter: 'familiar_ssr_shadow_hunter_portrait',
+    fam_appraisal_queen: 'familiar_ur_appraisal_queen'
+};
+
+// Phase 4a-20 抽卡 banner UI(Phase 4b-17 視覺升級)
 export class Gacha extends Scene {
     constructor() { super('Gacha'); }
+
+    init() {
+        // preload 期間(首次開抽卡 lazy-load 立繪)的載入提示,避免黑屏
+        if (this.scene.isActive('Game')) this.scene.pause('Game');
+        this.add.rectangle(0, 0, W, H, 0x1a1612, 1).setOrigin(0, 0);
+        this.add.text(W / 2, H / 2, '招募名冊載入中…', {
+            fontFamily: 'sans-serif', fontSize: 40, color: '#b08850', fontStyle: 'bold'
+        }).setOrigin(0.5);
+    }
+
+    preload() {
+        // 立繪只在尚未載入時抓(Phaser 已快取則秒過)
+        this.load.setPath('assets');
+        for (const key in FAM_FILES) {
+            if (!this.textures.exists(key)) this.load.image(key, `familiars/${FAM_FILES[key]}.png`);
+        }
+    }
 
     create() {
         if (this.scene.isActive('Game')) this.scene.pause('Game');
@@ -217,11 +253,6 @@ export class Gacha extends Scene {
             const topBar = this.add.rectangle(cx, cy - cardH / 2 + (single ? 6 : 4), cardW - 8, single ? 12 : 8, tier, 0.9)
                 .setDepth(2003);
 
-            // 角色 sprite
-            const spriteScale = single ? 0.55 : 0.2;
-            const sprite = this.add.image(cx, cy - (single ? 50 : 36), r.familiar.spriteKey)
-                .setScale(spriteScale).setDepth(2003);
-
             // tier label(用 tier 色,不再純白)
             const rarLabel = this.add.text(cx, cy + cardH / 2 - (single ? 70 : 52), RARITY_LABEL[r.rarity], {
                 fontFamily: 'sans-serif', fontSize: single ? 44 : 26,
@@ -235,21 +266,37 @@ export class Gacha extends Scene {
                 color: '#ffe0c0', align: 'center', wordWrap: { width: cardW - 16 }
             }).setOrigin(0.5).setDepth(2004);
 
-            cardObjs.push(glow, bg, topBar, sprite, rarLabel, nameText);
+            cardObjs.push(glow, bg, topBar, rarLabel, nameText);
 
             // 翻牌進場:scale 0.2 → final,依序錯開
             const delay = i * (single ? 0 : 55);
-            const unitTargets = [glow, bg, topBar, rarLabel, nameText];
+            const unitTargets: Phaser.GameObjects.GameObject[] = [glow, bg, topBar, rarLabel, nameText];
+
+            // 角色 sprite — 4G 逾時掉圖 guard:有貼圖才畫立繪;缺圖用 rarity 色塊 + ? placeholder(不綠框、不擋夥伴發放)
+            const spriteScale = single ? 0.55 : 0.2;
+            if (this.textures.exists(r.familiar.spriteKey)) {
+                const sprite = this.add.image(cx, cy - (single ? 50 : 36), r.familiar.spriteKey)
+                    .setScale(spriteScale * 0.2).setDepth(2003);
+                cardObjs.push(sprite);
+                this.tweens.add({
+                    targets: sprite, scaleX: spriteScale, scaleY: spriteScale,
+                    delay, duration: 280, ease: 'Back.easeOut'
+                });
+            } else {
+                const ph = this.add.rectangle(cx, cy - (single ? 50 : 36), single ? 200 : 84, single ? 280 : 116, tier, 0.22)
+                    .setStrokeStyle(3, tier, 0.85).setDepth(2003);
+                const q = this.add.text(cx, cy - (single ? 50 : 36), '?', {
+                    fontFamily: 'sans-serif', fontSize: single ? 96 : 42, color: this.hex(tier), fontStyle: 'bold'
+                }).setOrigin(0.5).setDepth(2004);
+                cardObjs.push(ph, q);
+                unitTargets.push(ph, q);
+            }
+
             for (const o of unitTargets) {
                 (o as unknown as { setScale: (n: number) => void }).setScale(0.2);
             }
             this.tweens.add({
                 targets: unitTargets, scaleX: 1, scaleY: 1,
-                delay, duration: 280, ease: 'Back.easeOut'
-            });
-            sprite.setScale(spriteScale * 0.2);
-            this.tweens.add({
-                targets: sprite, scaleX: spriteScale, scaleY: spriteScale,
                 delay, duration: 280, ease: 'Back.easeOut'
             });
 
