@@ -5,8 +5,12 @@ import { TALENT_NODES, TalentNode, TalentRoute, canSpend, isVisible, getRouteSpe
 const W = 1080;
 const H = 1920;
 
+// Phase 4c-D 樹根狀佈局常數(per user「天賦樹要像樹根一樣」)
+const TREE_TOP = 80;
+const TIER_VGAP = 252;
+
 // Phase 4b-15 60 節點完整天賦樹 — per Codex deep design council
-// 5 Tier × 3 Route grid,scrollable container
+// Phase 4c-D 改樹根狀:節點小圓 + tier 內分支 spread + requires 連線
 export class Talent extends Scene {
     constructor() { super('Talent'); }
 
@@ -43,9 +47,6 @@ export class Talent extends Scene {
         // Scrollable scene area:600 高,內含 5 tier × 3 col × node card
         const scrollTop = 220;
         const scrollHeight = H - 320;
-        const nodeW = 280;
-        const nodeH = 110;
-        const tierGap = 24;
 
         // Mask
         const mask = this.add.rectangle(W / 2, scrollTop + scrollHeight / 2, W, scrollHeight, 0xffffff, 0)
@@ -57,29 +58,46 @@ export class Talent extends Scene {
 
         const layer = this.add.container(0, scrollTop).setMask(geomask);
 
-        // 5 tier × 3 route grid
-        for (let tier = 1 as 1; tier <= 5; tier++) {
-            const tierY = (tier - 1) * (nodeH * 4 + tierGap); // 4 個 node + gap per tier(每 tier 約 3-4 個 node)
-            // Tier label
-            const tierLabel = this.add.text(W / 2, tierY + 20, `── Tier ${tier} (需 ${[0, 5, 15, 30, 50][tier - 1]} 點) ──`, {
+        // Phase 4c-D 樹根狀:先算所有節點座標,畫 requires 連線(底層),再畫節點圓(上層)
+        const positions = this.buildTalentPositions();
+        const g = this.add.graphics();
+        for (const node of TALENT_NODES) {
+            if (!isVisible(node)) continue;
+            const b = positions.get(node.id);
+            if (!b) continue;
+            for (const req of node.requires) {
+                const a = positions.get(req.nodeId);
+                if (!a) continue; // 前置為 hidden 節點則略過
+                const active = SaveService.instance.getTalentLevel(req.nodeId) >= req.minLevel;
+                g.lineStyle(active ? 5 : 3, active ? 0xffc024 : 0x5a4a38, active ? 0.85 : 0.4);
+                g.beginPath();
+                g.moveTo(a.x, a.y);
+                g.lineTo(b.x, b.y);
+                g.strokePath();
+            }
+        }
+        layer.add(g);
+
+        // tier 分隔標籤
+        for (let tier = 1; tier <= 5; tier++) {
+            const tierLabel = this.add.text(W / 2, TREE_TOP + (tier - 1) * TIER_VGAP - 64,
+                `── Tier ${tier} (需 ${[0, 5, 15, 30, 50][tier - 1]} 點) ──`, {
                 fontFamily: 'monospace', fontSize: 18, color: '#8b6020'
             }).setOrigin(0.5);
             layer.add(tierLabel);
-            (Object.keys(routeMeta) as TalentRoute[]).forEach(r => {
-                const colNodes = TALENT_NODES.filter(n => n.route === r && n.tier === tier);
-                colNodes.forEach((node, i) => {
-                    if (!isVisible(node)) return;
-                    const meta = routeMeta[r];
-                    const x = meta.x;
-                    const y = tierY + 60 + i * (nodeH + 6);
-                    const objs = this.drawNode(node, x, y, meta.color, nodeW, nodeH);
-                    layer.add(objs);
-                });
-            });
+        }
+
+        // 節點圓(上層)
+        for (const node of TALENT_NODES) {
+            if (!isVisible(node)) continue;
+            const p = positions.get(node.id);
+            if (!p) continue;
+            const objs = this.drawNodeCircle(node, p.x, p.y, routeMeta[node.route].color);
+            layer.add(objs);
         }
 
         // Total content height 估算
-        const totalH = 5 * (nodeH * 4 + tierGap) + 40;
+        const totalH = TREE_TOP + 4 * TIER_VGAP + 180;
         let layerY = scrollTop;
         const minY = scrollTop - Math.max(0, totalH - scrollHeight);
 
@@ -120,41 +138,61 @@ export class Talent extends Scene {
         this.input.keyboard?.on('keydown-T', () => this.close());
     }
 
-    private drawNode(node: TalentNode, x: number, y: number, color: number, w: number, h: number): Phaser.GameObjects.GameObject[] {
+    // Phase 4c-D 計算每個可見節點座標:tier 決定 y,route band 內依 index 水平分支
+    private buildTalentPositions(): Map<string, { x: number; y: number }> {
+        const ROUTE_CX: Record<TalentRoute, number> = { attack: 200, defense: W / 2, support: W - 200 };
+        const pos = new Map<string, { x: number; y: number }>();
+        for (let tier = 1; tier <= 5; tier++) {
+            (['attack', 'defense', 'support'] as TalentRoute[]).forEach(r => {
+                const nodes = TALENT_NODES.filter(n => n.route === r && n.tier === tier && isVisible(n));
+                const n = nodes.length;
+                const step = Math.min(88, 300 / Math.max(1, n));
+                nodes.forEach((node, i) => {
+                    pos.set(node.id, {
+                        x: ROUTE_CX[r] + (i - (n - 1) / 2) * step,
+                        y: TREE_TOP + (tier - 1) * TIER_VGAP
+                    });
+                });
+            });
+        }
+        return pos;
+    }
+
+    // Phase 4c-D 節點小圓(取代大卡片,配合樹根連線視覺)
+    private drawNodeCircle(node: TalentNode, x: number, y: number, color: number): Phaser.GameObjects.GameObject[] {
         const save = SaveService.instance;
         const lvl = save.getTalentLevel(node.id);
         const spendable = canSpend(node);
         const locked = !spendable && lvl === 0;
+        const maxed = lvl >= node.maxLevel;
+        const r = 34;
 
-        const wiredTag = node.wired ? '' : '  [預覽]';
-        const titleColor = locked ? '#4a3018' : node.wired ? '#ffe0c0' : '#8b6020';
+        const fill = locked ? 0x1a1612 : maxed ? 0x3a2f18 : 0x2a2520;
+        const ring = locked ? 0x4a3018 : maxed ? 0xffe060 : spendable ? 0xffc024 : color;
+        const c = this.add.circle(x, y, r, fill, 0.96)
+            .setStrokeStyle(spendable ? 5 : 3, ring, locked ? 0.5 : 1);
+        if (!locked) {
+            c.setInteractive({ useHandCursor: true });
+            c.on('pointerdown', () => this.trySpend(node));
+        }
 
-        const bg = this.add.rectangle(x, y, w, h, locked ? 0x1a1612 : 0x2a2520, 0.92)
-            .setStrokeStyle(2, locked ? 0x4a3018 : color, locked ? 0.4 : 0.95);
-        if (!locked) bg.setInteractive({ useHandCursor: true });
-        bg.on('pointerdown', () => this.trySpend(node));
-
-        const titleText = this.add.text(x, y - 36, `${node.nameZH}${wiredTag}`, {
-            fontFamily: 'sans-serif', fontSize: 18, color: titleColor, fontStyle: 'bold'
+        const lt = this.add.text(x, y, `${lvl}/${node.maxLevel}`, {
+            fontFamily: 'monospace', fontSize: 17,
+            color: maxed ? '#ffe060' : locked ? '#6a5a4a' : '#ffe0c0', fontStyle: 'bold'
         }).setOrigin(0.5);
 
-        const desc = lvl > 0 ? node.descZH(lvl) : node.descZH(1);
-        const descText = this.add.text(x, y - 6, desc, {
-            fontFamily: 'monospace', fontSize: 13, color: locked ? '#4a3018' : '#b08850',
-            align: 'center', wordWrap: { width: w - 16 }
-        }).setOrigin(0.5);
+        const wiredMark = node.wired ? '' : ' ▪';
+        const nm = this.add.text(x, y + r + 6, `${node.nameZH}${wiredMark}`, {
+            fontFamily: 'sans-serif', fontSize: 15, color: locked ? '#5a4a38' : '#b08850',
+            align: 'center', wordWrap: { width: 120 }, fontStyle: 'bold'
+        }).setOrigin(0.5, 0);
 
-        const levelText = this.add.text(x, y + 28, `${lvl} / ${node.maxLevel}`, {
-            fontFamily: 'monospace', fontSize: 18, color: lvl >= node.maxLevel ? '#ffe060' : '#ffe0c0',
-            fontStyle: 'bold'
-        }).setOrigin(0.5);
-
-        const objs: Phaser.GameObjects.GameObject[] = [bg, titleText, descText, levelText];
-        if (locked) {
-            const lock = this.add.text(x, y + 46, '🔒 未解鎖', {
-                fontFamily: 'sans-serif', fontSize: 11, color: '#6a5a4a'
+        const objs: Phaser.GameObjects.GameObject[] = [c, lt, nm];
+        if (spendable && !maxed) {
+            const plus = this.add.text(x + r - 6, y - r + 6, '+', {
+                fontFamily: 'sans-serif', fontSize: 24, color: '#ffe060', fontStyle: 'bold'
             }).setOrigin(0.5);
-            objs.push(lock);
+            objs.push(plus);
         }
         return objs;
     }
