@@ -216,14 +216,32 @@ export class Game extends Scene
     private static readonly MOB_CONTACT_RANGE = 65;  // 圓形碰撞半徑
     private static readonly MOB_CONTACT_COOLDOWN_MS = 800; // 怪 0.8s 才能再打一次同一玩家
     private static readonly PLAYER_INVULN_MS = 500;
-    private static readonly PLAYER_MAX_HP = 100;
+    // Phase 4c 設計修正:maxHP 隨等級成長(每級 +20)+ 天賦厚皮硬骨
+    private playerMaxHp = 100;
+    private computeMaxHp(level: number): number {
+        return 100 + (level - 1) * 20 + computeTalentBuff().maxHpFlat;
+    }
+
+    // 重算 maxHP(天賦 thick_hide 改變 / resume 時);maxHP 升不自動補血,只更新上限 + 條
+    private refreshMaxHp() {
+        if (!this.hpBarFill) return;
+        const newMax = this.computeMaxHp(SaveService.instance.get().level);
+        if (newMax === this.playerMaxHp) return;
+        this.playerMaxHp = newMax;
+        this.playerHP = Math.min(this.playerHP, this.playerMaxHp);
+        this.hpBarFill.width = (this.hudPlateBarW - 4) * (this.playerHP / this.playerMaxHp);
+        this.hpText.setText(`HP  ${this.playerHP} / ${this.playerMaxHp}`);
+    }
 
     constructor () { super('Game'); }
 
     create ()
     {
         console.log('[Game] create() entered');
-        this.playerHP = Game.PLAYER_MAX_HP;
+        this.playerMaxHp = this.computeMaxHp(SaveService.instance.get().level);
+        this.playerHP = this.playerMaxHp;
+        // Phase 4c 設計修正:從天賦/裝備頁 resume 回來時重算 maxHP(thick_hide 等即時反映)
+        this.events.on('resume', () => this.refreshMaxHp());
         this.playerInvulnUntilMs = 0;
         this.attackCooldownMs = 0;
         this.isGameOver = false;
@@ -453,7 +471,7 @@ export class Game extends Scene
             .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
         this.add.rectangle(barX + 2, hpY + 2, barW - 4, 7, 0xffe0c0, 0.18)
             .setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
-        this.hpText = this.add.text(barX + barW / 2, hpY + hpH / 2, `HP  ${this.playerHP} / ${Game.PLAYER_MAX_HP}`, {
+        this.hpText = this.add.text(barX + barW / 2, hpY + hpH / 2, `HP  ${this.playerHP} / ${this.playerMaxHp}`, {
             fontFamily: 'monospace', fontSize: 28, color: '#ffe0c0', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 3
         }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
@@ -542,11 +560,11 @@ export class Game extends Scene
         if (this.time.now < this.potionCdUntilMs) { if (!isAuto) this.flashHudMessage('藥水冷卻中', 0xb08850); return false; }
         if (!SaveService.instance.consumePotion(id)) { if (!isAuto) this.flashHudMessage('🧪 沒有藥水', 0xc23a1a); return false; }
         const save = SaveService.instance;
-        const eff = computePotionEffect(p, Game.PLAYER_MAX_HP, save.getMaxMp());
+        const eff = computePotionEffect(p, this.playerMaxHp, save.getMaxMp());
         if (eff.hpHeal > 0) {
-            this.playerHP = Math.min(Game.PLAYER_MAX_HP, this.playerHP + eff.hpHeal);
-            this.hpBarFill.width = (this.hudPlateBarW - 4) * (this.playerHP / Game.PLAYER_MAX_HP);
-            this.hpText.setText(`HP  ${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
+            this.playerHP = Math.min(this.playerMaxHp, this.playerHP + eff.hpHeal);
+            this.hpBarFill.width = (this.hudPlateBarW - 4) * (this.playerHP / this.playerMaxHp);
+            this.hpText.setText(`HP  ${this.playerHP} / ${this.playerMaxHp}`);
         }
         if (eff.mpRestore > 0) {
             save.setMp(save.getMp() + eff.mpRestore);
@@ -665,13 +683,13 @@ export class Game extends Scene
     private updatePotions(time: number) {
         if (time < this.hotUntilMs && time - this.hotLastTickMs >= 1000 && this.playerHP > 0) {
             this.hotLastTickMs = time;
-            this.playerHP = Math.min(Game.PLAYER_MAX_HP, this.playerHP + Math.round(Game.PLAYER_MAX_HP * this.hotPerSec));
-            this.hpBarFill.width = (this.hudPlateBarW - 4) * (this.playerHP / Game.PLAYER_MAX_HP);
-            this.hpText.setText(`HP  ${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
+            this.playerHP = Math.min(this.playerMaxHp, this.playerHP + Math.round(this.playerMaxHp * this.hotPerSec));
+            this.hpBarFill.width = (this.hudPlateBarW - 4) * (this.playerHP / this.playerMaxHp);
+            this.hpText.setText(`HP  ${this.playerHP} / ${this.playerMaxHp}`);
         }
         const ap = SaveService.instance.getAutoPot();
         if (ap.enabled && time >= this.potionCdUntilMs && this.playerHP > 0) {
-            if (ap.hpPotionId && this.playerHP / Game.PLAYER_MAX_HP <= ap.hpThresholdPct && SaveService.instance.getPotionCount(ap.hpPotionId) > 0) {
+            if (ap.hpPotionId && this.playerHP / this.playerMaxHp <= ap.hpThresholdPct && SaveService.instance.getPotionCount(ap.hpPotionId) > 0) {
                 this.usePotion(ap.hpPotionId, true);
             } else if (ap.mpPotionId) {
                 const c = SaveService.instance.get();
@@ -1223,9 +1241,9 @@ export class Game extends Scene
         this.playerInvulnUntilMs = time + Game.PLAYER_INVULN_MS;
 
         // 血條 + 文字
-        const ratio = this.playerHP / Game.PLAYER_MAX_HP;
+        const ratio = this.playerHP / this.playerMaxHp;
         this.hpBarFill.width = (this.hudPlateBarW - 4) * ratio;
-        this.hpText.setText(`HP  ${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
+        this.hpText.setText(`HP  ${this.playerHP} / ${this.playerMaxHp}`);
 
         // HP=0 → GameOver 早退,不放 flash 否則 clearTint 會蓋掉死亡 tint
         if (this.playerHP <= 0) {
@@ -1311,11 +1329,11 @@ export class Game extends Scene
         const dmg = Math.round(baseDmg * totalDmgMult);
 
         // Hand Rag recovery — 命中回血 0.5% × baseDmg
-        if (weapon.recoveryPercent && this.playerHP < Game.PLAYER_MAX_HP) {
+        if (weapon.recoveryPercent && this.playerHP < this.playerMaxHp) {
             const heal = Math.max(1, Math.round(baseDmg * weapon.recoveryPercent * 100));
-            this.playerHP = Math.min(Game.PLAYER_MAX_HP, this.playerHP + heal);
-            this.hpBarFill.width = (this.hudPlateBarW - 4) * (this.playerHP / Game.PLAYER_MAX_HP);
-            this.hpText.setText(`HP  ${this.playerHP} / ${Game.PLAYER_MAX_HP}`);
+            this.playerHP = Math.min(this.playerMaxHp, this.playerHP + heal);
+            this.hpBarFill.width = (this.hudPlateBarW - 4) * (this.playerHP / this.playerMaxHp);
+            this.hpText.setText(`HP  ${this.playerHP} / ${this.playerMaxHp}`);
         }
         // Pebble Sling knockback — mob 朝玩家反方向位移 + 邊界 clamp(per Codex review)
         if (weapon.knockbackPx && nearest.active) {
@@ -1713,10 +1731,12 @@ export class Game extends Scene
         this.cameras.main.flash(220, 255, 200, 80, false);
         this.cameras.main.shake(300, 0.012);
 
+        // Phase 4c 設計修正:升級後重算 maxHP(等級成長)再回滿
+        this.playerMaxHp = this.computeMaxHp(SaveService.instance.get().level);
         // HP / MP 全滿 + bar + text flash
-        this.playerHP = Game.PLAYER_MAX_HP;
+        this.playerHP = this.playerMaxHp;
         this.hpBarFill.width = this.hudPlateBarW - 4;
-        this.hpText.setText(`HP  ${Game.PLAYER_MAX_HP} / ${Game.PLAYER_MAX_HP}`);
+        this.hpText.setText(`HP  ${this.playerMaxHp} / ${this.playerMaxHp}`);
         const maxMp = SaveService.instance.getMaxMp();
         SaveService.instance.setMp(maxMp);
         this.mpBarFill.width = this.hudPlateBarW - 4;

@@ -6,6 +6,9 @@ import type { EquipSlot } from './ArmorService';
 const STORAGE_KEY = 'trash-epic-save-v1';
 const SAVE_VERSION = 1;
 
+// Phase 4c 設計修正:maxMp 隨等級成長(每級 +5)
+function computeMaxMp(level: number): number { return 50 + (level - 1) * 5; }
+
 interface SaveData {
     version: number;
     level: number;
@@ -157,6 +160,9 @@ export class SaveService {
             }
             merged.potionHotbar = Array.isArray(parsed.potionHotbar) ? [...parsed.potionHotbar] : makeDefaultSave().potionHotbar;
             merged.autoPot = { ...makeDefaultSave().autoPot, ...(parsed.autoPot ?? {}) };
+            // Phase 4c 設計修正:maxMp 隨等級衍生(舊存檔也修正),mp 夾住
+            merged.maxMp = computeMaxMp(merged.level);
+            merged.mp = Math.min(merged.mp, merged.maxMp);
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -191,6 +197,11 @@ export class SaveService {
             this.data.talentPoints++;
             levelsGained++;
             next = this.expToNext();
+        }
+        if (levelsGained > 0) {
+            // Phase 4c 設計修正:升級長魔力上限 + 回滿
+            this.data.maxMp = computeMaxMp(this.data.level);
+            this.data.mp = this.data.maxMp;
         }
         return { leveled: levelsGained > 0, newLevel: this.data.level, levelsGained };
     }

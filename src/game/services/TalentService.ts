@@ -34,47 +34,47 @@ export interface TalentNode {
 
 export const TALENT_NODES: TalentNode[] = [
     // ===== 主幹根 =====
-    { id: 'survivor_root', route: 'defense', tier: 1, kind: 'keystone', nameZH: '拾荒者之心', maxLevel: 5, requires: [], tierGateReq: 0,
+    { id: 'survivor_root', route: 'defense', tier: 1, kind: 'keystone', nameZH: '拾荒者之心', maxLevel: 20, requires: [], tierGateReq: 0,
       descZH: l => `掉落率 +${l * 2}%`, wired: true },
 
     // ===== 分支起點(tier2)=====
-    { id: 'brute_path', route: 'attack', tier: 2, kind: 'minor', nameZH: '兇徒之路', maxLevel: 10, requires: [{ nodeId: 'survivor_root', minLevel: 1 }], tierGateReq: 0,
+    { id: 'brute_path', route: 'attack', tier: 2, kind: 'minor', nameZH: '兇徒之路', maxLevel: 100, requires: [{ nodeId: 'survivor_root', minLevel: 1 }], tierGateReq: 0,
       descZH: l => `傷害 +${l * 2}%`, wired: true },
-    { id: 'iron_path', route: 'defense', tier: 2, kind: 'minor', nameZH: '鐵壁之路', maxLevel: 10, requires: [{ nodeId: 'survivor_root', minLevel: 1 }], tierGateReq: 0,
+    { id: 'iron_path', route: 'defense', tier: 2, kind: 'minor', nameZH: '鐵壁之路', maxLevel: 100, requires: [{ nodeId: 'survivor_root', minLevel: 1 }], tierGateReq: 0,
       descZH: l => `減傷 +${(l * 1.5).toFixed(1)}%`, wired: true },
-    { id: 'cunning_path', route: 'support', tier: 2, kind: 'minor', nameZH: '狡徒之路', maxLevel: 10, requires: [{ nodeId: 'survivor_root', minLevel: 1 }], tierGateReq: 0,
+    { id: 'cunning_path', route: 'support', tier: 2, kind: 'minor', nameZH: '狡徒之路', maxLevel: 100, requires: [{ nodeId: 'survivor_root', minLevel: 1 }], tierGateReq: 0,
       descZH: l => `經驗 +${(l * 1.5).toFixed(1)}%`, wired: true },
 
     // ===== tier3:各分支 minor + KEYSTONE =====
-    { id: 'rusty_fangs', route: 'attack', tier: 3, kind: 'minor', nameZH: '鏽牙獠齒', maxLevel: 10, requires: [{ nodeId: 'brute_path', minLevel: 2 }], tierGateReq: 0,
+    { id: 'rusty_fangs', route: 'attack', tier: 3, kind: 'minor', nameZH: '鏽牙獠齒', maxLevel: 100, requires: [{ nodeId: 'brute_path', minLevel: 2 }], tierGateReq: 0,
       descZH: l => `暴擊率 +${(l * 0.8).toFixed(1)}%`, wired: true },
     { id: 'berserk', route: 'attack', tier: 3, kind: 'keystone', nameZH: '嗜血狂亂', maxLevel: 1, requires: [{ nodeId: 'brute_path', minLevel: 3 }], tierGateReq: 0,
       descZH: () => `HP 越低傷害越高(滿血 +0% → 瀕死 +30%)`, wired: false },
 
-    { id: 'thick_hide', route: 'defense', tier: 3, kind: 'minor', nameZH: '厚皮硬骨', maxLevel: 10, requires: [{ nodeId: 'iron_path', minLevel: 2 }], tierGateReq: 0,
-      descZH: l => `最大 HP +${l * 40}`, wired: false },
+    { id: 'thick_hide', route: 'defense', tier: 3, kind: 'minor', nameZH: '厚皮硬骨', maxLevel: 100, requires: [{ nodeId: 'iron_path', minLevel: 2 }], tierGateReq: 0,
+      descZH: l => `最大 HP +${l * 40}`, wired: true },
     { id: 'bulwark', route: 'defense', tier: 3, kind: 'keystone', nameZH: '鋼鐵壁壘', maxLevel: 1, requires: [{ nodeId: 'iron_path', minLevel: 3 }], tierGateReq: 0,
       descZH: () => `免疫擊退 + 受擊反彈 15% 傷害`, wired: false },
 
-    { id: 'quick_fingers', route: 'support', tier: 3, kind: 'minor', nameZH: '快手拆解', maxLevel: 10, requires: [{ nodeId: 'cunning_path', minLevel: 2 }], tierGateReq: 0,
+    { id: 'quick_fingers', route: 'support', tier: 3, kind: 'minor', nameZH: '快手拆解', maxLevel: 100, requires: [{ nodeId: 'cunning_path', minLevel: 2 }], tierGateReq: 0,
       descZH: l => `撿取範圍 +${l * 6}%`, wired: false },
     { id: 'scrap_magnet', route: 'support', tier: 3, kind: 'keystone', nameZH: '廢料磁吸', maxLevel: 1, requires: [{ nodeId: 'cunning_path', minLevel: 3 }], tierGateReq: 0,
       descZH: () => `自動吸取全螢幕掉落物`, wired: false },
 
     // ===== tier4:各分支 2 minor 深化 =====
-    { id: 'exposed_nerve', route: 'attack', tier: 4, kind: 'minor', nameZH: '裸露神經', maxLevel: 10, requires: [{ nodeId: 'rusty_fangs', minLevel: 3 }], tierGateReq: 0,
+    { id: 'exposed_nerve', route: 'attack', tier: 4, kind: 'minor', nameZH: '裸露神經', maxLevel: 100, requires: [{ nodeId: 'rusty_fangs', minLevel: 3 }], tierGateReq: 0,
       descZH: l => `暴擊傷害 +${l * 4}%`, wired: true },
-    { id: 'carnage', route: 'attack', tier: 4, kind: 'minor', nameZH: '殺戮節奏', maxLevel: 10, requires: [{ nodeId: 'berserk', minLevel: 1 }], tierGateReq: 0,
+    { id: 'carnage', route: 'attack', tier: 4, kind: 'minor', nameZH: '殺戮節奏', maxLevel: 100, requires: [{ nodeId: 'berserk', minLevel: 1 }], tierGateReq: 0,
       descZH: l => `攻速 +${(l * 1.5).toFixed(1)}%`, wired: true },
 
-    { id: 'scar_tissue', route: 'defense', tier: 4, kind: 'minor', nameZH: '疤痕組織', maxLevel: 10, requires: [{ nodeId: 'thick_hide', minLevel: 3 }], tierGateReq: 0,
+    { id: 'scar_tissue', route: 'defense', tier: 4, kind: 'minor', nameZH: '疤痕組織', maxLevel: 100, requires: [{ nodeId: 'thick_hide', minLevel: 3 }], tierGateReq: 0,
       descZH: l => `每秒回血 +${l * 2}`, wired: false },
-    { id: 'rust_thorns', route: 'defense', tier: 4, kind: 'minor', nameZH: '鏽刺反甲', maxLevel: 10, requires: [{ nodeId: 'bulwark', minLevel: 1 }], tierGateReq: 0,
+    { id: 'rust_thorns', route: 'defense', tier: 4, kind: 'minor', nameZH: '鏽刺反甲', maxLevel: 100, requires: [{ nodeId: 'bulwark', minLevel: 1 }], tierGateReq: 0,
       descZH: l => `反傷 +${l * 3}%`, wired: false },
 
-    { id: 'gold_tooth', route: 'support', tier: 4, kind: 'minor', nameZH: '金牙', maxLevel: 10, requires: [{ nodeId: 'quick_fingers', minLevel: 3 }], tierGateReq: 0,
+    { id: 'gold_tooth', route: 'support', tier: 4, kind: 'minor', nameZH: '金牙', maxLevel: 100, requires: [{ nodeId: 'quick_fingers', minLevel: 3 }], tierGateReq: 0,
       descZH: l => `金幣 +${l * 2}%`, wired: true },
-    { id: 'lucky_scav', route: 'support', tier: 4, kind: 'minor', nameZH: '幸運拾荒', maxLevel: 10, requires: [{ nodeId: 'scrap_magnet', minLevel: 1 }], tierGateReq: 0,
+    { id: 'lucky_scav', route: 'support', tier: 4, kind: 'minor', nameZH: '幸運拾荒', maxLevel: 100, requires: [{ nodeId: 'scrap_magnet', minLevel: 1 }], tierGateReq: 0,
       descZH: l => `掉落 +${(l * 1.5).toFixed(1)}%`, wired: true },
 
     // ===== tier5:分支 KEYSTONE =====
