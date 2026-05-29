@@ -611,6 +611,26 @@ export class Game extends Scene
                 bg.on('pointerdown', () => { this.usePotion(id); });
             }
         }
+        // Phase 4c-2 補:auto-pot 開關(快捷列下方)
+        const ay = startY + 3 * (size + gap);
+        const ap0 = SaveService.instance.getAutoPot();
+        const autoBg = this.add.rectangle(x, ay, size, size, ap0.enabled ? 0x4a5d3a : 0x2a2520, 0.92)
+            .setStrokeStyle(3, ap0.enabled ? 0x7a9a5a : 0x4a3a30, ap0.enabled ? 1 : 0.6)
+            .setDepth(1100).setScrollFactor(0).setInteractive({ useHandCursor: true });
+        this.add.text(x, ay - 16, '自動', {
+            fontFamily: 'sans-serif', fontSize: 24, color: '#ffe0c0', fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(1101).setScrollFactor(0);
+        const autoState = this.add.text(x, ay + 20, ap0.enabled ? 'ON' : 'OFF', {
+            fontFamily: 'monospace', fontSize: 22, color: ap0.enabled ? '#9bd07a' : '#6a5a4a', fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(1101).setScrollFactor(0);
+        autoBg.on('pointerdown', () => {
+            const next = !SaveService.instance.getAutoPot().enabled;
+            SaveService.instance.setAutoPot({ enabled: next });
+            SaveService.instance.save();
+            autoBg.setFillStyle(next ? 0x4a5d3a : 0x2a2520, 0.92).setStrokeStyle(3, next ? 0x7a9a5a : 0x4a3a30, next ? 1 : 0.6);
+            autoState.setText(next ? 'ON' : 'OFF').setColor(next ? '#9bd07a' : '#6a5a4a');
+            this.flashHudMessage(next ? '自動喝藥 開' : '自動喝藥 關', next ? 0x4a5d3a : 0xb08850);
+        });
     }
 
     private refreshPotionHotbar() {
