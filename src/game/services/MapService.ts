@@ -157,7 +157,7 @@ const MAPS: Record<string, MapConfig> = {
     core_gate: {
         id: 'core_gate', nameZH: '爐心門', mapType: 'boss', levelRange: [180, 300], regionId: 'reactor',
         width: 2000, height: 2400, bgColor: '#241a16',
-        spawnPoints: fieldSpawns(2000, 2400, 6, [6]),  // 爐心門 = 輻射巨鼠(單一專屬)
+        spawnPoints: fieldSpawns(2000, 2400, 6, [10]),  // 爐心門 = 輻射機甲蟲(真‧獨立新 sprite)
         npcs: [],
         shopNpcs: [],
         portals: [

@@ -114,6 +114,11 @@ const MOB_BLUEPRINTS: MobBlueprint[] = [
     {
         id: 'rust_spider', type: 'Insect', spriteKey: 'mob_rust_spider', scale: 0.13,
         hp: 200, speedChase: 0.09, speedWander: 0.03, contactDamage: 24, expReward: 22, goldReward: 14
+    },
+    // Phase 4c-18 真‧獨立新怪(輻射機甲蟲)— idx 10,爐心門 signature(lv180-300 難度)
+    {
+        id: 'reactor_crawler', type: 'Robot', spriteKey: 'mob_reactor_crawler', scale: 0.16,
+        hp: 420, speedChase: 0.10, speedWander: 0.03, contactDamage: 40, expReward: 55, goldReward: 30
     }
 ];
 
@@ -1302,8 +1307,8 @@ export class Game extends Scene
                     mob.setTint(bp.tint);
                 }
                 // Phase 4b-11 play frame anim by blueprint id
-                // 鏽蜘蛛是單張 sprite(無 run frames)→ 不 play frame anim(否則會換到 giantrat/centipede 貼圖),改腳步輕微縮放抖動
-                if (bp.spriteKey === 'mob_rust_spider') {
+                // 真‧獨立新怪是單張 sprite(無 run frames)→ 不 play frame anim(否則會換到 giantrat/centipede 貼圖),改腳步輕微縮放抖動
+                if (bp.spriteKey === 'mob_rust_spider' || bp.spriteKey === 'mob_reactor_crawler') {
                     this.tweens.add({ targets: mob, scaleX: bp.scale * 1.06, scaleY: bp.scale * 0.96, duration: 380, yoyo: true, repeat: -1 });
                 } else if (bp.id === 'centipede' || bp.id === 'scrap_drone') {
                     mob.play('centipede_wave');
