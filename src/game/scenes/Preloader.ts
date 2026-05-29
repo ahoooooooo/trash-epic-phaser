@@ -50,6 +50,7 @@ export class Preloader extends Scene
         this.load.image('mob_giantrat_run_b', 'mobs/mob_giantrat_run_b.png');
         this.load.image('mob_centipede_wave_a', 'mobs/mob_centipede_wave_a.png');
         this.load.image('mob_centipede_wave_b', 'mobs/mob_centipede_wave_b.png');
+        this.load.image('mob_rust_spider', 'mobs/mob_rust_spider.png');  // Phase 4c-17 真‧獨立新怪(GPT-4o+BiRefNet)
         this.load.image('npc_clerk', 'characters/npc_quest_clerk_greenscarf.png');
 
         // Phase 4c-11:14 隻 gacha 立繪(~28MB)移到 Gacha 場景 lazy-load,不在開機 Preloader

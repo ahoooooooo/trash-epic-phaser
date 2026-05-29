@@ -125,7 +125,7 @@ const MAPS: Record<string, MapConfig> = {
     dry_well_road: {
         id: 'dry_well_road', nameZH: '乾井路', mapType: 'field', levelRange: [40, 90], regionId: 'scrap',
         width: 1800, height: 2800, bgColor: '#33291c',
-        spawnPoints: fieldSpawns(1800, 2800, 14, [4]),  // 乾井路 = 鏽蜈蚣(單一專屬)
+        spawnPoints: fieldSpawns(1800, 2800, 14, [9]),  // 乾井路 = 鏽蝕機械蜘蛛(真‧獨立新 sprite,非換色)
         npcs: [],
         shopNpcs: [],
         portals: [

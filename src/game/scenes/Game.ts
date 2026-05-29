@@ -109,6 +109,11 @@ const MOB_BLUEPRINTS: MobBlueprint[] = [
     {
         id: 'core_drone', type: 'Robot', spriteKey: 'mob_centipede_wave_a', scale: 0.15, tint: 0x40a060,
         hp: 340, speedChase: 0.17, speedWander: 0.05, contactDamage: 34, expReward: 60, goldReward: 35
+    },
+    // Phase 4c-17 真‧獨立新怪 sprite(GPT-4o+BiRefNet 鏽蝕機械蜘蛛,非換色)— idx 9,乾井路 signature
+    {
+        id: 'rust_spider', type: 'Insect', spriteKey: 'mob_rust_spider', scale: 0.13,
+        hp: 200, speedChase: 0.09, speedWander: 0.03, contactDamage: 24, expReward: 22, goldReward: 14
     }
 ];
 
@@ -1297,8 +1302,14 @@ export class Game extends Scene
                     mob.setTint(bp.tint);
                 }
                 // Phase 4b-11 play frame anim by blueprint id
-                if (bp.id === 'centipede' || bp.id === 'scrap_drone') mob.play('centipede_wave');
-                else mob.play('giantrat_run'); // giantrat 用 4-leg gallop
+                // 鏽蜘蛛是單張 sprite(無 run frames)→ 不 play frame anim(否則會換到 giantrat/centipede 貼圖),改腳步輕微縮放抖動
+                if (bp.spriteKey === 'mob_rust_spider') {
+                    this.tweens.add({ targets: mob, scaleX: bp.scale * 1.06, scaleY: bp.scale * 0.96, duration: 380, yoyo: true, repeat: -1 });
+                } else if (bp.id === 'centipede' || bp.id === 'scrap_drone') {
+                    mob.play('centipede_wave');
+                } else {
+                    mob.play('giantrat_run'); // giantrat 用 4-leg gallop
+                }
                 const data: MobData = {
                     blueprint: bp,
                     hp: bp.hp,
@@ -1648,6 +1659,7 @@ export class Game extends Scene
                 duration: 180, onComplete: () => deadShadow.destroy()
             });
         }
+        this.tweens.killTweensOf(target);  // 清掉殘留 idle tween(如鏽蜘蛛 wobble repeat:-1),避免洩漏 + 與死亡 tween 衝突
         this.tweens.add({
             targets: target, scale: target.scaleX * 1.4, alpha: 0,
             duration: 180, ease: 'Quad.out',
