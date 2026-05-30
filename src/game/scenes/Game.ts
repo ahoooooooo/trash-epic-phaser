@@ -206,6 +206,7 @@ interface BossDef {
     biteFill: number;          // rage 連咬 內圈
     biteStroke: number;        // rage 連咬 外環
     acidSpit?: boolean;        // 酸液噴吐(地面酸池 DoT zone)— acidsire 限定第 2 招
+    spawnAdds?: number;        // 產卵:HP<60% 一次召喚 N 隻幼蟲 add(0/undefined=不召)— acidsire 限定第 3 招
 }
 
 const BOSS_DEFS: Record<string, BossDef> = {
@@ -217,7 +218,7 @@ const BOSS_DEFS: Record<string, BossDef> = {
     acidsire: {
         blueprint: BOSS_ACIDSIRE, displayName: '蝕骨蜈蚣巢母',
         sweepFill: 0x40ff40, sweepStroke: 0x80ff50, sweepHit: 0x50d020,
-        biteFill: 0x90e040, biteStroke: 0xc0ff60, acidSpit: true
+        biteFill: 0x90e040, biteStroke: 0xc0ff60, acidSpit: true, spawnAdds: 4
     }
 };
 
@@ -246,6 +247,7 @@ interface MobData {
     wanderTargetY: number;
     nextWanderAt: number;
     isRaging?: boolean;
+    spawnedAdds?: boolean;       // boss 已產卵(一次性,防重複召幼蟲)
     isElite?: boolean;
     bleedUntilMs?: number;       // 廢鋁刀 Bleed DoT 到期
     bleedDmgPerTick?: number;    // 每秒流血傷害
@@ -1668,7 +1670,7 @@ export class Game extends Scene
                 }
                 // Phase 4b-11 play frame anim by blueprint id
                 // 真‧獨立新怪是單張 sprite(無 run frames)→ 不 play frame anim(否則會換到 giantrat/centipede 貼圖),改腳步輕微縮放抖動
-                if (bp.spriteKey === 'mob_rust_spider' || bp.spriteKey === 'mob_reactor_crawler' || bp.spriteKey === 'mob_mutant_creeper' || bp.spriteKey === 'mob_rust_scorpion') {
+                if (bp.spriteKey === 'mob_rust_spider' || bp.spriteKey === 'mob_reactor_crawler' || bp.spriteKey === 'mob_mutant_creeper' || bp.spriteKey === 'mob_rust_scorpion' || bp.spriteKey === 'mob_acidsire') {
                     this.tweens.add({ targets: mob, scaleX: mScale * 1.06, scaleY: mScale * 0.96, duration: 380, yoyo: true, repeat: -1 });
                 } else if (bp.id === 'centipede' || bp.id === 'scrap_drone') {
                     mob.play('centipede_wave');
@@ -2032,6 +2034,14 @@ export class Game extends Scene
             }
         }
 
+        // Boss 產卵(第 3 招,acidsire 限定):HP < 60% 一次性召喚 N 隻幼蟲 add(只在還活著時)
+        const addsN = this.activeBoss?.spawnAdds ?? 0;
+        if (data.hp > 0 && data.blueprint.isBoss && addsN > 0 && !data.spawnedAdds
+            && data.hp / data.blueprint.hp < 0.6) {
+            data.spawnedAdds = true;
+            this.spawnBroodAdds(target.x, target.y, addsN, time);
+        }
+
         // 死亡 + cycle 重生(boss 不 cycle)+ reward
         if (data.hp <= 0) {
             this.killMob(target, time);
@@ -2205,6 +2215,36 @@ export class Game extends Scene
         const ratio = Math.max(0, Math.min(1, data.hp / this.bossMaxHp));
         this.bossHpBarFill.width = this.bossHpBarInnerW * ratio;
         this.bossHpBarFill.fillColor = data.isRaging ? (data.blueprint.rageTint ?? 0xff2020) : 0xc23a1a;
+    }
+
+    // Boss 產卵(第 3 招):圍 boss 召喚 N 隻幼蟲 add(idx13 蝕骨蜈蚣縮小弱化版,單張 sprite wobble,用既有 mob 機制)
+    private spawnBroodAdds(bx: number, by: number, count: number, time: number) {
+        const bp = MOB_BLUEPRINTS[13];  // acid_centipede(spriteKey mob_acidsire)
+        const addScale = bp.scale * 0.6;        // 幼蟲遠小於巢母
+        const addHp = Math.max(1, Math.round(bp.hp * 0.12));  // 弱化:可快速清掉的 add
+        for (let i = 0; i < count; i++) {
+            const ang = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+            const dist = 130 + Math.random() * 90;
+            const ax = Math.max(80, Math.min(this.mapConfig.width - 80, bx + Math.cos(ang) * dist));
+            const ay = Math.max(80, Math.min(this.mapConfig.height - 80, by + Math.sin(ang) * dist));
+            const mob = this.add.sprite(ax, ay, bp.spriteKey).setScale(addScale);
+            // 單張 sprite → wobble(與 field mob 一致,不 play giantrat anim)
+            this.tweens.add({ targets: mob, scaleX: addScale * 1.08, scaleY: addScale * 0.94, duration: 340, yoyo: true, repeat: -1 });
+            const data: MobData = {
+                blueprint: bp, hp: addHp, spawnPoint: null,
+                lastContactMs: -Infinity, state: 'chase',
+                wanderTargetX: ax, wanderTargetY: ay, nextWanderAt: 0
+            };
+            mob.setData('mob', data);
+            mob.setData('shadow', this.makeGroundShadow(mob.x, mob.y, Math.max(24, mob.displayWidth * 0.7)));
+            this.mobs.push(mob);
+            // 孵化視覺:綠卵爆
+            const hatch = this.add.circle(ax, ay, 14, 0x4cff60, 0).setStrokeStyle(4, 0x4cff60, 0.9).setDepth(450);
+            this.tweens.add({ targets: hatch, radius: 70, alpha: 0, duration: 480, ease: 'Quad.out', onComplete: () => hatch.destroy() });
+        }
+        this.flashHudMessage('☢ 巢母產卵 — 幼蟲孵化!', 0x4cff60);
+        this.cameras.main.shake(240, 0.012);
+        void time;
     }
 
     // Boss 尾巴橫掃(設計招式):預警圈 windup → 結算大範圍 AoE,玩家可走出躲開(技巧表現)
