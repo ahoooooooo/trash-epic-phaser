@@ -9,7 +9,7 @@ import { QUESTS, QuestDef } from '../services/QuestService';
 import { getMap, MapConfig, NpcSpec, PortalSpec, ShopNpcSpec } from '../services/MapService';
 import { generateRandomWeapon, weaponDisplayName, rarityColor } from '../services/WeaponGenerator';
 import { generateRandomArmor, armorDisplayName, armorRarityColor } from '../services/ArmorService';
-import { getPotion, computePotionEffect } from '../services/PotionService';
+import { getPotion, computePotionEffect, PotionConfig } from '../services/PotionService';
 
 // 視窗尺寸(Phaser config 內固定 1080×1920 portrait)
 const VIEW_W = 1080;
@@ -841,9 +841,13 @@ export class Game extends Scene
                 .setStrokeStyle(3, id ? 0x8b6020 : 0x4a3a30, id ? 1 : 0.5)
                 .setDepth(1100).setScrollFactor(0);
             const p = id ? getPotion(id) : undefined;
-            this.add.text(x, y - 14, p ? p.nameZH.slice(0, 2) : '—', {
-                fontFamily: 'sans-serif', fontSize: 26, color: id ? '#ffe0c0' : '#5a4a38', fontStyle: 'bold'
-            }).setOrigin(0.5).setDepth(1101).setScrollFactor(0);
+            if (p) {
+                this.drawPotionIcon(x, y - 10, p, 1101);
+            } else {
+                this.add.text(x, y - 14, '—', {
+                    fontFamily: 'sans-serif', fontSize: 26, color: '#5a4a38', fontStyle: 'bold'
+                }).setOrigin(0.5).setDepth(1101).setScrollFactor(0);
+            }
             const cnt = this.add.text(x, y + 22, id ? `×${SaveService.instance.getPotionCount(id)}` : '', {
                 fontFamily: 'monospace', fontSize: 22, color: '#ffe060', fontStyle: 'bold'
             }).setOrigin(0.5).setDepth(1101).setScrollFactor(0);
@@ -853,19 +857,26 @@ export class Game extends Scene
                 bg.on('pointerdown', () => { this.usePotion(id); });
             }
         }
-        // Phase 4c-2 補:auto-pot 開關(快捷列下方)
+        // Phase 4c-2 補:auto-pot 開關(快捷列下方)— 月卡專屬(per user 2026-05-30)
         const ay = startY + 3 * (size + gap);
+        const hasMonthCard = SaveService.instance.isMonthCardActive();
         const ap0 = SaveService.instance.getAutoPot();
-        const autoBg = this.add.rectangle(x, ay, size, size, ap0.enabled ? 0x4a5d3a : 0x2a2520, 0.92)
-            .setStrokeStyle(3, ap0.enabled ? 0x7a9a5a : 0x4a3a30, ap0.enabled ? 1 : 0.6)
+        const apOn = hasMonthCard && ap0.enabled;
+        const autoBg = this.add.rectangle(x, ay, size, size, apOn ? 0x4a5d3a : 0x2a2520, 0.92)
+            .setStrokeStyle(3, apOn ? 0x7a9a5a : (hasMonthCard ? 0x4a3a30 : 0x6a5030), apOn ? 1 : 0.6)
             .setDepth(1100).setScrollFactor(0).setInteractive({ useHandCursor: true });
         this.add.text(x, ay - 16, '自動', {
-            fontFamily: 'sans-serif', fontSize: 24, color: '#ffe0c0', fontStyle: 'bold'
+            fontFamily: 'sans-serif', fontSize: 24, color: hasMonthCard ? '#ffe0c0' : '#7a6a58', fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(1101).setScrollFactor(0);
-        const autoState = this.add.text(x, ay + 20, ap0.enabled ? 'ON' : 'OFF', {
-            fontFamily: 'monospace', fontSize: 22, color: ap0.enabled ? '#9bd07a' : '#6a5a4a', fontStyle: 'bold'
+        const autoState = this.add.text(x, ay + 20, hasMonthCard ? (apOn ? 'ON' : 'OFF') : '🔒月卡', {
+            fontFamily: 'monospace', fontSize: hasMonthCard ? 22 : 18,
+            color: hasMonthCard ? (apOn ? '#9bd07a' : '#6a5a4a') : '#c89050', fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(1101).setScrollFactor(0);
         autoBg.on('pointerdown', () => {
+            if (!SaveService.instance.isMonthCardActive()) {
+                this.flashHudMessage('🔒 自動喝藥為月卡專屬', 0xc89050);
+                return;
+            }
             const next = !SaveService.instance.getAutoPot().enabled;
             SaveService.instance.setAutoPot({ enabled: next });
             SaveService.instance.save();
@@ -873,6 +884,31 @@ export class Game extends Scene
             autoState.setText(next ? 'ON' : 'OFF').setColor(next ? '#9bd07a' : '#6a5a4a');
             this.flashHudMessage(next ? '自動喝藥 開' : '自動喝藥 關', next ? 0x4a5d3a : 0xb08850);
         });
+    }
+
+    // 廢土風藥水瓶 icon(graphics 畫,取代文字)— 液體色依 target,邊框依 rarity
+    private drawPotionIcon(x: number, y: number, p: PotionConfig, depth: number) {
+        const liquid = p.target === 'hp' ? 0xd83a2a : p.target === 'mp' ? 0x4470d8 : 0xb050d0;
+        const rarityCol = p.rarity === 'SR' ? 0xffd040 : p.rarity === 'R' ? 0x9a60ff
+            : p.rarity === 'U' ? 0x60b050 : 0xa0a0a0;
+        const g = this.add.graphics().setDepth(depth).setScrollFactor(0);
+        // 玻璃瓶身
+        g.fillStyle(0x2a3038, 0.55);
+        g.fillRoundedRect(x - 17, y - 10, 34, 30, 8);
+        // 液體(瓶身下段)
+        g.fillStyle(liquid, 0.95);
+        g.fillRoundedRect(x - 14, y, 28, 17, 6);
+        // 瓶頸 + 軟木塞
+        g.fillStyle(0x2a3038, 0.7);
+        g.fillRect(x - 6, y - 20, 12, 12);
+        g.fillStyle(0x8b6020, 1);
+        g.fillRect(x - 7, y - 24, 14, 6);
+        // 高光
+        g.fillStyle(0xffffff, 0.22);
+        g.fillRect(x - 12, y - 6, 4, 18);
+        // rarity 邊框
+        g.lineStyle(2, rarityCol, 0.9);
+        g.strokeRoundedRect(x - 17, y - 10, 34, 30, 8);
     }
 
     private refreshPotionHotbar() {
@@ -950,7 +986,8 @@ export class Game extends Scene
             this.hpText.setText(`HP  ${this.playerHP} / ${this.playerMaxHp}`);
         }
         const ap = SaveService.instance.getAutoPot();
-        if (ap.enabled && time >= this.potionCdUntilMs && this.playerHP > 0) {
+        // 自動喝藥為月卡專屬:無月卡即使 enabled 也不觸發(per user 2026-05-30)
+        if (ap.enabled && SaveService.instance.isMonthCardActive() && time >= this.potionCdUntilMs && this.playerHP > 0) {
             if (ap.hpPotionId && this.playerHP / this.playerMaxHp <= ap.hpThresholdPct && SaveService.instance.getPotionCount(ap.hpPotionId) > 0) {
                 this.usePotion(ap.hpPotionId, true);
             } else if (ap.mpPotionId) {
