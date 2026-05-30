@@ -31,9 +31,16 @@ export class Talent extends Scene {
     create(data?: { openNode?: string; scrollY?: number }) {
         this.add.rectangle(0, 0, W, H, 0x140f0c, 1).setOrigin(0, 0);
 
-        // 標題 + TP(固定 header)
+        // 標題 + TP(固定 header)— 鏽蝕質感:底框 + 上沿亮帶 + 底部橙 accent + 角落鉚釘
         this.add.rectangle(0, 0, W, HEADER_BOTTOM, 0x1a1612, 0.96).setOrigin(0, 0)
             .setStrokeStyle(2, 0x8b6020, 0.6);
+        this.add.rectangle(0, 3, W, 24, 0x3a342c, 0.4).setOrigin(0, 0);                  // 上沿金屬反光
+        this.add.rectangle(0, HEADER_BOTTOM, W, 3, 0xff8830, 0.7).setOrigin(0, 0);       // 底部橙 accent
+        // 角落鉚釘(避開 flanking 按鈕 x=140 / W-120)
+        for (const rx of [14, W - 14]) {
+            this.add.circle(rx, 22, 5, 0xa05a30).setStrokeStyle(1, 0x1a1612);
+            this.add.circle(rx, HEADER_BOTTOM - 14, 5, 0xa05a30).setStrokeStyle(1, 0x1a1612);
+        }
         this.add.text(W / 2, 50, '🌳 廢土天賦樹', {
             fontFamily: 'sans-serif', fontSize: 44, color: '#ff8830', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 6

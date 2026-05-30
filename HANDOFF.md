@@ -76,6 +76,8 @@
 
 27. **[x] Quest 對話框精緻化(暗罩+鏽牌+鉚釘)**(2026-05-30 user「畫面精緻度」續做)— openQuestDialog 原本單 bg 面板無遮罩。加全屏暗罩 overlay(0.55 + setInteractive 擋背景誤觸,聚焦 modal)+ 標題鏽牌 titlePlate + 4 角鉚釘。**lifecycle 重點**:3 處 cleanup 陣列(接受/領獎/關閉)全 replace_all 加進新物件 overlay/titlePlate/r1-r4,確保關閉不殘留。tsc 0+build+Codex APPROVE(1 輪 clean,確認 3 cleanup 路徑完整/overlay depth 1999 不擋按鈕 2002/領獎切下個 quest 不疊舊 overlay)+ Playwright guild_hall 點 clerk 開對話框顯暗罩+鏽牌+鉚釘→關閉後全消畫面恢復無殘留+console 0 error。**註**:Talent/Gacha header 有 flanking 按鈕或已 styled,不適用 drawSceneHeader。
 
+28. **[x] Talent header 鏽蝕質感 + vendor 改動 revert**(2026-05-30 user「畫面精緻度」續做)— **vendor 商販買藥面板**原想加標題鏽牌+鉚釘(layer Container,lifecycle 安全),但 Playwright 無法穩定觸發 world-positioned stall(96px hit + 距離 gate)做截圖驗證 → **誠實 revert**(不出貨沒實測的視覺改動,must-test 原則)。改做**可靠用 tab 開啟驗證**的 Talent header:既有 header rect(0..168 含 flanking 按鈕,不能用全高 band)後加上沿亮帶 + 底部橙 accent + 4 角鉚釘。Codex 抓鉚釘 x=W-22 與返回鈕 2px 重疊 → 改 [14,W-14] 清開。tsc 0+build+Codex APPROVE(2 輪:鉚釘重疊,修完)+ Playwright 天賦 tab 截圖 header 顯橙 accent+鉚釘+亮帶,重置/返回 按鈕未被遮,console 0 error。**教訓**:world-positioned 互動元素(vendor stall/NPC)難用 Playwright 盲點觸發,優先挑 tab/按鈕可開的 UI 做視覺驗證。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)
