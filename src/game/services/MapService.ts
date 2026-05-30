@@ -61,16 +61,26 @@ export interface MapConfig {
 // field 獵場 spawn 群。每張圖用「專屬 signature 怪」(per user 2026-05-29「每張圖一種怪物」):
 //   廢土外圍(起始)=巨鼠+蜈蚣(idx0,1,支援新手 q1/q2 任務)/ 乾井路=鏽蜈蚣(idx4 橙蟲)/ 爐心門=輻射巨鼠(idx6 綠大)
 //   → 各圖剪影/色/大小各異,玩家一眼分辨。真‧獨立新怪 sprite 之後跑 pipeline 生。
+// 散佈 spawn point:格點打底(均勻覆蓋整圖)+ 每點 deterministic 抖動(看起來隨機,不是死板棋盤)
+// 抖動限在半個 cell 內 → 不會擠在一起也不會出界,大圖上分佈自然(per user「隨機地方生成適當個數」)
 function fieldSpawns(w: number, h: number, count: number, idxs: number[]): SpawnPointSpec[] {
     const pts: SpawnPointSpec[] = [];
     const cols = Math.ceil(Math.sqrt(count));
     const rows = Math.ceil(count / cols);
+    // deterministic pseudo-random ∈ [-0.5, 0.5](穩定不隨 reload 變,維持楓谷固定 spawn 機制)
+    const jit = (i: number, salt: number) => {
+        const n = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+        return (n - Math.floor(n)) - 0.5;
+    };
+    const cellX = 0.76 / cols, cellY = 0.72 / rows;
     for (let i = 0; i < count; i++) {
         const cx = (i % cols + 0.5) / cols;
         const cy = (Math.floor(i / cols) + 0.5) / rows;
+        const nx = 0.12 + cx * 0.76 + jit(i, 1) * cellX * 0.85;
+        const ny = 0.14 + cy * 0.72 + jit(i, 2) * cellY * 0.85;
         pts.push({
-            x: Math.round(w * (0.12 + cx * 0.76)),
-            y: Math.round(h * (0.14 + cy * 0.72)),
+            x: Math.round(w * nx),
+            y: Math.round(h * ny),
             blueprintIdx: idxs[i % idxs.length]
         });
     }
@@ -113,7 +123,7 @@ const MAPS: Record<string, MapConfig> = {
     wasteland_outskirts: {
         id: 'wasteland_outskirts', nameZH: '廢土外圍', mapType: 'field', levelRange: [1, 40], regionId: 'scrap',
         width: 3600, height: 4800, bgColor: '#2a2520', bgKey: 'map_wasteland_topdown',
-        spawnPoints: fieldSpawns(3600, 4800, 16, [0]),  // 一圖一怪:廢土外圍 = 廢料巨鼠 only(q1)— 放大圖走路刷
+        spawnPoints: fieldSpawns(3600, 4800, 36, [0]),  // 一圖一怪:廢土外圍 = 廢料巨鼠 only(q1)— 放大圖走路刷
         npcs: [],
         shopNpcs: [],
         portals: [
@@ -128,7 +138,7 @@ const MAPS: Record<string, MapConfig> = {
     creeper_vale: {
         id: 'creeper_vale', nameZH: '毒花谷', mapType: 'field', levelRange: [1, 40], regionId: 'scrap',
         width: 3000, height: 4200, bgColor: '#26301f', bgKey: 'map_creeper_vale_topdown',
-        spawnPoints: fieldSpawns(3000, 4200, 14, [11]),  // 一圖一怪:毒花谷 = 變異食人花 only(q2/q6)
+        spawnPoints: fieldSpawns(3000, 4200, 32, [11]),  // 一圖一怪:毒花谷 = 變異食人花 only(q2/q6)
         npcs: [],
         shopNpcs: [],
         portals: [
@@ -141,7 +151,7 @@ const MAPS: Record<string, MapConfig> = {
     dry_well_road: {
         id: 'dry_well_road', nameZH: '乾井路', mapType: 'field', levelRange: [40, 90], regionId: 'scrap',
         width: 2700, height: 4200, bgColor: '#33291c', bgKey: 'map_dry_well_road_topdown',
-        spawnPoints: fieldSpawns(2700, 4200, 14, [9]),  // 乾井路 = 鏽蝕機械蜘蛛(真‧獨立新 sprite,非換色)
+        spawnPoints: fieldSpawns(2700, 4200, 30, [9]),  // 乾井路 = 鏽蝕機械蜘蛛(真‧獨立新 sprite,非換色)
         npcs: [],
         shopNpcs: [],
         portals: [
@@ -156,7 +166,7 @@ const MAPS: Record<string, MapConfig> = {
     sand_pit: {
         id: 'sand_pit', nameZH: '鏽蝕沙坑', mapType: 'field', levelRange: [40, 90], regionId: 'scrap',
         width: 3000, height: 4200, bgColor: '#33291c', bgKey: 'map_sand_pit_topdown',
-        spawnPoints: fieldSpawns(3000, 4200, 14, [12]),  // 一圖一怪:鏽蝕沙坑 = 廢土巨蠍 only
+        spawnPoints: fieldSpawns(3000, 4200, 32, [12]),  // 一圖一怪:鏽蝕沙坑 = 廢土巨蠍 only
         npcs: [],
         shopNpcs: [],
         portals: [
@@ -170,7 +180,7 @@ const MAPS: Record<string, MapConfig> = {
     acid_brood: {
         id: 'acid_brood', nameZH: '蝕骨蜈蚣巢', mapType: 'field', levelRange: [90, 180], regionId: 'scrap',
         width: 2700, height: 3900, bgColor: '#1a2515',
-        spawnPoints: fieldSpawns(2700, 3900, 8, [13]),  // 一圖一怪:蝕骨蜈蚣巢 = 蝕骨蜈蚣 only
+        spawnPoints: fieldSpawns(2700, 3900, 22, [13]),  // 一圖一怪:蝕骨蜈蚣巢 = 蝕骨蜈蚣 only
         npcs: [],
         shopNpcs: [],
         portals: [
@@ -201,7 +211,7 @@ const MAPS: Record<string, MapConfig> = {
     core_gate: {
         id: 'core_gate', nameZH: '爐心門', mapType: 'boss', levelRange: [180, 300], regionId: 'reactor',
         width: 3000, height: 3600, bgColor: '#241a16', bgKey: 'map_core_gate_topdown',
-        spawnPoints: fieldSpawns(3000, 3600, 6, [10]),  // 爐心門 = 輻射機甲蟲(真‧獨立新 sprite)
+        spawnPoints: fieldSpawns(3000, 3600, 18, [10]),  // 爐心門 = 輻射機甲蟲(真‧獨立新 sprite)
         npcs: [],
         shopNpcs: [],
         portals: [
@@ -215,7 +225,7 @@ const MAPS: Record<string, MapConfig> = {
     ancient_ruins: {
         id: 'ancient_ruins', nameZH: '古文明遺跡', mapType: 'boss', levelRange: [300, 500], regionId: 'reactor',
         width: 3000, height: 4200, bgColor: '#1a1a16',
-        spawnPoints: fieldSpawns(3000, 4200, 6, [10]),  // 一圖一怪:遺跡 = 輻射機甲蟲(古哨兵機械,殺 50 召銹蝕審判官)
+        spawnPoints: fieldSpawns(3000, 4200, 18, [10]),  // 一圖一怪:遺跡 = 輻射機甲蟲(古哨兵機械,殺 50 召銹蝕審判官)
         npcs: [],
         shopNpcs: [],
         portals: [
