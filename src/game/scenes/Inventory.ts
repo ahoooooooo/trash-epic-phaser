@@ -4,27 +4,39 @@ import { getWeapon, effectiveDamage, enhanceCost } from '../services/WeaponServi
 import {
     ArmorDef, EquipSlot, equipSlotLabel,
     armorSlotForEquipSlot, armorDisplayName, armorRarityColor,
-    effectiveDefense, armorEnhanceCost
+    effectiveDefense, armorEnhanceCost, armorBonusLabel
 } from '../services/ArmorService';
 
 const W = 1080;
 const H = 1920;
 
-// Phase 4c-E 裝備頁 paper doll:角色置中 + 周圍 7 裝備框,點框列該部位防具一鍵裝/卸
-// per user 2026-05-29「角色 skin 中間 + 周圍裝備框,點框出現倉庫對應部位裝備一鍵裝上」
+// Phase 4c-E/G 裝備頁 paper doll:正面立繪置中 + 周圍 7 裝備框 + 連線,點框列該部位防具一鍵裝/卸
+// per user 2026-05-30「裝備頁重新設計更精美 + 立繪置中」
 interface SlotPos { slot: EquipSlot; x: number; y: number; }
 
-const FRAME = 150;
-// 左欄(頭/胸/腕)+ 右欄(腿/靴/飾I/飾II),角色置中
+const FRAME = 158;
+// 立繪中心(連線匯聚點)
+const DOLL_X = W / 2;
+const DOLL_Y = 760;
+// 左欄(頭/胸/腕)+ 右欄(腿/靴/飾I/飾II),立繪置中
 const SLOT_LAYOUT: SlotPos[] = [
-    { slot: 'helmet', x: 200, y: 470 },
-    { slot: 'chest', x: 200, y: 660 },
-    { slot: 'bracers', x: 200, y: 850 },
-    { slot: 'legs', x: W - 200, y: 470 },
-    { slot: 'boots', x: W - 200, y: 660 },
-    { slot: 'accessory1', x: W - 200, y: 850 },
-    { slot: 'accessory2', x: W - 200, y: 1040 }
+    { slot: 'helmet', x: 196, y: 470 },
+    { slot: 'chest', x: 196, y: 690 },
+    { slot: 'bracers', x: 196, y: 910 },
+    { slot: 'legs', x: W - 196, y: 470 },
+    { slot: 'boots', x: W - 196, y: 690 },
+    { slot: 'accessory1', x: W - 196, y: 910 },
+    { slot: 'accessory2', x: W - 196, y: 1130 }
 ];
+
+// 部位 icon(廢土風 emoji 字符,純文字繪製)
+const SLOT_ICON: Record<EquipSlot, string> = {
+    helmet: '⛑', chest: '🦺', bracers: '🧤', legs: '👖', boots: '🥾',
+    accessory1: '⚙', accessory2: '⚙'
+};
+
+const TIER_HEX: Record<string, string> = { N: '#a0a0a0', R: '#5080ff', SR: '#c060ff', SSR: '#ffd040' };
+function tierHex(tier: string): string { return TIER_HEX[tier] ?? '#a0a0a0'; }
 
 export class Inventory extends Scene {
     private pickerLayer?: Phaser.GameObjects.Container;
@@ -33,9 +45,14 @@ export class Inventory extends Scene {
 
     create() {
         if (this.scene.isActive('Game')) this.scene.pause('Game');
-        this.add.rectangle(0, 0, W, H, 0x1a1612, 0.96).setOrigin(0, 0);
+        // 廢土深色底 + 上方暈光營造立繪舞台感
+        this.add.rectangle(0, 0, W, H, 0x1a1612, 0.97).setOrigin(0, 0);
+        this.add.rectangle(0, 130, W, 1060, 0x231c16, 0.55).setOrigin(0, 0);
 
-        this.add.text(W / 2, 84, '◤  裝備  ◢', {
+        // 標題列(鏽蝕橫條)
+        this.add.rectangle(W / 2, 84, W - 80, 96, 0x2a2520, 0.9).setStrokeStyle(3, 0xa05a30, 0.85);
+        this.drawRivets(W / 2, 84, W - 80, 96);
+        this.add.text(W / 2, 84, '◤  裝  備  ◢', {
             fontFamily: 'sans-serif', fontSize: 56, color: '#ff8830', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 6
         }).setOrigin(0.5);
@@ -48,15 +65,43 @@ export class Inventory extends Scene {
         this.input.keyboard?.on('keydown-I', () => this.closeInventory());
     }
 
-    // ── 角色 skin 置中 + 周圍裝備框 ──
+    // ── 正面立繪置中 + 連線 + 周圍裝備框 ──
     private drawPaperDoll() {
-        // 角色 skin(複用 player_idle texture,鎖固定顯示高度)
-        const doll = this.add.sprite(W / 2, 700, 'player_idle');
-        if (doll.height > 0) doll.setScale(520 / doll.height);
+        // 立繪底座光暈(暖橙油燈氛圍)
+        this.add.ellipse(DOLL_X, DOLL_Y + 250, 360, 90, 0xff8830, 0.10);
+        this.add.ellipse(DOLL_X, DOLL_Y + 250, 240, 56, 0xff8830, 0.16);
+
+        // 框→立繪連線(先畫,壓在框與立繪底下)
+        for (const sp of SLOT_LAYOUT) {
+            this.drawSlotLink(sp);
+        }
+
+        // 正面全身立繪(player_portrait,地圖才用 side idle)
+        const tex = this.textures.exists('player_portrait') ? 'player_portrait' : 'player_idle';
+        const doll = this.add.sprite(DOLL_X, DOLL_Y, tex);
+        if (doll.height > 0) doll.setScale(640 / doll.height);
 
         for (const sp of SLOT_LAYOUT) {
             this.drawEquipFrame(sp);
         }
+    }
+
+    // 裝備框→立繪中心的鏽線(已裝 = rarity 色亮線,空槽 = 暗銅虛線感)
+    private drawSlotLink(sp: SlotPos) {
+        const eq = this.equippedDef(sp.slot);
+        const color = eq ? armorRarityColor(eq.tier) : 0x6a4a28;
+        const alpha = eq ? 0.55 : 0.28;
+        const fromRight = sp.x > W / 2;
+        const x0 = sp.x + (fromRight ? -FRAME / 2 : FRAME / 2);
+        const g = this.add.graphics();
+        g.lineStyle(eq ? 4 : 2, color, alpha);
+        g.beginPath();
+        g.moveTo(x0, sp.y);
+        g.lineTo(DOLL_X, sp.y);
+        g.lineTo(DOLL_X, DOLL_Y);
+        g.strokePath();
+        // 匯聚點小銅釘
+        this.add.circle(x0, sp.y, eq ? 6 : 4, color, alpha + 0.2);
     }
 
     private equippedDef(slot: EquipSlot): ArmorDef | null {
@@ -70,35 +115,58 @@ export class Inventory extends Scene {
     private drawEquipFrame(sp: SlotPos) {
         const eq = this.equippedDef(sp.slot);
         const border = eq ? armorRarityColor(eq.tier) : 0x8b6020;
-        const frame = this.add.rectangle(sp.x, sp.y, FRAME, FRAME, 0x2a2520, 0.95)
-            .setStrokeStyle(eq ? 4 : 2, border, eq ? 1 : 0.8);
+
+        // 外層鏽蝕金屬底
+        const outer = this.add.rectangle(sp.x, sp.y, FRAME, FRAME, 0x231c16, 0.96)
+            .setStrokeStyle(eq ? 5 : 3, border, eq ? 1 : 0.75);
+        // 內層槽(已裝染 rarity 淡色,空槽暗)
+        this.add.rectangle(sp.x, sp.y, FRAME - 16, FRAME - 16, eq ? border : 0x1a1612, eq ? 0.12 : 0.85)
+            .setStrokeStyle(1, 0x4a3a30, 0.7);
         this.drawRivets(sp.x, sp.y, FRAME, FRAME);
 
-        // 部位名(框上緣)
-        this.add.text(sp.x, sp.y - FRAME / 2 - 18, equipSlotLabel(sp.slot), {
-            fontFamily: 'sans-serif', fontSize: 22, color: '#a05a30', fontStyle: 'bold'
+        // 部位名牌(框上緣鏽條)
+        this.add.rectangle(sp.x, sp.y - FRAME / 2 - 16, FRAME - 6, 30, 0x2a2520, 0.95)
+            .setStrokeStyle(1, 0xa05a30, 0.8);
+        this.add.text(sp.x, sp.y - FRAME / 2 - 16, `${SLOT_ICON[sp.slot]} ${equipSlotLabel(sp.slot)}`, {
+            fontFamily: 'sans-serif', fontSize: 21, color: '#b08850', fontStyle: 'bold'
         }).setOrigin(0.5);
 
         if (eq) {
-            this.add.text(sp.x, sp.y - 16, armorDisplayName(eq), {
-                fontFamily: 'sans-serif', fontSize: 18, color: '#ffe0c0',
-                align: 'center', wordWrap: { width: FRAME - 16 }
+            // rarity 角標
+            this.add.text(sp.x + FRAME / 2 - 22, sp.y - FRAME / 2 + 18, eq.tier, {
+                fontFamily: 'monospace', fontSize: 18, color: tierHex(eq.tier), fontStyle: 'bold'
             }).setOrigin(0.5);
+
+            this.add.text(sp.x, sp.y - 30, armorDisplayName(eq), {
+                fontFamily: 'sans-serif', fontSize: 17, color: '#ffe0c0', fontStyle: 'bold',
+                align: 'center', wordWrap: { width: FRAME - 18 }
+            }).setOrigin(0.5);
+
             const eqId = SaveService.instance.getEquippedArmorId(sp.slot);
             const aEnh = eqId ? SaveService.instance.getArmorEnh(eqId) : 0;
             const effDef = effectiveDefense(eq, aEnh);
-            this.add.text(sp.x, sp.y + 38, `防 ${effDef}${aEnh > 0 ? ` +${aEnh}` : ''}  [${eq.tier}]`, {
-                fontFamily: 'monospace', fontSize: 18, color: '#ffe060', fontStyle: 'bold'
+            this.add.text(sp.x, sp.y + 22, `防 ${effDef}${aEnh > 0 ? ` +${aEnh}` : ''}`, {
+                fontFamily: 'monospace', fontSize: 20, color: '#ffe060', fontStyle: 'bold'
             }).setOrigin(0.5);
+
+            // bonus 標籤(裝備種類維度,顯示用)
+            if (eq.bonus) {
+                this.add.text(sp.x, sp.y + 52, armorBonusLabel(eq.bonus), {
+                    fontFamily: 'sans-serif', fontSize: 16, color: '#ffb070', fontStyle: 'bold'
+                }).setOrigin(0.5);
+            }
         } else {
-            this.add.text(sp.x, sp.y, '空', {
-                fontFamily: 'sans-serif', fontSize: 30, color: '#6a5a4a'
+            this.add.text(sp.x, sp.y - 6, '＋', {
+                fontFamily: 'sans-serif', fontSize: 40, color: '#5a4a38'
+            }).setOrigin(0.5);
+            this.add.text(sp.x, sp.y + 36, '空', {
+                fontFamily: 'sans-serif', fontSize: 20, color: '#6a5a4a'
             }).setOrigin(0.5);
         }
 
-        frame.setInteractive({ useHandCursor: true });
-        frame.on('pointerdown', () => {
-            this.tweens.add({ targets: frame, scaleX: 0.94, scaleY: 0.94, duration: 70, yoyo: true });
+        outer.setInteractive({ useHandCursor: true });
+        outer.on('pointerdown', () => {
+            this.tweens.add({ targets: outer, scaleX: 0.94, scaleY: 0.94, duration: 70, yoyo: true });
             this.openSlotPicker(sp.slot);
         });
     }
@@ -165,7 +233,8 @@ export class Inventory extends Scene {
             // 上限顯示 8 件(避免溢出),已按防禦排序
             const shown = matches.slice(0, 8);
             for (const m of shown) {
-                const label = `${armorDisplayName(m.def)}  防${m.def.defense} [${m.def.tier}]`;
+                const bonusTxt = m.def.bonus ? `  ${armorBonusLabel(m.def.bonus)}` : '';
+                const label = `${armorDisplayName(m.def)}  防${m.def.defense} [${m.def.tier}]${bonusTxt}`;
                 const color = '#ffe0c0';
                 this.addPickerRow(layer, rowY, label, color, () => {
                     SaveService.instance.equipArmor(slot, m.id);
@@ -235,16 +304,39 @@ export class Inventory extends Scene {
         this.drawRivets(W / 2, top + h / 2, W - 120, h);
 
         const nameSuffix = enh > 0 ? ` +${enh}` : '';
-        this.add.text(W / 2, top + 40, `⚔ ${w.nameZH}${nameSuffix}`, {
-            fontFamily: 'sans-serif', fontSize: 30, color: '#b08850', fontStyle: 'bold',
+        this.add.text(W / 2, top + 34, `⚔ ${w.nameZH}${nameSuffix}`, {
+            fontFamily: 'sans-serif', fontSize: 28, color: '#b08850', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 4
         }).setOrigin(0.5);
 
-        this.drawSummaryChip(W / 2 - 200, top + 130, '攻擊', `${dmg}`, '#ffe060');
-        this.drawSummaryChip(W / 2, top + 130, '總防禦', `${totalDef}`, '#80c0ff');
-        this.drawSummaryChip(W / 2 + 200, top + 130, 'Lv', `${save.level}`, '#ffe0c0');
+        // 裝備種類 bonus 總計(顯示用,不接 HUD)
+        const bonusTotal = this.summarizeBonuses();
+        if (bonusTotal) {
+            this.add.text(W / 2, top + 68, `套裝加成  ${bonusTotal}`, {
+                fontFamily: 'sans-serif', fontSize: 20, color: '#ffb070', fontStyle: 'bold'
+            }).setOrigin(0.5);
+        }
+
+        this.drawSummaryChip(W / 2 - 200, top + 135, '攻擊', `${dmg}`, '#ffe060');
+        this.drawSummaryChip(W / 2, top + 135, '總防禦', `${totalDef}`, '#80c0ff');
+        this.drawSummaryChip(W / 2 + 200, top + 135, 'Lv', `${save.level}`, '#ffe0c0');
 
         this.drawEnhanceButton();
+    }
+
+    // 已裝防具的 bonus 依 stat 加總成顯示字串(無則回 null)
+    private summarizeBonuses(): string | null {
+        const totals: Record<string, number> = {};
+        for (const sp of SLOT_LAYOUT) {
+            const eq = this.equippedDef(sp.slot);
+            if (eq?.bonus) totals[eq.bonus.stat] = (totals[eq.bonus.stat] ?? 0) + eq.bonus.value;
+        }
+        const order: Array<{ k: string; lbl: string; pct: boolean }> = [
+            { k: 'hp', lbl: '生命', pct: false }, { k: 'atk', lbl: '攻擊', pct: false },
+            { k: 'crit', lbl: '暴擊', pct: true }, { k: 'dodge', lbl: '閃避', pct: true }
+        ];
+        const parts = order.filter(o => totals[o.k]).map(o => `${o.lbl}+${totals[o.k]}${o.pct ? '%' : ''}`);
+        return parts.length ? parts.join('  ') : null;
     }
 
     // 武器強化按鈕(花金幣 +1,無上限,成功 restart 重繪;不足彈訊息)

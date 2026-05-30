@@ -11,7 +11,7 @@
 - push main → GitHub Actions auto-deploy ~40-60s。
 - Phase 4c 程式 roadmap + user 6 大需求 A-F + 變現 + FTUE + 每日簽到 + 主動技能 + 3 隻真新怪 sprite + 10 特色天賦 **全部已完成上線**。
 - build 狀態:綠(tsc 0 error / vite build 過 / live 200)。
-- 最近(本 session):①UI 直屏防誤觸(右列內縮/tab 間距/搖桿排除底部)②camera HUD-safe band(camera bounds 上下延伸 HUD 高度,角色走到地圖頂/底不被血條/經驗條遮;bg 補滿延伸帶)— 皆 Codex APPROVE + Playwright 實測上線。
+- 最近(本 session):**裝備頁重設計 + 裝備種類擴充**(backlog #12)— ArmorService 每部位 base 8-10 個 + optional bonus 次要屬性(hp/atk/crit/dodge,tier 越高機率帶,顯示用不接 HUD);Inventory paper-doll 改 player_portrait 正面立繪 + 框→立繪連線 + rarity 精美框 + bonus 標籤 + 套裝加成總計。Codex APPROVE + Playwright 端到端(進頁/picker/換裝/屬性即時更新)實測上線。
 
 ## 你接手做事的鐵律(違背就停)
 1. **改完不准沒實測說「修好了」**:`npx tsc --noEmit` → `npm run build` → `npx vite preview --port 4180` 從 root `/` 開 → Playwright 1080×1920 設假存檔(localStorage)→ click(540,1610) 進 game → 截圖。三者+證據缺一不可。
@@ -43,6 +43,8 @@
 10. **[x] 一圖一怪真正做到**(2026-05-30 user 指出沒做到)— 查證起始圖 wasteland_outskirts spawn idxs 是 `[0,11]`=巨鼠+食人花(**2 種,違反**)。修:wasteland 改 `[0]` 純巨鼠 + 新增獨立 field 圖 `creeper_vale`(毒花谷)`[11]` 純食人花 + 雙向 portal + WorldMap 節點/邊 + q2/q6 描述改指毒花谷。現 4 戰鬥圖各一怪:廢土外圍=巨鼠 / 毒花谷=食人花 / 乾井路=機械蜘蛛 / 爐心門=輻射機甲蟲。Codex APPROVE + Playwright 實測兩圖各自只見對應怪。
 
 11. **[x] 登入/註冊頁美感升級**(2026-05-30 user「要有美感 現在完全沒有」)— visual-iterate agent 迭代 3 輪:新增 `authUi.ts` 共用 helper(廢土背景+vignette+暖光、厚重多層標題、鏽蝕金屬卡+鉚釘、鏽橙 header 牌、發光 CTA、DOM input focus 發光、裝飾 decals)+ rewrite `Login.ts`(加主角立繪 hero)+ `Register.ts`。廢土 palette 嚴守。Codex APPROVE + Playwright 註冊/登入/錯密碼/訪客全流程實測沒破壞 + live 確認上線。commit 7fc1feb。
+
+12. **[x] 裝備頁重設計 + 裝備種類擴充**(2026-05-30 user「裝備頁也要重新設計 更精美 裝備的種類也要設計」)— **A 種類擴充** `ArmorService.ts`:每部位 base 名 4-5→8-10 個(廢土風:鉛襯/骨製/輪胎/管線/焊接/防化/廢核…);新增 optional `ArmorDef.bonus`(ArmorBonus stat hp/atk/crit/dodge + value,tier 越高機率帶 TIER_BONUS_CHANCE N10%→SSR100%,generateRandomArmor roll);純顯示用**不接 maxHP HUD**;新 export armorBonusLabel/armorBonusColor;effectiveDefense/armorEnhanceCost/armorDisplayName/各既有 export 不破壞;optional 欄位向後相容舊存檔。**B 裝備頁** `Inventory.ts`:paper-doll 中央改正面立繪 `player_portrait`(fallback player_idle)+ 框→立繪連線(graphics,已裝 rarity 亮線/空槽暗線)+ 底座暖橙光暈;裝備框雙層鏽蝕框 + rarity 邊框(N灰/R藍/SR紫/SSR金)+ 部位 icon 名牌 + 鉚釘 + bonus 標籤 + 空槽「＋ 空」;摘要面板加「套裝加成」總計列(已裝 bonus 依 stat 加總,顯示用)。既有互動全保留(picker/裝/卸/強化/返回/attack+totalDef)。tsc 0 error + build 過 + Codex APPROVE(1 輪 clean,確認 optional bonus 相容 getTotalArmorDefense + 無 forbidden Phaser pattern)+ Playwright 端到端:進裝備頁截圖(立繪+連線+rarity框+bonus 標籤)→點頭盔框開 picker(顯示卸下/強化/SSR暴擊+5%金框/R閃避+3%藍框)→換裝 R 頭盔→總防禦 79→60、套裝加成即時更新實測。
 
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
