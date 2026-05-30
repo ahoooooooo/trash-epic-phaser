@@ -38,8 +38,9 @@ export class MainMenu extends Scene
             fontFamily: 'monospace', fontSize: 22, color: '#6a5a4a'
         }).setOrigin(0.5);
 
-        // 3. 主角立繪
-        const sprite = this.add.image(W / 2, 700, 'player_idle').setScale(0.55);
+        // 3. 主角立繪(正面,per user;地圖才側視)
+        const sprite = this.add.image(W / 2, 720, 'player_portrait').setScale(1);
+        sprite.setScale(460 / sprite.height);
         // 輕微 hover idle 動畫(只在 menu,Game scene 用真 frame anim)
         this.tweens.add({
             targets: sprite, y: sprite.y - 10, duration: 1500,

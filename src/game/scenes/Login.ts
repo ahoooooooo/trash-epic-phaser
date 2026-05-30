@@ -106,9 +106,9 @@ export class Login extends Scene {
         sh.fillStyle(0x000000, 0.4);
         sh.fillEllipse(x, y + 168, 280, 56);
 
-        const hero = this.add.image(x, y, 'player_idle');
+        const hero = this.add.image(x, y, 'player_portrait');  // 正面立繪(per user 主角立繪要正面)
         // 等比縮放至高約 360px
-        const target = 360;
+        const target = 420;
         const s = target / hero.height;
         hero.setScale(s);
         hero.setOrigin(0.5, 0.5);

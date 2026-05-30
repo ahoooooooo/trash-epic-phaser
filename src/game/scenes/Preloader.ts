@@ -41,6 +41,7 @@ export class Preloader extends Scene
 
         // V1 主角 frame anim(Phase 4b-10:idle/walk + 4b-14:attack/hurt)
         this.load.image('player_idle', 'characters/player_scavver_sideview_idle.png');
+        this.load.image('player_portrait', 'characters/player_scavver_portrait.png');  // 正面全身立繪(登入/選單/裝備頁用,地圖才側視)
         this.load.image('player_walk_r', 'characters/player_scavver_walk_right.png');
         this.load.image('player_walk_l', 'characters/player_scavver_walk_left.png');
         this.load.image('player_atk_windup', 'characters/player_scavver_attack_windup.png');
