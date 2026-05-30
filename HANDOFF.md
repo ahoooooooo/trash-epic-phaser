@@ -82,6 +82,8 @@
 
 30. **[x] 大數字壓縮顯示 formatStat(K/M/B/T/Q)**(2026-05-30,design-doc progression_v1 §3 Stat Compression UI 設計已定未實作)— 原本所有大數字顯示 raw(gold「101502」)。新 `src/game/services/StatFormat.ts` `formatStat(n)`:<1000 整數 / K/M/B/T/Q / >1Q 字母後綴 aa,ab…,~3 sig figs(對齊設計範例 12.5K/50.2M/1.27B)。純 display 套到 Shop gold/crystal、Game EXP bar(create+update)、vendor gold、Gacha 素材、Storage 材料 count(不動花費/存檔運算)。Codex 抓 3 edge(4 sig figs→`decimals=v<10?2:v<100?1:0`、邊界 999950→1000K 改進位 1M、負零 -0.1→-0 改 floor 判 sign)修完。tsc 0+build+Codex APPROVE(2 輪)+ node sanity 全對齊設計範例 + Playwright 開商店截圖 gold「💰 102K」crystal「💎 130」(整數)+console 0 error。**註**:設計 §2 stat 公式(HP=100×N^1.2 等)是刻意用 weapon-based combat+線性 HP 取代(Phase 4c 設計修正),不動。
 
+31. **[x] formatStat rollout 補完(Inventory/Storage)**(2026-05-30,接 fire 30 §3 全面化)— 把 formatStat 補套到剩餘大數字顯示:Inventory 武器摘要「攻擊」/「總防禦」chip + 強化按鈕「花費/持有 gold」、Storage 武器卡傷害。純 display(花費/spendGold/effectiveDamage 運算仍用原始 number)。tsc 0+build+Codex APPROVE(1 輪 clean,確認只改 display)+ Playwright 注入 baseDamage 9999 武器裝備後 Inventory「攻擊 10K」(formatStat(9999))+總防禦「0」+console 0 error,已還原測試武器。§3 大數字壓縮全面套到 gold/exp/crystal/材料/武器攻擊/防禦/傷害。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)

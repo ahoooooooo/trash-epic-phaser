@@ -128,7 +128,7 @@ export class Storage extends Scene {
         this.add.text(left, cy + 38, '傷害', {
             fontFamily: 'sans-serif', fontSize: 18, color: '#a05a30'
         }).setOrigin(0, 0.5);
-        this.add.text(left + 64, cy + 38, `${weapon.baseDamage}`, {
+        this.add.text(left + 64, cy + 38, `${formatStat(weapon.baseDamage)}`, {
             fontFamily: 'monospace', fontSize: 26, color: '#ffe060', fontStyle: 'bold'
         }).setOrigin(0, 0.5);
 

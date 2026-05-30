@@ -2,6 +2,7 @@ import { Scene } from 'phaser';
 import { SaveService } from '../services/SaveService';
 import { effectiveDamage, enhanceCost } from '../services/WeaponService';
 import { getEquippedWeaponDef } from '../services/EquippedWeapon';
+import { formatStat } from '../services/StatFormat';
 import {
     ArmorDef, EquipSlot, equipSlotLabel,
     armorSlotForEquipSlot, armorDisplayName, armorRarityColor,
@@ -318,8 +319,8 @@ export class Inventory extends Scene {
             }).setOrigin(0.5);
         }
 
-        this.drawSummaryChip(W / 2 - 200, top + 135, '攻擊', `${dmg}`, '#ffe060');
-        this.drawSummaryChip(W / 2, top + 135, '總防禦', `${totalDef}`, '#80c0ff');
+        this.drawSummaryChip(W / 2 - 200, top + 135, '攻擊', formatStat(dmg), '#ffe060');
+        this.drawSummaryChip(W / 2, top + 135, '總防禦', formatStat(totalDef), '#80c0ff');
         this.drawSummaryChip(W / 2 + 200, top + 135, 'Lv', `${save.level}`, '#ffe0c0');
 
         this.drawEnhanceButton();
@@ -355,7 +356,7 @@ export class Inventory extends Scene {
         this.add.text(W / 2, by - 12, `⚒ 強化武器  +${enh} → +${enh + 1}`, {
             fontFamily: 'sans-serif', fontSize: 26, color: can ? '#1a1612' : '#8a7a68', fontStyle: 'bold'
         }).setOrigin(0.5);
-        this.add.text(W / 2, by + 16, `花費 ${cost} 金  (持有 ${gold})`, {
+        this.add.text(W / 2, by + 16, `花費 ${formatStat(cost)} 金  (持有 ${formatStat(gold)})`, {
             fontFamily: 'monospace', fontSize: 20, color: can ? '#1a1612' : '#8a7a68'
         }).setOrigin(0.5);
         bg.on('pointerdown', () => {
