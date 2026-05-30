@@ -44,6 +44,7 @@ export class Preloader extends Scene
         this.load.image('player_portrait', 'characters/player_scavver_portrait.png');  // 正面全身立繪(登入/選單/裝備頁用,地圖才側視)
         this.load.image('player_walk_r', 'characters/player_scavver_walk_right.png');
         this.load.image('player_walk_l', 'characters/player_scavver_walk_left.png');
+        this.load.image('player_walk_mid', 'characters/player_scavver_walk_mid.png');  // RIFE 過渡幀(雙腳併攏)— 走路順暢
         this.load.image('player_atk_windup', 'characters/player_scavver_attack_windup.png');
         this.load.image('player_atk_impact', 'characters/player_scavver_attack_impact.png');
         this.load.image('player_hurt', 'characters/player_scavver_hurt.png');

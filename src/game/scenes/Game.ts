@@ -561,9 +561,11 @@ export class Game extends Scene
                 key: 'player_walk',
                 frames: [
                     { key: 'player_walk_r' },
-                    { key: 'player_walk_l' }
+                    { key: 'player_walk_mid' },  // 雙腳併攏過渡幀(RIFE)→ 左右左右順暢
+                    { key: 'player_walk_l' },
+                    { key: 'player_walk_mid' }
                 ],
-                frameRate: 8,
+                frameRate: 10,
                 repeat: -1
             });
         }
