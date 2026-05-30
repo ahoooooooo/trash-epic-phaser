@@ -60,6 +60,8 @@
 
 19. **[x] 藥水快捷列圖示化 + auto-pot 月卡 gate**(2026-05-30 user 要求「旁邊藥水改圖片表示 + 自動補水按鈕只給開月卡玩家」)— ① hotbar 3 格原本文字 `nameZH.slice(0,2)`,改 `drawPotionIcon`(this.add.graphics 畫廢土風藥水瓶:玻璃瓶身+液體色依 target hp紅/mp藍/both紫+瓶頸+軟木塞+高光+rarity 邊框 C灰/U綠/R紫/SR金)。② auto-pot 開關(早已存在但無 gate)接月卡:`isMonthCardActive()` gate 三處一致 — 按鈕無月卡顯「🔒月卡」橙鎖、pointerdown recheck 擋下發提示、update auto-heal 觸發條件加 `&& isMonthCardActive()`(無月卡即使 enabled 也不自動喝)。tsc 0+build+Codex APPROVE(1 輪 clean,確認 graphics 只 HUD 建立時畫無洩漏+月卡 gate 三處齊)+ Playwright:無月卡顯紅HP/藍MP瓶 icon+auto「🔒月卡」;設月卡 reload 後 auto 可開「ON」綠且實際自動喝藥(MP×5→×4);console 0 error。**小尾巴**:月卡若在 Game 場景開著時過期,按鈕字面到 redraw 才更新(但 runtime gate 已擋實際效果,非 blocker)。
 
+20. **[x] HUD HP/MP/EXP 條精緻化(能量錶質感)**(2026-05-30 user「畫面精緻度還有許多可改進」)— 原 HP/MP/EXP 是扁平 Rectangle。加 `decorateHudBar(x,y,w,h,segments,depth)`:this.add.graphics 畫 (segments-1) 條垂直暗刻度線 + 頂亮邊 + 底暗邊 bevel,扁平 bar → 金屬能量錶感。三條各呼叫(HP/MP segments=14、EXP=30,depth=1002,fill 之上字之下)。HP/MP 數字 depth 1002→1003 讓 z-order 明確(Codex 非阻擋建議採納)。只 createHud 建一次非每幀。tsc 0+build+Codex APPROVE(1 輪 clean,確認無 graphics 洩漏/效能 ok/無 prod pitfall)+ Playwright 截圖 HP/MP 變分段儀表+刻度不蓋數字+console 0 error。**可續**:minimap 框精緻化 / 底部 5 tab icon 放大 / boss 血條同質感。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)

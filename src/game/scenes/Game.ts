@@ -602,10 +602,11 @@ export class Game extends Scene
             .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
         this.add.rectangle(barX + 2, hpY + 2, barW - 4, 7, 0xffe0c0, 0.18)
             .setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
+        this.decorateHudBar(barX, hpY, barW, hpH, 14, 1002);
         this.hpText = this.add.text(barX + barW / 2, hpY + hpH / 2, `HP  ${this.playerHP} / ${this.playerMaxHp}`, {
             fontFamily: 'monospace', fontSize: 28, color: '#ffe0c0', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 3
-        }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
+        }).setOrigin(0.5).setDepth(1003).setScrollFactor(0);
 
         // MP bar(能量綠)— 等寬
         this.add.rectangle(barX, mpY, barW, mpH, HUD_BAR_BG)
@@ -615,10 +616,11 @@ export class Game extends Scene
             .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
         this.add.rectangle(barX + 2, mpY + 2, barW - 4, 5, 0xffe0c0, 0.16)
             .setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
+        this.decorateHudBar(barX, mpY, barW, mpH, 14, 1002);
         this.mpText = this.add.text(barX + barW / 2, mpY + mpH / 2, `MP  ${save.mp} / ${save.maxMp}`, {
             fontFamily: 'monospace', fontSize: 22, color: '#ffe0c0', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 3
-        }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
+        }).setOrigin(0.5).setDepth(1003).setScrollFactor(0);
 
         // Phase 4c-2 手機藥水快捷列(右側 3 格,tap 用藥)
         this.drawPotionHotbar();
@@ -646,6 +648,7 @@ export class Game extends Scene
             .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
         this.add.rectangle(2, expBarY + 2, expBarW - 4, 7, 0xffffff, 0.28)
             .setOrigin(0, 0).setDepth(1002).setScrollFactor(0);
+        this.decorateHudBar(0, expBarY, expBarW, expBarH, 30, 1002);
         // Lv 徽章在 EXP bar 左端
         this.add.rectangle(0, expBarY - 4, 150, expBarH + 8, 0x1a1612, 0.95)
             .setOrigin(0, 0).setStrokeStyle(2, 0xff8830, 1).setDepth(1003).setScrollFactor(0);
@@ -909,6 +912,22 @@ export class Game extends Scene
         // rarity 邊框
         g.lineStyle(2, rarityCol, 0.9);
         g.strokeRoundedRect(x - 17, y - 10, 34, 30, 8);
+    }
+
+    // HUD 能量錶質感:分段刻度 + 上亮下暗 bevel(讓扁平 bar 有金屬錶面感)
+    private decorateHudBar(x: number, y: number, w: number, h: number, segments: number, depth: number) {
+        const g = this.add.graphics().setDepth(depth).setScrollFactor(0);
+        // 分段刻度(垂直暗線)
+        g.lineStyle(1, 0x1a1612, 0.40);
+        for (let i = 1; i < segments; i++) {
+            const sx = Math.round(x + (w * i / segments));
+            g.lineBetween(sx, y + 3, sx, y + h - 3);
+        }
+        // 頂部亮邊 + 底部暗邊 bevel
+        g.lineStyle(2, 0xffe0c0, 0.22);
+        g.lineBetween(x + 3, y + 2, x + w - 3, y + 2);
+        g.lineStyle(2, 0x1a1612, 0.35);
+        g.lineBetween(x + 3, y + h - 2, x + w - 3, y + h - 2);
     }
 
     private refreshPotionHotbar() {
