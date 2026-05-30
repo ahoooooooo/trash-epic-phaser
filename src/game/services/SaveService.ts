@@ -18,6 +18,9 @@ interface SaveData {
     gold: number;
     totalKills: number;
     killMilestoneIdx: number;       // 已領取的擊殺里程碑數(留存)
+    weekKills: number;              // 本週擊殺數(週挑戰,每週重置)
+    weekBucket: number;             // 當前週桶 floor(now/7d),變動即重置
+    weekRewardClaimed: boolean;     // 本週挑戰獎勵已領
     playtimeSec: number;
     lastSavedAt: number;
     // Phase 4a-16 新增
@@ -95,6 +98,9 @@ function makeDefaultSave(): SaveData {
         gold: 0,
         totalKills: 0,
         killMilestoneIdx: 0,
+        weekKills: 0,
+        weekBucket: 0,
+        weekRewardClaimed: false,
         playtimeSec: 0,
         lastSavedAt: 0,
         currentWeaponId: 'weapon_wood_stick',
@@ -228,6 +234,9 @@ export class SaveService {
             merged.loginStreak = typeof parsed.loginStreak === 'number' ? parsed.loginStreak : 0;
             merged.lastLoginClaimAt = typeof parsed.lastLoginClaimAt === 'number' ? parsed.lastLoginClaimAt : 0;
             merged.killMilestoneIdx = typeof parsed.killMilestoneIdx === 'number' ? parsed.killMilestoneIdx : 0;
+            merged.weekKills = typeof parsed.weekKills === 'number' ? parsed.weekKills : 0;
+            merged.weekBucket = typeof parsed.weekBucket === 'number' ? parsed.weekBucket : 0;
+            merged.weekRewardClaimed = typeof parsed.weekRewardClaimed === 'boolean' ? parsed.weekRewardClaimed : false;
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -298,6 +307,24 @@ export class SaveService {
         if (!claimed) return null;
         this.addCrystal(totalCrystal);
         return { kills: lastKills, crystal: totalCrystal };
+    }
+
+    // 週挑戰(recurring 留存):本週擊殺達標領晶體,每 7 天桶重置。每殺呼叫一次。
+    tickWeeklyChallenge(): { goal: number; crystal: number } | null {
+        const bucket = Math.floor(Date.now() / 604800000); // 7 天一桶
+        if (bucket !== this.data.weekBucket) {
+            this.data.weekBucket = bucket;
+            this.data.weekKills = 0;
+            this.data.weekRewardClaimed = false;
+        }
+        this.data.weekKills++;
+        const GOAL = 300, CRYSTAL = 30;
+        if (!this.data.weekRewardClaimed && this.data.weekKills >= GOAL) {
+            this.data.weekRewardClaimed = true;
+            this.addCrystal(CRYSTAL);
+            return { goal: GOAL, crystal: CRYSTAL };
+        }
+        return null;
     }
     addPlaytimeSec(sec: number): void { this.data.playtimeSec += sec; }
 

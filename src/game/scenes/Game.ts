@@ -1863,6 +1863,9 @@ export class Game extends Scene
         // 擊殺里程碑(留存):跨門檻給晶體 + 慶祝 toast
         const milestone = save.claimKillMilestones();
         if (milestone) this.flashHudMessage(`擊殺 ${milestone.kills} 達成! +${milestone.crystal} 晶體`, 0xffe060);
+        // 週挑戰(recurring 留存):本週擊殺達標領晶體
+        const weekly = save.tickWeeklyChallenge();
+        if (weekly) this.flashHudMessage(`週挑戰達成! 本週擊殺 ${weekly.goal}  +${weekly.crystal} 晶體`, 0x9bd0ff);
         // Phase 4b-15 talent: gold buff(金幣不再 HUD 顯示,各 scene 內看)+ 精英怪 ×倍
         save.addGold(Math.round(bp.goldReward * (1 + buff.goldGainPct) * eliteMult));
         if (!bp.isBoss) this.sessionKills++;
@@ -1900,8 +1903,8 @@ export class Game extends Scene
             this.levelText.setText(`Lv ${cur.level}`);
             this.spawnLevelUpEffect(result.levelsGained);
         }
-        if (result.leveled || milestone) {
-            // 升級 / 擊殺里程碑(晶體獎勵)立刻 persist —— 含本次 gold/exp/quest 一起落盤
+        if (result.leveled || milestone || weekly) {
+            // 升級 / 擊殺里程碑 / 週挑戰(晶體獎勵)立刻 persist —— 含本次 gold/exp/quest 一起落盤
             save.save();
             this.lastPersistMs = Date.now();
         } else {
