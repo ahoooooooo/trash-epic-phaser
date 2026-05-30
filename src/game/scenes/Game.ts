@@ -1240,8 +1240,18 @@ export class Game extends Scene
         const isReady = progress >= q.targetCount;
 
         // Quest dialog viewport-fixed(per Codex review:VIEW_W/H + scrollFactor 0)
+        // 全螢幕暗罩(聚焦對話框 + 擋背景誤觸)
+        const overlay = this.add.rectangle(VIEW_W / 2, VIEW_H / 2, VIEW_W, VIEW_H, 0x000000, 0.55)
+            .setDepth(1999).setScrollFactor(0).setInteractive();
         const bg = this.add.rectangle(VIEW_W / 2, VIEW_H / 2, VIEW_W - 80, 700, 0x1a1612, 0.97)
             .setStrokeStyle(4, 0xff8830).setDepth(2000).setScrollFactor(0);
+        // 標題鏽牌 + 4 角鉚釘(對齊面板鏽蝕質感)
+        const titlePlate = this.add.rectangle(VIEW_W / 2, VIEW_H / 2 - 280, VIEW_W - 140, 84, 0x140f0c, 0.92)
+            .setStrokeStyle(2, 0x8b6020, 0.7).setDepth(2000).setScrollFactor(0);
+        const hw = (VIEW_W - 80) / 2 - 16, hh = 350 - 16;
+        const qrivet = (rx: number, ry: number) =>
+            this.add.circle(VIEW_W / 2 + rx, VIEW_H / 2 + ry, 5, 0xa05a30).setStrokeStyle(1, 0x1a1612).setDepth(2001).setScrollFactor(0);
+        const r1 = qrivet(-hw, -hh), r2 = qrivet(hw, -hh), r3 = qrivet(-hw, hh), r4 = qrivet(hw, hh);
         const title = this.add.text(VIEW_W / 2, VIEW_H / 2 - 280, `📜 ${q.nameZH}`, {
             fontFamily: 'sans-serif', fontSize: 56, color: '#ff8830', fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(2001).setScrollFactor(0);
@@ -1267,7 +1277,7 @@ export class Game extends Scene
             actionFn = () => this.claimQuestReward(q);
         } else {
             actionBtnLabel = '接受任務';
-            actionFn = () => this.closeQuestDialog([bg, title, desc, prog, reward, action, close]);
+            actionFn = () => this.closeQuestDialog([overlay, bg, titlePlate, r1, r2, r3, r4, title, desc, prog, reward, action, close]);
         }
         const action = this.add.text(VIEW_W / 2 - 130, VIEW_H / 2 + 200, actionBtnLabel, {
             fontFamily: 'sans-serif', fontSize: 32, color: '#1a1612', fontStyle: 'bold',
@@ -1277,7 +1287,7 @@ export class Game extends Scene
             actionFn();
             if (isReady) {
                 // refresh dialog 內容(進入 next quest 或關閉)
-                [bg, title, desc, prog, reward, action, close].forEach(o => o.destroy());
+                [overlay, bg, titlePlate, r1, r2, r3, r4, title, desc, prog, reward, action, close].forEach(o => o.destroy());
                 this.questDialogOpen = false;
                 this.time.delayedCall(100, () => {
                     if (this.getCurrentQuest()) this.openQuestDialog();
@@ -1289,7 +1299,7 @@ export class Game extends Scene
             fontFamily: 'sans-serif', fontSize: 32, color: '#ffe0c0',
             backgroundColor: '#4a3a30', padding: { x: 24, y: 14 }
         }).setOrigin(0.5).setDepth(2002).setScrollFactor(0).setInteractive({ useHandCursor: true });
-        close.on('pointerdown', () => this.closeQuestDialog([bg, title, desc, prog, reward, action, close]));
+        close.on('pointerdown', () => this.closeQuestDialog([overlay, bg, titlePlate, r1, r2, r3, r4, title, desc, prog, reward, action, close]));
     }
 
     private closeQuestDialog(objs: Phaser.GameObjects.GameObject[])
