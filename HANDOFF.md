@@ -52,6 +52,8 @@
 
 15. **[x] 傳送門站立 3 秒自動傳送 + 過場**(2026-05-30 user 要求)— 原本 tap 圓圈即時換圖。改:站圓圈 70px 內連續 3 秒 → 自動傳送(黃色進度弧 + 倒數),保留 tap 加速;傳送過場(廢土橙擴散環 + 「傳送中…」+ camera fadeOut 520ms → switchMap → 新 scene fadeIn 420ms,Game.portalArrival static flag 跨 restart)。**計時用 delta 累加非絕對 time**(Codex 抓到:絕對 time 會把 modal/pause 算進 3 秒 resume 瞬傳;改 delta 後 pause 早退不累加)。teleporting flag 凍結 gameplay + 防重觸發。Codex APPROVE(2 輪)+ Playwright 實測 guild_hall 站傳送門進度弧+倒數 → 3 秒自動傳到 scrap_town。
 
+16. **[x] Boss 狂咬招式(廢料巨鼠設計 3 招補齊)**(2026-05-30,design doc 設計已定未實作)— 02_boss_giantrat.md §9 列 3 招,已做碰撞+尾巴橫掃,補第 3 招「狂咬(<50% rage 後 連 3 咬 + 黃牙血效)」:boss rage 時玩家貼身(240px)+ 冷卻到 → 3 連黃牙咬視覺 + 1 次 burst 傷害(contactDamage×2.2,因 PLAYER_INVULN_MS=500 連咬只 1 次中,故視覺 3 咬 + 邏輯 1 burst 尊重 i-frame)。接 updateBossAttack 內與橫掃各自獨立冷卻。Codex APPROVE(1 輪 clean)+ Playwright trigger=3 farm boss 打到 rage(HP 條亮紅)貼身實測無 crash。廢料巨鼠設計招式全補齊。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)

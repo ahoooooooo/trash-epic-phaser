@@ -161,6 +161,9 @@ const BOSS_TRIGGER_KILLS = 50; // 殺 50 mob 觸發 boss
 const BOSS_SWEEP_RADIUS = 340;       // world 單位橫掃半徑
 const BOSS_SWEEP_WINDUP_MS = 950;    // 預警時間(玩家反應窗)
 const BOSS_SWEEP_CD_MS = 4800;       // 橫掃冷卻(rage 時減半)
+// Boss 狂咬(per 02_boss_giantrat.md「< 50% 怒氣後 連 3 咬 + 黃牙血效」)— rage 限定貼身 burst
+const BOSS_BITE_RANGE = 240;         // 狂咬貼身範圍
+const BOSS_BITE_CD_MS = 2600;        // 狂咬冷卻(rage 限定)
 
 interface MobData {
     blueprint: MobBlueprint;
@@ -223,6 +226,7 @@ export class Game extends Scene
     private bossSweepNextAt = 0;       // 下次可起手時間
     private bossSweepResolveAt = 0;    // >0 = windup 中,到此時間結算
     private bossSweepRing?: Phaser.GameObjects.Arc;  // 預警圈(world space)
+    private bossBiteNextAt = 0;        // Boss 狂咬冷卻(rage 限定貼身 burst)
     // Phase 4b-14 player action lock — 'attacking' / 'hurt' 期間禁切 idle/walking
     private playerActionAnim: 'attacking' | 'hurt' | null = null;
     // Phase 4c B fix:攻擊後此時間內 flipX 鎖朝目標怪,handleMovement 不覆蓋(防往後走背打)
@@ -325,6 +329,7 @@ export class Game extends Scene
         this.bossSweepRing = undefined;   // 同理清橫掃 telegraph 欄位
         this.bossSweepNextAt = 0;
         this.bossSweepResolveAt = 0;
+        this.bossBiteNextAt = 0;
         this.mobs = [];
         this.portals = [];
         // 傳送門站立傳送:scene restart 清欄位(物件已隨 scene 銷毀)
@@ -1992,6 +1997,16 @@ export class Game extends Scene
             }
             return;
         }
+        // 狂咬(rage 限定):玩家貼身時冷卻到就咬;設計『連 3 咬』= 3 連黃牙視覺 + 1 次 burst 傷害(尊重 i-frame)
+        if (data.isRaging && time >= this.bossBiteNextAt) {
+            const bd = Math.hypot(this.player.x - bossMob.x, this.player.y - bossMob.y);
+            if (bd <= BOSS_BITE_RANGE) {
+                this.doFrenzyBite(this.player.x, this.player.y, time);
+                this.bossBiteNextAt = time + BOSS_BITE_CD_MS;
+            } else {
+                this.bossBiteNextAt = time + 500;  // 太遠,稍後再試
+            }
+        }
         // 起手:冷卻到 + 玩家在合理範圍內才放(離太遠不放)
         if (time >= this.bossSweepNextAt) {
             const d = Math.hypot(this.player.x - bossMob.x, this.player.y - bossMob.y);
@@ -2014,6 +2029,22 @@ export class Game extends Scene
         const d = Math.hypot(this.player.x - bx, this.player.y - by);
         if (d <= BOSS_SWEEP_RADIUS && time >= this.playerInvulnUntilMs && !this.isGameOver) {
             this.takeDamage(Math.round(BOSS_GIANTRAT.contactDamage * 2), time);
+        }
+    }
+
+    // Boss 狂咬:3 連黃牙咬視覺(staggered)+ 1 次 burst 傷害(contactDamage×2.2「3 咬份」,尊重 i-frame)
+    private doFrenzyBite(px: number, py: number, time: number) {
+        for (let i = 0; i < 3; i++) {
+            const bite = this.add.circle(px, py, 64, 0xffe040, 0).setStrokeStyle(6, 0xfff080, 0.9).setDepth(7);
+            this.tweens.add({
+                targets: bite, scale: { from: 0.4, to: 1.4 }, alpha: { from: 0.7, to: 0 },
+                duration: 200, delay: i * 140, onComplete: () => bite.destroy()
+            });
+        }
+        this.cameras.main.shake(180, 0.012);
+        const d = Math.hypot(this.player.x - px, this.player.y - py);
+        if (d <= BOSS_BITE_RANGE && time >= this.playerInvulnUntilMs && !this.isGameOver) {
+            this.takeDamage(Math.round(BOSS_GIANTRAT.contactDamage * 2.2), time);
         }
     }
 
@@ -2067,6 +2098,7 @@ export class Game extends Scene
         this.createBossHpBar(BOSS_GIANTRAT.hp, '廢料巨鼠王');
         this.bossSweepNextAt = time + 2800;  // 出現後緩衝才放首次橫掃
         this.bossSweepResolveAt = 0;
+        this.bossBiteNextAt = time + 2000;   // 狂咬首次緩衝(只在 rage 後實際生效)
 
         // Boss spawn 視覺
         this.cameras.main.shake(400, 0.020);
