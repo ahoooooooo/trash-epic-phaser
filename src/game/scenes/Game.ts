@@ -1052,15 +1052,25 @@ export class Game extends Scene
         tabs.forEach((t, i) => {
             const cx = tabW * (i + 0.5);
             const c = this.add.container(cx, tabY).setDepth(1001).setScrollFactor(0);
-            const bg = this.add.rectangle(0, 0, tabW - 24, tabH - 18, 0x2a2520, 0.85)
-                .setStrokeStyle(2, 0x4a3a30);
+            const bw = tabW - 24, bh = tabH - 18;
+            // 鏽蝕金屬按鈕:底 + 上沿亮帶(金屬反光)+ 底暗影 + 內鏽框
+            const bg = this.add.rectangle(0, 0, bw, bh, 0x2a2520, 0.92).setStrokeStyle(3, 0x1a1612, 1);
+            const sheen = this.add.rectangle(0, -bh / 2 + bh * 0.18, bw - 10, bh * 0.30, 0x3a342c, 0.55).setOrigin(0.5);
+            const shade = this.add.rectangle(0, bh / 2 - bh * 0.14, bw - 10, bh * 0.24, 0x140f0c, 0.5).setOrigin(0.5);
+            const inner = this.add.rectangle(0, 0, bw - 12, bh - 12, 0x000000, 0).setStrokeStyle(2, 0x8b6020, 0.7);
+            // 4 角鉚釘
+            const hx = bw / 2 - 13, hy = bh / 2 - 13;
+            const rivet = (rx: number, ry: number) => this.add.circle(rx, ry, 4, 0xa05a30).setStrokeStyle(1, 0x1a1612);
             const icon = this.add.text(0, -35, t.icon, {
                 fontFamily: 'sans-serif', fontSize: 56, color: '#ff8830'
             }).setOrigin(0.5);
+            const accent = this.add.rectangle(0, 8, bw * 0.5, 3, 0xff8830, 0.7).setOrigin(0.5);
             const label = this.add.text(0, 45, t.label, {
                 fontFamily: 'sans-serif', fontSize: 32, color: '#ffe0c0', fontStyle: 'bold'
             }).setOrigin(0.5);
-            c.add([bg, icon, label]);
+            c.add([bg, sheen, shade, inner,
+                rivet(-hx, -hy), rivet(hx, -hy), rivet(-hx, hy), rivet(hx, hy),
+                icon, accent, label]);
             c.setSize(tabW - 24, tabH - 18);
             c.setInteractive({ useHandCursor: true });
             c.on('pointerdown', () => this.openTabScene(t.scene));

@@ -62,6 +62,8 @@
 
 20. **[x] HUD HP/MP/EXP 條精緻化(能量錶質感)**(2026-05-30 user「畫面精緻度還有許多可改進」)— 原 HP/MP/EXP 是扁平 Rectangle。加 `decorateHudBar(x,y,w,h,segments,depth)`:this.add.graphics 畫 (segments-1) 條垂直暗刻度線 + 頂亮邊 + 底暗邊 bevel,扁平 bar → 金屬能量錶感。三條各呼叫(HP/MP segments=14、EXP=30,depth=1002,fill 之上字之下)。HP/MP 數字 depth 1002→1003 讓 z-order 明確(Codex 非阻擋建議採納)。只 createHud 建一次非每幀。tsc 0+build+Codex APPROVE(1 輪 clean,確認無 graphics 洩漏/效能 ok/無 prod pitfall)+ Playwright 截圖 HP/MP 變分段儀表+刻度不蓋數字+console 0 error。**可續**:minimap 框精緻化 / 底部 5 tab icon 放大 / boss 血條同質感。
 
+21. **[x] 底部 5-tab bar 鏽蝕金屬按鈕質感**(2026-05-30 user「畫面精緻度」續做)— buildBottomTabs 每 tab 原本扁平 rect+emoji。升級成鏽蝕金屬按鈕:底+黑框 / 上沿亮帶 sheen(金屬反光)/ 底暗影 shade / 內鏽橙框 inner(fill alpha 0 只 stroke)/ 4 角鉚釘 rivet / icon 下橙 accent 線 / label,全 add 進同 container(c.setSize→setInteractive 順序不變,互動未壞)。tsc 0+build+Codex APPROVE(1 輪 clean,確認 container hit area/子物件不搶 input/fill-alpha-0+stroke 合法/效能 ok 55 物件)+ Playwright 截圖 5 顆變金屬按鈕+點倉庫 tab 正常開 Storage+console 0 error。**可續**:minimap 框/技能鈕/boss 血條同質感、emoji icon 換手繪。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)
