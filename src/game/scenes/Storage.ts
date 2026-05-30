@@ -6,6 +6,10 @@ import { formatStat } from '../services/StatFormat';
 const W = 1080;
 const H = 1920;
 
+// boss 戰利品 → 強化石 兌換(讓 acidsire/kraz/arbiter 戰利品有用途)
+const STORAGE_TROPHY_IDS = ['acid_gland', 'warchief_skull', 'ancient_core'];
+const TROPHY_STONE_RATE = 50;
+
 // Phase 4b-5/4b-7 倉庫:顯示素材 + 掉落武器 — Phase 4b-17 鏽板視覺升級
 export class Storage extends Scene {
     constructor() { super('Storage'); }
@@ -32,7 +36,9 @@ export class Storage extends Scene {
         };
         const matEntries = Object.entries(materials);
         const matPanelTop = 160;
-        const matPanelH = 150;
+        // 有 boss 戰利品時加高 panel,讓兌換按鈕獨佔一列(不壓素材 grid)
+        const trophyTotal = STORAGE_TROPHY_IDS.reduce((s, id) => s + save.getMaterial(id), 0);
+        const matPanelH = trophyTotal > 0 ? 214 : 150;
         this.drawPanel(W / 2, matPanelTop + matPanelH / 2, W - 100, matPanelH);
         this.drawSectionLabel(80, matPanelTop + 16, '素材');
 
@@ -50,6 +56,27 @@ export class Storage extends Scene {
                 this.add.text(cx + 150, cy, `×${formatStat(count)}`, {
                     fontFamily: 'monospace', fontSize: 24, color: '#ffe060', fontStyle: 'bold'
                 }).setOrigin(0, 0.5);
+            });
+        }
+
+        // ── boss 戰利品兌換按鈕(讓酸液腺/戰酋頭顱/古能源石有用途)──
+        // 置中獨佔一列,放在素材兩列(cy 250/300)下方,不壓 grid
+        if (trophyTotal > 0) {
+            const btnY = matPanelTop + 180;
+            const exBtn = this.add.rectangle(W / 2, btnY, 440, 52, 0xff8830, 1)
+                .setStrokeStyle(3, 0x1a1612).setInteractive({ useHandCursor: true });
+            this.add.text(W / 2, btnY, `♻ 戰利品全兌換 → 🔨 ×${TROPHY_STONE_RATE}/個`, {
+                fontFamily: 'sans-serif', fontSize: 22, color: '#1a1612', fontStyle: 'bold'
+            }).setOrigin(0.5);
+            exBtn.on('pointerdown', () => {
+                const gained = save.exchangeBossTrophies(STORAGE_TROPHY_IDS, TROPHY_STONE_RATE);
+                if (gained > 0) {
+                    const flash = this.add.text(W / 2, matPanelTop + matPanelH / 2, `+${formatStat(gained)} 強化石!`, {
+                        fontFamily: 'sans-serif', fontSize: 34, color: '#ffe060', fontStyle: 'bold',
+                        stroke: '#1a1612', strokeThickness: 5
+                    }).setOrigin(0.5).setDepth(2000);
+                    this.tweens.add({ targets: flash, y: flash.y - 40, alpha: 0, duration: 900, onComplete: () => this.scene.restart() });
+                }
             });
         }
 

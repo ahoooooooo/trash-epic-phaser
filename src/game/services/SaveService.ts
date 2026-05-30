@@ -444,6 +444,19 @@ export class SaveService {
     }
     getMaterial(id: string): number { return this.data.materials[id] ?? 0; }
     getAllMaterials(): Record<string, number> { return { ...this.data.materials }; }
+    // 戰利品兌換:把指定 boss 戰利品(全清)換成強化石(每個 stonePerTrophy);回傳獲得的強化石數(0=無戰利品)
+    exchangeBossTrophies(trophyIds: string[], stonePerTrophy: number): number {
+        let total = 0;
+        for (const id of trophyIds) {
+            const c = this.data.materials[id] ?? 0;
+            if (c > 0) { total += c; delete this.data.materials[id]; }
+        }
+        if (total > 0) {
+            this.data.materials['strengthen_stone'] = (this.data.materials['strengthen_stone'] ?? 0) + total * stonePerTrophy;
+            this.save();
+        }
+        return total * stonePerTrophy;
+    }
     addDroppedWeapon(w: object): void {
         const id = Math.random().toString(36).slice(2, 10);
         this.data.droppedWeapons.push({ id, data: JSON.stringify(w) });
