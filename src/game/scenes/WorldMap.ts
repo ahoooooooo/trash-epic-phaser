@@ -19,8 +19,9 @@ interface WorldNode {
 const NODES: WorldNode[] = [
     { mapId: 'guild_hall', x: 540, y: 340 },
     { mapId: 'scrap_town', x: 540, y: 640 },
-    { mapId: 'wasteland_outskirts', x: 280, y: 940 },
-    { mapId: 'dry_well_road', x: 280, y: 1290 },
+    { mapId: 'wasteland_outskirts', x: 300, y: 940 },
+    { mapId: 'creeper_vale', x: 80, y: 760 },
+    { mapId: 'dry_well_road', x: 300, y: 1290 },
     { mapId: 'rust_alley', x: 680, y: 1120 },
     { mapId: 'core_gate', x: 840, y: 1440 }
 ];
@@ -30,6 +31,7 @@ const EDGES: [string, string][] = [
     ['guild_hall', 'scrap_town'],
     ['scrap_town', 'wasteland_outskirts'],
     ['scrap_town', 'rust_alley'],
+    ['wasteland_outskirts', 'creeper_vale'],
     ['wasteland_outskirts', 'dry_well_road'],
     ['dry_well_road', 'rust_alley'],
     ['rust_alley', 'core_gate']

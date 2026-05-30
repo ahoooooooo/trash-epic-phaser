@@ -26,7 +26,7 @@ export const QUESTS: QuestDef[] = [
     {
         id: 'q2_centipede',
         nameZH: '剷除毒花',
-        descZH: '廢土外圍長出變異食人花,會咬人,殺 5 株。',
+        descZH: '毒花谷爬滿變異食人花,會咬人,殺 5 株。(從廢土外圍往西進毒花谷)',
         objective: 'kill_mob', targetMobId: 'mutant_creeper', targetCount: 5,
         rewardGold: 80, rewardExp: 80,
         prereqQuestId: 'q1_clear_rats'
@@ -59,7 +59,7 @@ export const QUESTS: QuestDef[] = [
     {
         id: 'q6_creeper_purge',
         nameZH: '焦土清剿',
-        descZH: '變異食人花在廢土外圍蔓延成片,擋住了通往綠洲的路。燒掉 20 株,殺出一條血路。',
+        descZH: '變異食人花在毒花谷蔓延成片,擋住了通往綠洲的路。燒掉 20 株,殺出一條血路。',
         objective: 'kill_mob', targetMobId: 'mutant_creeper', targetCount: 20,
         rewardGold: 360, rewardExp: 360, rewardCrystal: 15,
         prereqQuestId: 'q5_reactor_crawl'

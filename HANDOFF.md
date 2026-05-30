@@ -40,6 +40,8 @@
 
 9. **[x] 註冊頁 / 登入頁**(2026-05-30 user 要求「像其他手遊直式遊戲要有註冊頁登入頁」)— 本地帳號系統(localStorage,無後端,Cloud Save 留 Phase 4d):`AccountService`(register/login/loginGuest/currentUser,密碼簡易 hash 僅避明文,所有 storage read/write/remove 都 try/catch guard)+ `Login` scene(廢土風 + DOM input 帳密 + 登入/註冊/訪客 三鈕)+ `Register` scene(帳號/密碼/確認密碼)。main.ts 加 `dom:{createContainer:true}`;Preloader 改 `isLoggedIn()?MainMenu:Login`(auto-login)。Codex APPROVE(3 輪:抓到「寫入失敗假成功」+「開機讀取路徑 crash」storage 健壯性,修完過)+ Playwright 全流程:Login 渲染/註冊建帳號→MainMenu/auto-login 跳過/登出回 Login/錯密碼擋下/對密碼登入/訪客試玩。**註**:帳號目前只 gate 進入,存檔仍共用單一 key(per-account 隔離留 Phase 4d)。
 
+10. **[x] 一圖一怪真正做到**(2026-05-30 user 指出沒做到)— 查證起始圖 wasteland_outskirts spawn idxs 是 `[0,11]`=巨鼠+食人花(**2 種,違反**)。修:wasteland 改 `[0]` 純巨鼠 + 新增獨立 field 圖 `creeper_vale`(毒花谷)`[11]` 純食人花 + 雙向 portal + WorldMap 節點/邊 + q2/q6 描述改指毒花谷。現 4 戰鬥圖各一怪:廢土外圍=巨鼠 / 毒花谷=食人花 / 乾井路=機械蜘蛛 / 爐心門=輻射機甲蟲。Codex APPROVE + Playwright 實測兩圖各自只見對應怪。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)

@@ -111,15 +111,29 @@ const MAPS: Record<string, MapConfig> = {
     wasteland_outskirts: {
         id: 'wasteland_outskirts', nameZH: '廢土外圍', mapType: 'field', levelRange: [1, 40], regionId: 'scrap',
         width: 2400, height: 3200, bgColor: '#2a2520',
-        spawnPoints: fieldSpawns(2400, 3200, 16, [0, 11]),  // 廢土外圍(起始)= 巨鼠 + 變異食人花(真新怪,q1 巨鼠 / q2 食人花)
+        spawnPoints: fieldSpawns(2400, 3200, 16, [0]),  // 一圖一怪:廢土外圍 = 廢料巨鼠 only(q1)
         npcs: [],
         shopNpcs: [],
         portals: [
             { x: 1200, y: 200, targetMapId: 'scrap_town', targetX: 600, targetY: 1300, label: '← 廢料鎮' },
+            { x: 300, y: 1600, targetMapId: 'creeper_vale', targetX: 1000, targetY: 400, label: '毒花谷 →' },
             { x: 1200, y: 3000, targetMapId: 'dry_well_road', targetX: 900, targetY: 300, label: '乾井路 ↓' }
         ],
         bossEnabled: true,
         playerStartX: 1200, playerStartY: 1600
+    },
+    // === 毒花谷(field 1-40,食人花獵場 — 一圖一怪)===
+    creeper_vale: {
+        id: 'creeper_vale', nameZH: '毒花谷', mapType: 'field', levelRange: [1, 40], regionId: 'scrap',
+        width: 2000, height: 2800, bgColor: '#26301f',
+        spawnPoints: fieldSpawns(2000, 2800, 14, [11]),  // 一圖一怪:毒花谷 = 變異食人花 only(q2/q6)
+        npcs: [],
+        shopNpcs: [],
+        portals: [
+            { x: 1000, y: 200, targetMapId: 'wasteland_outskirts', targetX: 300, targetY: 1700, label: '← 廢土外圍' }
+        ],
+        bossEnabled: false,
+        playerStartX: 1000, playerStartY: 1400
     },
     // === 乾井路(field 40-90,進階獵場)===
     dry_well_road: {
