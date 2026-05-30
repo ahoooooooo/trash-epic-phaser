@@ -244,6 +244,8 @@ interface BossDef {
     spitLabel?: string;        // 站池 DoT 浮字(預設「酸蝕」)
     spawnAdds?: number;        // HP<60% 一次召喚 N 隻 add(0/undefined=不召)
     addsBlueprintIdx?: number; // 召喚的 add 怪 blueprint idx(預設 13 蝕骨蜈蚣幼蟲)
+    projectile?: boolean;      // 投射物招式(朝玩家發射直線飛行彈)— kraz 投矛 / arbiter 火箭
+    projColor?: number;        // 投射物主題色(預設用 spitColor / 0xffd060)
 }
 
 const BOSS_DEFS: Record<string, BossDef> = {
@@ -264,15 +266,17 @@ const BOSS_DEFS: Record<string, BossDef> = {
         // 戰錘橫掃(sweep)鏽橙 + rage 連砸(bite)橙紅 + 戰錘下砸塵爆地裂池(spit 橙火)
         sweepFill: 0xff7020, sweepStroke: 0xffa040, sweepHit: 0xff5020,
         biteFill: 0xffb060, biteStroke: 0xffd090,
-        acidSpit: true, spitColor: 0xff7020, spitLabel: '灼燒'  // 戰錘下砸地裂(04 §9 招式 2)
+        acidSpit: true, spitColor: 0xff7020, spitLabel: '灼燒',  // 戰錘下砸地裂(04 §9 招式 2)
+        projectile: true, projColor: 0xd8c8a0  // 人骨投矛(04 §9 招式 3,骨白)
     },
     arbiter: {
         blueprint: BOSS_ARBITER, displayName: '銹蝕審判官',
         // 巨劍橫斬(sweep)暗紅 + rage 連擊(bite)暗紅 + 古能量池(spit 暗紅)+ 召古機械哨兵
         sweepFill: 0xc81830, sweepStroke: 0xff4050, sweepHit: 0xa01828,
         biteFill: 0xe04040, biteStroke: 0xff6060,
-        acidSpit: true, spitColor: 0xc81830, spitLabel: '審判',  // 古文字符火箭地灼(05 §9 招式 3)
-        spawnAdds: 2, addsBlueprintIdx: 10  // 召輻射機甲蟲古哨兵(05 §9 招式 4)
+        acidSpit: true, spitColor: 0xc81830, spitLabel: '審判',  // 古能量地灼池
+        spawnAdds: 2, addsBlueprintIdx: 10,  // 召輻射機甲蟲古哨兵(05 §9 招式 4)
+        projectile: true, projColor: 0xff3040  // 古文字符火箭(05 §9 招式 3,暗紅符光)
     }
 };
 
@@ -290,6 +294,12 @@ const ACID_SPIT_WINDUP_MS = 900;     // 預警時間(玩家走出窗)
 const ACID_SPIT_CD_MS = 5600;        // 酸液冷卻(rage 減半)
 const ACID_POOL_LIFE_MS = 3600;      // 酸池殘留時間
 const ACID_POOL_TICK_MS = 500;       // 酸池 DoT tick 間隔
+// 投射物招式(kraz 人骨投矛 / arbiter 古文字符火箭)— 朝玩家發射直線飛行彈,玩家可走位閃
+const PROJ_SPEED = 0.62;             // 飛行速度(px / ms)
+const PROJ_RADIUS = 22;              // 投射物半徑(命中判定 = + 玩家半身)
+const PROJ_CD_MS = 3600;             // 投射冷卻(rage 減半)
+const PROJ_LIFE_MS = 2400;           // 投射物最長存活(超時自滅)
+const PROJ_DMG_MULT = 1.4;           // 命中傷害 = contactDamage × 此倍
 
 interface MobData {
     blueprint: MobBlueprint;
@@ -369,6 +379,8 @@ export class Game extends Scene
     private acidSpitTargetX = 0;
     private acidSpitTargetY = 0;
     private acidPools: { circle: Phaser.GameObjects.Arc; untilMs: number; nextTickMs: number }[] = [];  // 殘留酸池
+    private projNextAt = 0;        // 下次可投射
+    private bossProjectiles: { circle: Phaser.GameObjects.Arc; vx: number; vy: number; untilMs: number }[] = [];  // 飛行中的投射物
     // Phase 4b-14 player action lock — 'attacking' / 'hurt' 期間禁切 idle/walking
     private playerActionAnim: 'attacking' | 'hurt' | null = null;
     // Phase 4c B fix:攻擊後此時間內 flipX 鎖朝目標怪,handleMovement 不覆蓋(防往後走背打)
@@ -479,6 +491,8 @@ export class Game extends Scene
         this.acidSpitResolveAt = 0;
         this.acidSpitNextAt = 0;
         this.acidPools = [];
+        this.projNextAt = 0;
+        this.bossProjectiles = [];
         this.bossBiteNextAt = 0;
         this.mobs = [];
         this.portals = [];
@@ -1264,7 +1278,7 @@ export class Game extends Scene
         this.handleMovement(delta);
         this.handleSpawn(time);
         this.trySpawnBoss(time);
-        if (this.bossActive) { this.updateBossHpBar(); this.updateBossAttack(time); this.updateAcidPools(time); }
+        if (this.bossActive) { this.updateBossHpBar(); this.updateBossAttack(time); this.updateAcidPools(time); this.updateBossProjectiles(time, delta); }
         this.handleMobAI(time, delta);
         this.handleMobContactDamage(time);
         if (this.isGameOver) return;
@@ -2196,6 +2210,7 @@ export class Game extends Scene
         this.destroyBossHpBar();
         this.destroyBossSweep(); this.bossSweepResolveAt = 0;
         this.destroyAcidPools();
+        this.destroyBossProjectiles();
         this.cameras.main.shake(500, 0.025);
         // 大號 BOSS DEFEATED popup
         const popup = this.add.text(VIEW_W / 2, VIEW_H / 2, 'BOSS 擊破!', {
@@ -2362,7 +2377,52 @@ export class Game extends Scene
                 .setStrokeStyle(6, sc, 0.8).setDepth(6);
             this.tweens.add({ targets: this.acidSpitTelegraph, alpha: 0.32, duration: 200, yoyo: true, repeat: -1 });
             this.acidSpitResolveAt = time + ACID_SPIT_WINDUP_MS;
+            return;
         }
+        // 投射物起手(kraz 投矛 / arbiter 火箭):朝玩家當下方向發射直線飛行彈(玩家可走位閃)
+        if (this.activeBoss?.projectile && time >= this.projNextAt) {
+            const dx = this.player.x - bossMob.x, dy = this.player.y - bossMob.y;
+            const len = Math.hypot(dx, dy);
+            if (len < 60 || len > 1100) { this.projNextAt = time + 600; return; }  // 太近/太遠不射
+            const ux = dx / len, uy = dy / len;
+            const pc = this.activeBoss.projColor ?? this.activeBoss.spitColor ?? 0xffd060;
+            const proj = this.add.circle(bossMob.x, bossMob.y, PROJ_RADIUS, pc, 0.9)
+                .setStrokeStyle(3, 0xffffff, 0.7).setDepth(7);
+            this.bossProjectiles.push({ circle: proj, vx: ux * PROJ_SPEED, vy: uy * PROJ_SPEED, untilMs: time + PROJ_LIFE_MS });
+            // 槍口閃
+            const muzzle = this.add.circle(bossMob.x, bossMob.y, 34, pc, 0.5).setDepth(7);
+            this.tweens.add({ targets: muzzle, scale: 1.6, alpha: 0, duration: 200, onComplete: () => muzzle.destroy() });
+            this.projNextAt = time + ((bossMob.getData('mob') as MobData).isRaging ? PROJ_CD_MS / 2 : PROJ_CD_MS);
+        }
+    }
+
+    // 每幀更新投射物:飛行 + 命中玩家判定 + 出界/超時清除(delta 來自 update)
+    private updateBossProjectiles(time: number, delta: number) {
+        if (this.bossProjectiles.length === 0) return;
+        const dmg = Math.max(1, Math.round((this.activeBoss?.blueprint.contactDamage ?? 30) * PROJ_DMG_MULT));
+        const survivors: { circle: Phaser.GameObjects.Arc; vx: number; vy: number; untilMs: number }[] = [];
+        for (const p of this.bossProjectiles) {
+            p.circle.x += p.vx * delta;
+            p.circle.y += p.vy * delta;
+            const hit = Math.hypot(this.player.x - p.circle.x, this.player.y - p.circle.y) <= PROJ_RADIUS + 28;
+            const oob = p.circle.x < -40 || p.circle.x > this.mapConfig.width + 40 || p.circle.y < -40 || p.circle.y > this.mapConfig.height + 40;
+            if (hit && time >= this.playerInvulnUntilMs && !this.isGameOver) {
+                this.takeDamage(dmg, time);
+                const burst = this.add.circle(p.circle.x, p.circle.y, PROJ_RADIUS, 0xffffff, 0.6).setDepth(8);
+                this.tweens.add({ targets: burst, scale: 1.8, alpha: 0, duration: 200, onComplete: () => burst.destroy() });
+                p.circle.destroy();
+                continue;
+            }
+            if (time >= p.untilMs || oob) { p.circle.destroy(); continue; }
+            survivors.push(p);
+        }
+        this.bossProjectiles = survivors;
+    }
+
+    // 清所有投射物(boss 擊敗 / scene reset)
+    private destroyBossProjectiles() {
+        for (const p of this.bossProjectiles) p.circle.destroy();
+        this.bossProjectiles = [];
     }
 
     // 清酸液預警圈(連同 repeat:-1 pulse tween 一起 kill,防洩漏)— resolve/destroy 共用
