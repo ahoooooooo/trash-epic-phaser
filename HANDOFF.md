@@ -11,7 +11,7 @@
 - push main → GitHub Actions auto-deploy ~40-60s。
 - Phase 4c 程式 roadmap + user 6 大需求 A-F + 變現 + FTUE + 每日簽到 + 主動技能 + 4 隻真新怪 sprite + 10 特色天賦 **全部已完成上線**。
 - build 狀態:綠(tsc 0 error / vite build 過 / live 200)。
-- 最近(本 session):**裝備頁重設計 + 裝備種類擴充**(backlog #12)— ArmorService 每部位 base 8-10 個 + optional bonus 次要屬性(hp/atk/crit/dodge,tier 越高機率帶,顯示用不接 HUD);Inventory paper-doll 改 player_portrait 正面立繪 + 框→立繪連線 + rarity 精美框 + bonus 標籤 + 套裝加成總計。Codex APPROVE + Playwright 端到端(進頁/picker/換裝/屬性即時更新)實測上線。
+- 最近(本 session):**夥伴(familiar)被動效果系統**(backlog #14)— 14 隻 familiar 原本純收集無戰鬥效果,現各補 ONE 個被動 effect(方向照 design 角色,rarity 階梯)+ 出戰機制 + 戰鬥套用 + 夥伴頁出戰 UI。Codex APPROVE + Playwright 實測 HP 1280→1430 + 出戰/切換/卸下/owned-lock 全驗。commit 38c80a9 上線。
 
 ## 你接手做事的鐵律(違背就停)
 1. **改完不准沒實測說「修好了」**:`npx tsc --noEmit` → `npm run build` → `npx vite preview --port 4180` 從 root `/` 開 → Playwright 1080×1920 設假存檔(localStorage)→ click(540,1610) 進 game → 截圖。三者+證據缺一不可。
@@ -47,6 +47,8 @@
 12. **[x] 裝備頁重設計 + 裝備種類擴充**(2026-05-30 user「裝備頁也要重新設計 更精美 裝備的種類也要設計」)— **A 種類擴充** `ArmorService.ts`:每部位 base 名 4-5→8-10 個(廢土風:鉛襯/骨製/輪胎/管線/焊接/防化/廢核…);新增 optional `ArmorDef.bonus`(ArmorBonus stat hp/atk/crit/dodge + value,tier 越高機率帶 TIER_BONUS_CHANCE N10%→SSR100%,generateRandomArmor roll);純顯示用**不接 maxHP HUD**;新 export armorBonusLabel/armorBonusColor;effectiveDefense/armorEnhanceCost/armorDisplayName/各既有 export 不破壞;optional 欄位向後相容舊存檔。**B 裝備頁** `Inventory.ts`:paper-doll 中央改正面立繪 `player_portrait`(fallback player_idle)+ 框→立繪連線(graphics,已裝 rarity 亮線/空槽暗線)+ 底座暖橙光暈;裝備框雙層鏽蝕框 + rarity 邊框(N灰/R藍/SR紫/SSR金)+ 部位 icon 名牌 + 鉚釘 + bonus 標籤 + 空槽「＋ 空」;摘要面板加「套裝加成」總計列(已裝 bonus 依 stat 加總,顯示用)。既有互動全保留(picker/裝/卸/強化/返回/attack+totalDef)。tsc 0 error + build 過 + Codex APPROVE(1 輪 clean,確認 optional bonus 相容 getTotalArmorDefense + 無 forbidden Phaser pattern)+ Playwright 端到端:進裝備頁截圖(立繪+連線+rarity框+bonus 標籤)→點頭盔框開 picker(顯示卸下/強化/SSR暴擊+5%金框/R閃避+3%藍框)→換裝 R 頭盔→總防禦 79→60、套裝加成即時更新實測。
 
 13. **[x] Boss 尾巴橫掃 telegraph 招式**(2026-05-30,backlog 清完後從 design doc 02_boss_giantrat.md 挑「設計已定未實作」招式)— 廢料巨鼠原本只碰撞+rage,設計的「尾巴橫掃 大範圍 telegraph」未實作。加:玩家靠近時 boss 出鏽紅預警圈(windup 950ms 跟著 boss)→ 結算 contactDamage×2 範圍 AoE,玩家可在 windup 走出躲開(技巧表現),rage 時冷卻減半。狀態機 windup→resolve→cooldown;create/handleBossDefeated/boss死於windup 各路徑清 ring 防洩漏;takeDamage 尊重 i-frame。Codex APPROVE(1 輪 clean)+ Playwright 暫設 trigger=3 farm boss 實測預警弧出現+boss 傷害提升(level60 被打死/level300 存活)+無 crash,還原 50。
+
+14. **[x] 夥伴(familiar)被動效果系統**(2026-05-30,「設計已定未實作」缺口 — 14 隻 familiar 純收集無戰鬥效果,整個 gacha/夥伴 loop 純裝飾)— 逐讀 docs/design/v2/16~28_familiar_*.md 取每隻角色定位,各定 ONE 個被動 effect(`FamiliarEffect={stat,value,label}`,stat 為 TalentBuff 數值欄位,方向嚴格照 design,數值 rarity 階梯 R<SR<SSR<UR):pip 撿取範圍+15% / mira 掉落+8% / grub 最大HP+150 / zix 金幣+10% / neek 傷害+5% / dorl 減傷+4% / fire_imp 傷害+10% / ironguard 減傷+8% / frost_witch 暴擊率+6% / axe_brothers 攻速+12% / blackmarket_fox 金幣+30% / prophet 傷害+18% / shadow_hunter 暴擊率+12% / appraisal_queen 掉落+25%。SaveService 加 `activeFamiliarId`(forward-compat merge + owned 守門 setter,只允許已擁有出戰、null 卸下);`computeTalentBuff()` 摺進 active familiar effect(TalentService import FAMILIAR_POOL,無循環依賴),戰鬥 9 處讀 buff 自動吃到。Gacha 夥伴頁加出戰收藏區(已擁有可點出戰 / 出戰中高亮 / 卸下 / owned-only / 未擁有鎖 / effect.label 顯示);不破壞 doPull/showResults。Codex APPROVE(1 輪 clean,確認 owned 雙守門 / 無循環 / forward-compat / TS 健全 / 無 forbidden Phaser pattern)+ Playwright prod-preview 實測:出戰 maxHpFlat+150 夥伴後 HUD HP 1280→1430(buff 真套到戰鬥)+ 點 fire_imp 出戰切換 + 卸下回 null + 未擁有鎖,全驗。commit 38c80a9。
 
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
