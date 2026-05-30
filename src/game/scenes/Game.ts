@@ -35,6 +35,7 @@ const ELITE_CHANCE = 0.08;
 const ELITE_HP_MULT = 3.5;
 const ELITE_SCALE_MULT = 1.5;
 const ELITE_REWARD_MULT = 4;
+const ELITE_DMG_MULT = 1.6;
 const ELITE_TINT = 0xffd040;
 // Phase 4c C-fix:玩家各 frame PNG 尺寸不一(BiRefNet crop bbox 852~1209 寬 1043~1254 高),
 // fixed setScale(0.3) 讓 render 高度脈動(頭忽大忽小)。改鎖固定 display 高度,scale 依 frame 動態算。
@@ -999,8 +1000,8 @@ export class Game extends Scene
             if (!m.active) continue;
             const md = m.getData('mob') as MobData | undefined;
             if (!md) continue;
-            const color = md.blueprint.isBoss ? 0xff8830 : 0xc23a1a;
-            const r = md.blueprint.isBoss ? 6 : 3;
+            const color = md.blueprint.isBoss ? 0xff8830 : md.isElite ? ELITE_TINT : 0xc23a1a;
+            const r = md.blueprint.isBoss ? 6 : md.isElite ? 5 : 3;
             this.minimap.fillStyle(color, 1);
             this.minimap.fillCircle(px(m.x), py(m.y), r);
         }
@@ -1428,7 +1429,7 @@ export class Game extends Scene
             const d = Math.hypot(this.player.x - m.x, this.player.y - m.y);
             if (d < Game.MOB_CONTACT_RANGE) {
                 data.lastContactMs = time;
-                this.takeDamage(data.blueprint.contactDamage, time);
+                this.takeDamage(Math.round(data.blueprint.contactDamage * (data.isElite ? ELITE_DMG_MULT : 1)), time);
                 return; // 一個 frame 只扣一次,不疊
             }
         }
