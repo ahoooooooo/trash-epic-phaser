@@ -84,6 +84,8 @@
 
 31. **[x] formatStat rollout 補完(Inventory/Storage)**(2026-05-30,接 fire 30 §3 全面化)— 把 formatStat 補套到剩餘大數字顯示:Inventory 武器摘要「攻擊」/「總防禦」chip + 強化按鈕「花費/持有 gold」、Storage 武器卡傷害。純 display(花費/spendGold/effectiveDamage 運算仍用原始 number)。tsc 0+build+Codex APPROVE(1 輪 clean,確認只改 display)+ Playwright 注入 baseDamage 9999 武器裝備後 Inventory「攻擊 10K」(formatStat(9999))+總防禦「0」+console 0 error,已還原測試武器。§3 大數字壓縮全面套到 gold/exp/crystal/材料/武器攻擊/防禦/傷害。
 
+32. **[~] acidsire boss epic step 1:sprite 生成**(2026-05-30,design-doc 03_boss_acidsire「蝕骨蜈蚣巢母·酸主」設計已定未實作 — 啟動其他 3 boss epic)— 美術 pipeline 生 boss sprite:codex_imagegen GPT-4o(107s,prompt 對齊設計:15m 黑硬殼直立蜈蚣母蟲+酸綠鉗顎+多對酸黃複眼+綠透明卵囊+鏽紅鏽蝕邊+酸氣)→ BiRefNet 去背(86.8s,clean alpha)→ resize 820×923 + palette 壓 782KB → `public/assets/mobs/mob_acidsire.png`。視覺驗證:design-faithful,clean cutout。**未 wiring**(context 考量,留下一火):需 boss-system 從 hardcoded BOSS_GIANTRAT 泛化成 data-driven BossConfig + 新 map「蝕骨蜈蚣巢」5 區 + Preloader load + 4 招設計(撞擊/酸液噴吐/節肢推進/體節橫掃,03 doc §...)。**下一火接**:先做 boss-system 泛化(讓 acidsire/kraz/arbiter 都好接),再入場。prompt 存 `D:\Trash Epic\automation\prompts\boss_acidsire.txt`。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)
