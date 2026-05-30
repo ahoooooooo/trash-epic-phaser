@@ -558,10 +558,18 @@ export class Game extends Scene
             .setOrigin(0, 0).setStrokeStyle(2, 0x8b6020, 0.9).setDepth(999).setScrollFactor(0);
         this.add.rectangle(MM_PAD, MM_PAD, MM, MM, 0x2a2520, 0.85)
             .setOrigin(0, 0).setStrokeStyle(2, 0xa05a30, 0.95).setDepth(1000).setScrollFactor(0);
-        this.add.text(MM_PAD + MM / 2, MM_PAD + 8, '◤ 廢墟 ◢', {
+        // 標題鏽牌(壓在 minimap 內容上方,讓標題可讀)
+        this.add.rectangle(MM_PAD, MM_PAD, MM, 30, 0x140f0c, 0.9)
+            .setOrigin(0, 0).setStrokeStyle(1, 0x8b6020, 0.7).setDepth(1003).setScrollFactor(0);
+        this.add.text(MM_PAD + MM / 2, MM_PAD + 7, '◤ 廢墟 ◢', {
             fontFamily: 'monospace', fontSize: 18, color: '#ff8830', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 2
-        }).setOrigin(0.5, 0).setDepth(1003).setScrollFactor(0);
+        }).setOrigin(0.5, 0).setDepth(1004).setScrollFactor(0);
+        // 4 角鉚釘(對齊倉庫/tab 面板質感)
+        const mmRivet = (rx: number, ry: number) =>
+            this.add.circle(rx, ry, 4, 0xa05a30).setStrokeStyle(1, 0x1a1612).setDepth(1004).setScrollFactor(0);
+        mmRivet(MM_PAD + 3, MM_PAD + 3); mmRivet(MM_PAD + MM - 3, MM_PAD + 3);
+        mmRivet(MM_PAD + 3, MM_PAD + MM - 3); mmRivet(MM_PAD + MM - 3, MM_PAD + MM - 3);
         this.minimap = this.add.graphics().setDepth(1002).setScrollFactor(0);
         // Phase 4c-1:點 minimap 開楓谷風世界全圖(per user)
         this.add.rectangle(MM_PAD, MM_PAD, MM, MM, 0xffffff, 0.001)
@@ -1147,12 +1155,14 @@ export class Game extends Scene
         const mmSize = Game.MINIMAP_SIZE;
         const mmPad = Game.MINIMAP_PAD;
         const innerPad = 14;
-        const drawSize = mmSize - innerPad * 2;
+        const headerH = 30;   // 上方標題鏽牌高,繪圖區避開以免遮住最上排點
+        const drawW = mmSize - innerPad * 2;
+        const drawH = mmSize - headerH - innerPad;
         const mapW = this.mapConfig.width, mapH = this.mapConfig.height;
-        const scale = Math.min(drawSize / mapW, drawSize / mapH);
+        const scale = Math.min(drawW / mapW, drawH / mapH);
         const mapDrawW = mapW * scale, mapDrawH = mapH * scale;
         const ox = mmPad + (mmSize - mapDrawW) / 2;
-        const oy = mmPad + (mmSize - mapDrawH) / 2;
+        const oy = mmPad + headerH + (drawH - mapDrawH) / 2;
         const px = (x: number) => ox + x * scale;
         const py = (y: number) => oy + y * scale;
         this.minimap.clear();

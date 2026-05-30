@@ -68,6 +68,8 @@
 
 23. **[x] Boss 血條能量錶質感 + lifecycle 修正**(2026-05-30 user「畫面精緻度」續做)— createBossHpBar 加外發光(危險紅暈)+ 頂 gloss + decorateHudBar(22 段刻度+bevel),對齊玩家血條能量錶。**Codex 抓 lifecycle bug**:新增的 glow/gloss/decor graphics 原本沒存 ref → destroyBossHpBar 清不到 → boss 死後殘留 + 重複疊層(我只測 spawn 沒測死亡)。修:加 3 欄位 bossHpBarGlow/Gloss/Decor + decorateHudBar 回傳 Graphics + create 存 ref + destroyBossHpBar 一起 destroy + scene-restart reset 補。tsc 0+build+Codex APPROVE(2 輪:lifecycle leak,修完)+ Playwright trigger=3 連 farm ~40s 多次 boss 生死**始終單一血條無疊層** + boss 死亡走 destroyBossHpBar(Game.ts:2016)清乾淨,還原 trigger=50+移除測試武器+smoke 0 error。
 
+24. **[x] Minimap 框鏽蝕質感**(2026-05-30 user「畫面精緻度」續做)— minimap 原雙層框+浮空標題。加標題鏽牌(深底+鏽橙邊,標題可讀)+ 4 角鉚釘(對齊倉庫/tab 質感)。**Codex 抓**:標題牌 depth 1003 蓋住 minimap 繪圖區(1002)最上排 ~16px 玩家/怪點 = 資訊遺失。修:updateMinimap 加 headerH=30 把繪圖區(outline+所有點)下移到標題牌下方。tsc 0+build+Codex APPROVE(2 輪:遮點 bug,修完)+ Playwright 截圖標題鏽牌+鉚釘+所有點完整在牌下方不被遮+console 0 error。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)
