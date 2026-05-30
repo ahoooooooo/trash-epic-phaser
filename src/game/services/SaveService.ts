@@ -16,6 +16,7 @@ interface SaveData {
     exp: number;
     gold: number;
     totalKills: number;
+    killMilestoneIdx: number;       // 已領取的擊殺里程碑數(留存)
     playtimeSec: number;
     lastSavedAt: number;
     // Phase 4a-16 新增
@@ -91,6 +92,7 @@ function makeDefaultSave(): SaveData {
         exp: 0,
         gold: 0,
         totalKills: 0,
+        killMilestoneIdx: 0,
         playtimeSec: 0,
         lastSavedAt: 0,
         currentWeaponId: 'weapon_wood_stick',
@@ -221,6 +223,7 @@ export class SaveService {
             // Phase 4c-16 每日登入 forward-compat
             merged.loginStreak = typeof parsed.loginStreak === 'number' ? parsed.loginStreak : 0;
             merged.lastLoginClaimAt = typeof parsed.lastLoginClaimAt === 'number' ? parsed.lastLoginClaimAt : 0;
+            merged.killMilestoneIdx = typeof parsed.killMilestoneIdx === 'number' ? parsed.killMilestoneIdx : 0;
             this.data = merged;
         } catch (e) {
             console.warn('[Save] load failed', e);
@@ -271,6 +274,27 @@ export class SaveService {
         return true;
     }
     addKill(): void { this.data.totalKills++; }
+
+    // 擊殺里程碑(留存鉤子):累積擊殺跨門檻領晶體,一次結算所有積欠(舊存檔升級也補發)
+    claimKillMilestones(): { kills: number; crystal: number } | null {
+        const M = [
+            { kills: 100, crystal: 5 }, { kills: 500, crystal: 12 }, { kills: 1000, crystal: 25 },
+            { kills: 2500, crystal: 40 }, { kills: 5000, crystal: 70 }, { kills: 10000, crystal: 120 },
+            { kills: 25000, crystal: 250 }, { kills: 50000, crystal: 500 }
+        ];
+        // 防禦:存檔篡改/損壞 → idx 夾成合法整數 0..M.length(避免 M[idx] undefined crash 或永久跳過補發)
+        this.data.killMilestoneIdx = Math.max(0, Math.min(M.length, Math.floor(this.data.killMilestoneIdx || 0)));
+        let totalCrystal = 0, lastKills = 0, claimed = false;
+        while (this.data.killMilestoneIdx < M.length && this.data.totalKills >= M[this.data.killMilestoneIdx].kills) {
+            totalCrystal += M[this.data.killMilestoneIdx].crystal;
+            lastKills = M[this.data.killMilestoneIdx].kills;
+            this.data.killMilestoneIdx++;
+            claimed = true;
+        }
+        if (!claimed) return null;
+        this.addCrystal(totalCrystal);
+        return { kills: lastKills, crystal: totalCrystal };
+    }
     addPlaytimeSec(sec: number): void { this.data.playtimeSec += sec; }
 
     // 武器

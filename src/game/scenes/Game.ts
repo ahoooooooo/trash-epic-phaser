@@ -1860,6 +1860,9 @@ export class Game extends Scene
         const buff = computeTalentBuff();
         const eliteMult = isElite ? ELITE_REWARD_MULT : 1;
         save.addKill();
+        // 擊殺里程碑(留存):跨門檻給晶體 + 慶祝 toast
+        const milestone = save.claimKillMilestones();
+        if (milestone) this.flashHudMessage(`擊殺 ${milestone.kills} 達成! +${milestone.crystal} 晶體`, 0xffe060);
         // Phase 4b-15 talent: gold buff(金幣不再 HUD 顯示,各 scene 內看)+ 精英怪 ×倍
         save.addGold(Math.round(bp.goldReward * (1 + buff.goldGainPct) * eliteMult));
         if (!bp.isBoss) this.sessionKills++;
@@ -1896,7 +1899,10 @@ export class Game extends Scene
         if (result.leveled) {
             this.levelText.setText(`Lv ${cur.level}`);
             this.spawnLevelUpEffect(result.levelsGained);
-            save.save(); // 升級立刻 persist
+        }
+        if (result.leveled || milestone) {
+            // 升級 / 擊殺里程碑(晶體獎勵)立刻 persist —— 含本次 gold/exp/quest 一起落盤
+            save.save();
             this.lastPersistMs = Date.now();
         } else {
             // 普通殺怪 3s throttle persist(per Codex review:防 tab close 丟 exp/gold)

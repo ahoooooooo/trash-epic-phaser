@@ -23,7 +23,7 @@
 
 ## 下一步 backlog(由上往下做,挑最上面未劃掉的)
 1. **[x] UI 直屏擁擠誤觸**(2026-05-30 完成)— 右側技能鈕+藥水列從貼邊 `VIEW_W-70` 內縮到右緣 46px margin(技能/藥水右對齊 1034)、底部 5 tab 間距 12→24px(`tabW-24`)、`VirtualJoystick` 排除底部 200px(避免點左下 tab 誤觸搖桿)。tsc+build+Codex APPROVE+Playwright 進遊戲截圖(右列內縮/tab 間距/天賦 tab 開 Talent)實測。
-2. **[ ] 留存深化**(QA⑥)— 每日簽到已做;補「週挑戰 / 任務主線」其一。任務敘事目前散亂(QA⑨),可設計一條廢土主線串起現有 quest。
+2. **[~] 留存深化**(QA⑥)— 每日簽到已做;**2026-05-30 加擊殺里程碑**(累積殺 100/500/1k/2.5k/5k/10k/25k/50k 領晶體 + 慶祝 toast,SaveService.killMilestoneIdx 一次結算積欠/舊存檔補發,晶體立即落盤,idx clamp 防篡改;Codex APPROVE 3 輪 + Playwright 99→101 驗 idx/crystal)。**仍待**:週挑戰(recurring,需 UI scene)/ 廢土主線串 quest(QA⑨)。
    ※ 註:2026-05-30 曾誤記「lastLoginClaimAt 沒保存」為 bug,已查證 SaveService line 168/223 有正確還原,**非 bug**(舊存檔沒領過才每次彈,正常)。
 3. **[ ] 第 4+ 隻真新怪 sprite 或怪的 2-frame 動畫**— pipeline ~3.5min/隻(見下「美術 pipeline」)。目前 3 隻真新怪是單張 wobble,可生 walk frame 做真動畫;或新增廢土飛蟲/變種狗/巨型蠍。
 4. **[ ] 4c-5:6 張 painted 地圖**(GPT-4o)— 廢料鎮/乾井路/鏽蝕巷/爐心門等,目前是純色底。需專門 session 跑 pipeline(quota+慢+逐張接 bgKey),不適合長 loop 尾端硬跑。
