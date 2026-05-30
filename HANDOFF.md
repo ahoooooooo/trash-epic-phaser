@@ -70,6 +70,8 @@
 
 24. **[x] Minimap 框鏽蝕質感**(2026-05-30 user「畫面精緻度」續做)— minimap 原雙層框+浮空標題。加標題鏽牌(深底+鏽橙邊,標題可讀)+ 4 角鉚釘(對齊倉庫/tab 質感)。**Codex 抓**:標題牌 depth 1003 蓋住 minimap 繪圖區(1002)最上排 ~16px 玩家/怪點 = 資訊遺失。修:updateMinimap 加 headerH=30 把繪圖區(outline+所有點)下移到標題牌下方。tsc 0+build+Codex APPROVE(2 輪:遮點 bug,修完)+ Playwright 截圖標題鏽牌+鉚釘+所有點完整在牌下方不被遮+console 0 error。
 
+25. **[x] 虛擬搖桿 dpad 質感**(2026-05-30 user「畫面精緻度」續做)— VirtualJoystick 原本 base+stick 兩素橙圈。加 `deco`(Graphics depth 999:外暗環+內圈+4 方向 N/S/W/E 短刻度,dpad 感)+ `stickHi`(搖桿頭高光 circle depth 1002 偏上 radius*0.12 給 3D 旋鈕感)。base 移到觸點時 drawDeco 重畫(g.clear 防累積);新增 setStickPos 同步 stick+stickHi 取代所有 stick.setPosition;destroy 加 deco/stickHi。tsc 0+build+Codex APPROVE(1 輪 clean,確認 setStickPos 全覆蓋無殘留/drawDeco clear 無洩漏/stickHi 偏移一致/destroy 齊)+ Playwright 截圖搖桿顯外環+4 刻度+搖桿頭高光+拖曳 stick 跟手 deco 重定位 movement 正常+console 0 error。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)

@@ -1,10 +1,12 @@
 import { Scene } from 'phaser';
 
-// 手機虛擬搖桿 — bottom-left 半透明圓
+// 手機虛擬搖桿 — bottom-left 半透明圓 + 廢土風 dpad 環飾
 // 輸出 normalized {dx, dy} in [-1, 1] for Game movement
 export class VirtualJoystick {
     private base!: Phaser.GameObjects.Arc;
     private stick!: Phaser.GameObjects.Arc;
+    private stickHi!: Phaser.GameObjects.Arc;
+    private deco!: Phaser.GameObjects.Graphics;
     private pointerId: number | null = null;
     private baseX: number;
     private baseY: number;
@@ -30,12 +32,39 @@ export class VirtualJoystick {
 
     private create() {
         // UI depth = 1000+(高於 mob sprite 預設 0)+ scrollFactor 0(camera follow 不動)
+        this.deco = this.scene.add.graphics().setDepth(999).setScrollFactor(0);
         this.base = this.scene.add.circle(this.baseX, this.baseY, this.radius, 0xff8830, 0.18)
             .setStrokeStyle(3, 0xff8830, 0.6)
             .setDepth(1000).setScrollFactor(0);
         this.stick = this.scene.add.circle(this.baseX, this.baseY, this.radius * 0.42, 0xff8830, 0.55)
             .setStrokeStyle(2, 0xffffff, 0.4)
             .setDepth(1001).setScrollFactor(0);
+        // 搖桿頭高光(偏上,給 3D 旋鈕感)
+        this.stickHi = this.scene.add.circle(this.baseX, this.baseY - this.radius * 0.12, this.radius * 0.16, 0xffe0c0, 0.45)
+            .setDepth(1002).setScrollFactor(0);
+        this.drawDeco();
+    }
+
+    // 環飾:外暗環 + 內圈 + 4 方向短刻度(dpad 感)。base 移動時重畫
+    private drawDeco() {
+        const g = this.deco;
+        const x = this.baseX, y = this.baseY, r = this.radius;
+        g.clear();
+        g.lineStyle(2, 0x1a1612, 0.5);
+        g.strokeCircle(x, y, r + 4);
+        g.lineStyle(1, 0xff8830, 0.3);
+        g.strokeCircle(x, y, r * 0.7);
+        g.lineStyle(3, 0xffe0c0, 0.45);
+        const t = r * 0.18;
+        g.lineBetween(x, y - r + 6, x, y - r + 6 + t);   // N
+        g.lineBetween(x, y + r - 6, x, y + r - 6 - t);   // S
+        g.lineBetween(x - r + 6, y, x - r + 6 + t, y);   // W
+        g.lineBetween(x + r - 6, y, x + r - 6 - t, y);   // E
+    }
+
+    private setStickPos(x: number, y: number) {
+        this.stick.setPosition(x, y);
+        this.stickHi.setPosition(x, y - this.radius * 0.12);
     }
 
     private attach() {
@@ -52,7 +81,8 @@ export class VirtualJoystick {
             this.baseX = p.x;
             this.baseY = p.y;
             this.base.setPosition(this.baseX, this.baseY);
-            this.stick.setPosition(this.baseX, this.baseY);
+            this.setStickPos(this.baseX, this.baseY);
+            this.drawDeco();
             this.base.setAlpha(0.35);
         });
 
@@ -66,7 +96,7 @@ export class VirtualJoystick {
             this.pointerId = null;
             this._dx = 0;
             this._dy = 0;
-            this.stick.setPosition(this.baseX, this.baseY);
+            this.setStickPos(this.baseX, this.baseY);
             this.base.setAlpha(0.18);
         };
         scene.input.on('pointerup', release);
@@ -79,12 +109,12 @@ export class VirtualJoystick {
         const d = Math.hypot(dx, dy);
         const max = this.radius;
         if (d <= max) {
-            this.stick.setPosition(this.baseX + dx, this.baseY + dy);
+            this.setStickPos(this.baseX + dx, this.baseY + dy);
             this._dx = dx / max;
             this._dy = dy / max;
         } else {
             const k = max / d;
-            this.stick.setPosition(this.baseX + dx * k, this.baseY + dy * k);
+            this.setStickPos(this.baseX + dx * k, this.baseY + dy * k);
             this._dx = dx / d; // 已 normalized
             this._dy = dy / d;
         }
@@ -95,12 +125,14 @@ export class VirtualJoystick {
         this.pointerId = null;
         this._dx = 0;
         this._dy = 0;
-        this.stick.setPosition(this.baseX, this.baseY);
+        this.setStickPos(this.baseX, this.baseY);
         this.base.setAlpha(0.18);
     }
 
     destroy() {
+        this.deco.destroy();
         this.base.destroy();
         this.stick.destroy();
+        this.stickHi.destroy();
     }
 }
