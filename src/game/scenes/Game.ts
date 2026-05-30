@@ -2,7 +2,8 @@ import { Scene } from 'phaser';
 import { HitStopService } from '../services/HitStopService';
 import { VirtualJoystick } from '../services/VirtualJoystick';
 import { SaveService } from '../services/SaveService';
-import { effectiveDamage, getWeapon, WeaponDef } from '../services/WeaponService';
+import { effectiveDamage, WeaponDef } from '../services/WeaponService';
+import { getEquippedWeaponDef } from '../services/EquippedWeapon';
 import { computeTalentBuff } from '../services/TalentService';
 import { QUESTS, QuestDef } from '../services/QuestService';
 import { getMap, MapConfig, NpcSpec, PortalSpec, ShopNpcSpec } from '../services/MapService';
@@ -775,7 +776,7 @@ export class Game extends Scene
         this.mpText.setText(`MP  ${c.mp} / ${c.maxMp}`);
 
         // 傷害:武器有效傷害 × 倍率 × 天賦
-        const weapon = getWeapon(save.getCurrentWeaponId());
+        const weapon = getEquippedWeaponDef();
         const buff = computeTalentBuff();
         const skillDmg = Math.max(1, Math.round(
             effectiveDamage(weapon, save.getWeaponEnh(weapon.id)) * Game.SKILL_DMG_MULT * (1 + buff.dmgPct + this.potionAtkPct())
@@ -799,7 +800,9 @@ export class Game extends Scene
             const d = Math.hypot(dx, dy);
             if (d > Game.SKILL_RADIUS) continue;
             const data = m.getData('mob') as MobData;
-            data.hp -= skillDmg;
+            // weapons_v1 §4 元素抗性:技能同樣吃武器 element vs 怪 type(與普攻一致)
+            const sd = Math.max(1, Math.round(skillDmg * elementResistMult(data.blueprint.type, data.blueprint.isBoss === true, weapon.element)));
+            data.hp -= sd;
             // 擊退
             const len = d || 1;
             m.x = Math.max(60, Math.min(this.mapConfig.width - 60, m.x + (dx / len) * Game.SKILL_KNOCKBACK));
@@ -814,8 +817,8 @@ export class Game extends Scene
                 else if (td.blueprint.tint !== undefined) m.setTint(td.blueprint.tint).setTintMode(0);  // multiply 保留紋路
                 else m.clearTint();
             });
-            // 傷害數字
-            const t = this.add.text(m.x, m.y - 54, `${skillDmg}`, {
+            // 傷害數字(抗性後)
+            const t = this.add.text(m.x, m.y - 54, `${sd}`, {
                 fontFamily: 'sans-serif', fontSize: 44, color: '#ffe060',
                 stroke: '#8b3a1f', strokeThickness: 6, fontStyle: 'bold'
             }).setOrigin(0.5).setDepth(460);
@@ -1697,7 +1700,7 @@ export class Game extends Scene
         if (this.attackCooldownMs > 0) return;
 
         // 用當前武器 spec(per WeaponService)
-        const weapon = getWeapon(SaveService.instance.getCurrentWeaponId());
+        const weapon = getEquippedWeaponDef();
         const enh = SaveService.instance.getWeaponEnh(weapon.id);
         const baseDmg = effectiveDamage(weapon, enh);
         // Phase 4b-15 talent buff apply

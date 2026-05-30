@@ -92,10 +92,29 @@ export class Storage extends Scene {
 
     private drawWeaponCard(cx: number, cy: number, w: number, h: number, weapon: GeneratedWeapon) {
         const color = rarityColor(weapon.tier);
-        this.add.rectangle(cx, cy, w, h, 0x2a2520, 0.92)
-            .setStrokeStyle(3, color, 0.95);
+        const equipped = weapon.id === SaveService.instance.getCurrentWeaponId();
+        const bg = this.add.rectangle(cx, cy, w, h, equipped ? 0x33402a : 0x2a2520, 0.92)
+            .setStrokeStyle(equipped ? 4 : 3, equipped ? 0x9be060 : color, equipped ? 1 : 0.95);
         // tier 邊框左側色條
         this.add.rectangle(cx - w / 2 + 6, cy, 8, h - 14, color, 0.9).setOrigin(0.5);
+
+        // 裝備狀態:已裝備=綠勾標記;否則整卡可點裝備
+        if (equipped) {
+            this.add.text(cx + w / 2 - 16, cy + h / 2 - 18, '✓ 已裝備', {
+                fontFamily: 'sans-serif', fontSize: 18, color: '#9be060', fontStyle: 'bold'
+            }).setOrigin(1, 0.5);
+        } else {
+            bg.setInteractive({ useHandCursor: true });
+            this.add.text(cx + w / 2 - 16, cy + h / 2 - 18, '點擊裝備', {
+                fontFamily: 'sans-serif', fontSize: 18, color: '#ff8830'
+            }).setOrigin(1, 0.5);
+            bg.on('pointerdown', () => {
+                this.tweens.add({ targets: bg, scaleX: 0.97, scaleY: 0.97, duration: 70, yoyo: true });
+                SaveService.instance.setCurrentWeaponId(weapon.id);
+                SaveService.instance.save();
+                this.scene.restart();
+            });
+        }
 
         const left = cx - w / 2 + 24;
         this.add.text(left, cy - 44, weaponDisplayName(weapon), {

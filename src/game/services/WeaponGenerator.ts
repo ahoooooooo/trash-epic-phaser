@@ -1,7 +1,7 @@
 // Phase 4b-8 隨機武器生成 — base × prefix × suffix × element × tier ≈ 6400 種
 // 每把 weapon 唯一 id,stats 動態算
 
-import { WeaponCategory, ElementType } from './WeaponService';
+import { WeaponCategory, ElementType, WeaponDef } from './WeaponService';
 
 export type WeaponTier = 'N' | 'R' | 'SR' | 'SSR';
 
@@ -96,6 +96,20 @@ export function generateRandomWeapon(_levelHint = 1): GeneratedWeapon {
 
 export function weaponDisplayName(w: GeneratedWeapon): string {
     return `${w.prefix} ${w.base} ${w.suffix}`;
+}
+
+// 掉落武器 → 戰鬥用 WeaponDef(mechanic flag 留空,generated 是純數值+元素武器)
+export function generatedWeaponToDef(w: GeneratedWeapon): WeaponDef {
+    return {
+        id: w.id,
+        nameZH: weaponDisplayName(w),
+        nameEN: w.id,
+        category: w.category,
+        element: w.element,
+        baseDamage: w.baseDamage,
+        attackIntervalMs: w.attackIntervalMs,
+        range: w.range
+    };
 }
 
 export function rarityColor(tier: WeaponTier): number {

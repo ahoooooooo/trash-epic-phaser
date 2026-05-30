@@ -56,6 +56,8 @@
 
 17. **[x] 武器元素 vs 怪抗性表**(2026-05-30,design doc weapons_v1.md §4 設計已定未實作)— 武器有 element(Physical/Fire/Acid/Shock/Toxin)、怪有 type(Rat/Insect/Robot/Plant)+ isBoss,但戰鬥從沒套抗性表(元素系統半殘)。加 `ELEMENT_RESIST` 5×5 表(照 §4 原數值)+ `elementResistMult(mobType,isBoss,element)`(未知 type/element fallback 1.0 不 crash);handleAutoAttack 命中後 `dmg = max(1, round(dmg × resistMult))`(在 execute 判定+popup **之前**,順序正確);damage popup 加剋制提示(mult≥1.15 亮綠+↑ / mult≤0.85 暗灰+↓)讓玩家看得到元素互動。**註**:目前 5 把 base 武器全 Physical,但 Physical 欄本身隨怪變(Robot 0.7↓ / Boss 0.5↓ / Plant 1.1),已有戰略意義(物理剋不動機械/裝甲);生成武器 element 進戰鬥的裝備路徑是另一輪。tsc 0+build 過+Codex APPROVE(1 輪 clean,零 critical)+ Playwright 進 core_gate 木棍打機甲蟲 popup 實測「11 ↓」灰字(Physical vs Robot 0.7×)無 crash。
 
+18. **[x] 掉落武器可裝備 + 進戰鬥(含 element)**(2026-05-30,接 fire 17 元素系統的缺口)— 掉落的隨機武器(GeneratedWeapon,存 droppedWeapons)原本**只在倉庫 display 不能裝備**,戰鬥永遠用 5 把 Physical base → 掉落 loop + 元素抗性系統半殘。新增 `EquippedWeapon.ts` resolver `getEquippedWeaponDef()`:currentWeaponId 先找 base WEAPONS,找不到**迭代 droppedWeapons parse 比對 gw.id**(Codex 抓到:wrapper id≠gw.id,不能用 entry.id)+ shape guard(isValidGeneratedWeapon 防欄位缺失 NaN),fallback 木棍。`WeaponGenerator.generatedWeaponToDef` map 成 WeaponDef。Game.ts 普攻+技能、Inventory 摘要全改走 resolver。Storage 武器卡可點裝備(setCurrentWeaponId+save+restart)+「✓ 已裝備」綠框。技能傷害也補套 elementResistMult(Codex 抓到原本只普攻吃元素)。tsc 0+build+Codex APPROVE(2 輪:wrapper-id bug + 技能漏 resist,修完 clean)+ Playwright 模擬真掉落(wrapper≠gw.id)裝備頁正確顯示「劇毒髒手套 99」(修前落回木棍 10)+ 倉庫點卡裝備存 currentWeaponId 實測,console 0 error。**註**:generated 武器無 mechanic flag(bleed/stagger 等留空);armor 賣出未清 enh 的同類小尾巴。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)

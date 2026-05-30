@@ -1,6 +1,7 @@
 import { Scene } from 'phaser';
 import { SaveService } from '../services/SaveService';
-import { getWeapon, effectiveDamage, enhanceCost } from '../services/WeaponService';
+import { effectiveDamage, enhanceCost } from '../services/WeaponService';
+import { getEquippedWeaponDef } from '../services/EquippedWeapon';
 import {
     ArmorDef, EquipSlot, equipSlotLabel,
     armorSlotForEquipSlot, armorDisplayName, armorRarityColor,
@@ -292,7 +293,7 @@ export class Inventory extends Scene {
     // ── 武器 + 總防禦摘要 ──
     private drawSummary() {
         const save = SaveService.instance.get();
-        const w = getWeapon(save.currentWeaponId);
+        const w = getEquippedWeaponDef();
         const enh = SaveService.instance.getWeaponEnh(w.id);
         const dmg = effectiveDamage(w, enh);
         const totalDef = SaveService.instance.getTotalArmorDefense();
