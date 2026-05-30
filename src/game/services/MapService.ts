@@ -205,10 +205,24 @@ const MAPS: Record<string, MapConfig> = {
         npcs: [],
         shopNpcs: [],
         portals: [
-            { x: 1200, y: 200, targetMapId: 'rust_alley', targetX: 1300, targetY: 1300, label: '← 鏽蝕巷' }
+            { x: 1200, y: 200, targetMapId: 'rust_alley', targetX: 1300, targetY: 1300, label: '← 鏽蝕巷' },
+            { x: 1000, y: 2200, targetMapId: 'ancient_ruins', targetX: 1000, targetY: 400, label: '古文明遺跡 ↓' }
         ],
         bossEnabled: true, bossId: 'kraz',  // 終極區 boss = 哥布林戰酋 克拉茲(取代預設巨鼠)
         playerStartX: 1000, playerStartY: 1800
+    },
+    // === 古文明遺跡(隱藏 boss 區 lv300+,銹蝕審判官)— 鏡像 acid_brood 一圖一怪 + boss ===
+    ancient_ruins: {
+        id: 'ancient_ruins', nameZH: '古文明遺跡', mapType: 'boss', levelRange: [300, 500], regionId: 'reactor',
+        width: 2000, height: 2800, bgColor: '#1a1a16',
+        spawnPoints: fieldSpawns(2000, 2800, 6, [10]),  // 一圖一怪:遺跡 = 輻射機甲蟲(古哨兵機械,殺 50 召銹蝕審判官)
+        npcs: [],
+        shopNpcs: [],
+        portals: [
+            { x: 1000, y: 200, targetMapId: 'core_gate', targetX: 1000, targetY: 2100, label: '← 爐心門' }
+        ],
+        bossEnabled: true, bossId: 'arbiter',
+        playerStartX: 1000, playerStartY: 1400
     }
 };
 

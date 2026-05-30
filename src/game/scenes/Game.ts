@@ -212,6 +212,23 @@ const BOSS_KRAZ: MobBlueprint = {
     rageTint: 0xff5a20     // 橙紅狂暴(鐵與血)
 };
 
+// 銹蝕審判官 boss(05_boss_arbiter,隱藏 boss,古文明遺跡)— 半石半機械古守護機械,最強隱藏 boss
+const BOSS_ARBITER: MobBlueprint = {
+    id: 'boss_arbiter',
+    type: 'Rat',            // isBoss 蓋過 type 判定(走 ELEMENT_RESIST Boss 列)
+    spriteKey: 'mob_arbiter',
+    scale: 0.5,            // 3.5m 巨型古守護機械
+    hp: 6000,
+    speedChase: 0.06,      // 古守護者動作緩慢但每招致命
+    speedWander: 0,
+    contactDamage: 90,
+    expReward: 2000,
+    goldReward: 1000,
+    isBoss: true,
+    rageThreshold: 0.3,    // < 30% 核心爆發(per 05 doc phase 2)
+    rageTint: 0xc81830     // 暗紅核心狂暴(古能源石)
+};
+
 // Boss 泛化:data-driven BossDef registry(sprite/血條名/anim/招式視覺色),per-map bossId 選用
 interface BossDef {
     blueprint: MobBlueprint;
@@ -242,6 +259,12 @@ const BOSS_DEFS: Record<string, BossDef> = {
         // 戰錘橫掃(sweep)鏽橙警示 + rage 戰錘連砸(bite)橙紅,單張 sprite wobble
         sweepFill: 0xff7020, sweepStroke: 0xffa040, sweepHit: 0xff5020,
         biteFill: 0xffb060, biteStroke: 0xffd090
+    },
+    arbiter: {
+        blueprint: BOSS_ARBITER, displayName: '銹蝕審判官',
+        // 巨劍橫斬(sweep)暗紅古能量 + rage 核心爆發連擊(bite)暗紅,單張 sprite wobble
+        sweepFill: 0xc81830, sweepStroke: 0xff4050, sweepHit: 0xa01828,
+        biteFill: 0xe04040, biteStroke: 0xff6060
     }
 };
 

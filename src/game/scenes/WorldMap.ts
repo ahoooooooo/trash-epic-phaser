@@ -25,7 +25,8 @@ const NODES: WorldNode[] = [
     { mapId: 'sand_pit', x: 110, y: 1490 },
     { mapId: 'acid_brood', x: 110, y: 1690 },
     { mapId: 'rust_alley', x: 680, y: 1120 },
-    { mapId: 'core_gate', x: 840, y: 1440 }
+    { mapId: 'core_gate', x: 840, y: 1440 },
+    { mapId: 'ancient_ruins', x: 840, y: 1660 }
 ];
 
 // 連線(雙向 portal 關係)
@@ -38,7 +39,8 @@ const EDGES: [string, string][] = [
     ['dry_well_road', 'sand_pit'],
     ['sand_pit', 'acid_brood'],
     ['dry_well_road', 'rust_alley'],
-    ['rust_alley', 'core_gate']
+    ['rust_alley', 'core_gate'],
+    ['core_gate', 'ancient_ruins']
 ];
 
 const TYPE_ICON: Record<string, string> = { town: '🏚', field: '⚔', boss: '☢' };
