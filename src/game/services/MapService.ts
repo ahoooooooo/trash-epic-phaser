@@ -47,6 +47,7 @@ export interface MapConfig {
     width: number;
     height: number;
     bgColor: string;
+    bgKey?: string;
     spawnPoints: SpawnPointSpec[];
     npcs: NpcSpec[];
     shopNpcs: ShopNpcSpec[];
@@ -79,7 +80,7 @@ const MAPS: Record<string, MapConfig> = {
     // === 公會大廳(town,起點,只賣 skin)===
     guild_hall: {
         id: 'guild_hall', nameZH: '廢墟同盟公會', mapType: 'town', regionId: 'hub',
-        width: 1200, height: 1400, bgColor: '#1a1612',
+        width: 1200, height: 1400, bgColor: '#1a1612', bgKey: 'map_guild_hall_topdown',
         spawnPoints: [],
         npcs: [{ type: 'clerk', x: 300, y: 600, spriteKey: 'npc_clerk', scale: 0.4 }],
         shopNpcs: [],
@@ -92,7 +93,7 @@ const MAPS: Record<string, MapConfig> = {
     // === 廢料鎮(town,新手村,賣低階藥)===
     scrap_town: {
         id: 'scrap_town', nameZH: '廢料鎮', mapType: 'town', levelRange: [1, 80], regionId: 'scrap',
-        width: 1400, height: 1600, bgColor: '#2a2218',
+        width: 1400, height: 1600, bgColor: '#2a2218', bgKey: 'map_scrap_town_topdown',
         spawnPoints: [],
         npcs: [],
         shopNpcs: [
@@ -110,7 +111,7 @@ const MAPS: Record<string, MapConfig> = {
     // === 廢土外圍(field 1-40,新手獵場)===
     wasteland_outskirts: {
         id: 'wasteland_outskirts', nameZH: '廢土外圍', mapType: 'field', levelRange: [1, 40], regionId: 'scrap',
-        width: 2400, height: 3200, bgColor: '#2a2520',
+        width: 2400, height: 3200, bgColor: '#2a2520', bgKey: 'map_wasteland_topdown',
         spawnPoints: fieldSpawns(2400, 3200, 16, [0]),  // 一圖一怪:廢土外圍 = 廢料巨鼠 only(q1)
         npcs: [],
         shopNpcs: [],
@@ -125,7 +126,7 @@ const MAPS: Record<string, MapConfig> = {
     // === 毒花谷(field 1-40,食人花獵場 — 一圖一怪)===
     creeper_vale: {
         id: 'creeper_vale', nameZH: '毒花谷', mapType: 'field', levelRange: [1, 40], regionId: 'scrap',
-        width: 2000, height: 2800, bgColor: '#26301f',
+        width: 2000, height: 2800, bgColor: '#26301f', bgKey: 'map_creeper_vale_topdown',
         spawnPoints: fieldSpawns(2000, 2800, 14, [11]),  // 一圖一怪:毒花谷 = 變異食人花 only(q2/q6)
         npcs: [],
         shopNpcs: [],
@@ -138,7 +139,7 @@ const MAPS: Record<string, MapConfig> = {
     // === 乾井路(field 40-90,進階獵場)===
     dry_well_road: {
         id: 'dry_well_road', nameZH: '乾井路', mapType: 'field', levelRange: [40, 90], regionId: 'scrap',
-        width: 1800, height: 2800, bgColor: '#33291c',
+        width: 1800, height: 2800, bgColor: '#33291c', bgKey: 'map_dry_well_road_topdown',
         spawnPoints: fieldSpawns(1800, 2800, 14, [9]),  // 乾井路 = 鏽蝕機械蜘蛛(真‧獨立新 sprite,非換色)
         npcs: [],
         shopNpcs: [],
@@ -153,7 +154,7 @@ const MAPS: Record<string, MapConfig> = {
     // === 鏽蝕沙坑(field 40-90,廢土巨蠍獵場 — 一圖一怪)===
     sand_pit: {
         id: 'sand_pit', nameZH: '鏽蝕沙坑', mapType: 'field', levelRange: [40, 90], regionId: 'scrap',
-        width: 2000, height: 2800, bgColor: '#33291c',
+        width: 2000, height: 2800, bgColor: '#33291c', bgKey: 'map_sand_pit_topdown',
         spawnPoints: fieldSpawns(2000, 2800, 14, [12]),  // 一圖一怪:鏽蝕沙坑 = 廢土巨蠍 only
         npcs: [],
         shopNpcs: [],
@@ -166,7 +167,7 @@ const MAPS: Record<string, MapConfig> = {
     // === 鏽蝕巷(town 80-180,中繼村,賣中低階藥)===
     rust_alley: {
         id: 'rust_alley', nameZH: '鏽蝕巷', mapType: 'town', levelRange: [80, 180], regionId: 'rust',
-        width: 1500, height: 1600, bgColor: '#2e221a',
+        width: 1500, height: 1600, bgColor: '#2e221a', bgKey: 'map_rust_alley_topdown',
         spawnPoints: [],
         npcs: [],
         shopNpcs: [
@@ -184,7 +185,7 @@ const MAPS: Record<string, MapConfig> = {
     // === 爐心門(boss 區)===
     core_gate: {
         id: 'core_gate', nameZH: '爐心門', mapType: 'boss', levelRange: [180, 300], regionId: 'reactor',
-        width: 2000, height: 2400, bgColor: '#241a16',
+        width: 2000, height: 2400, bgColor: '#241a16', bgKey: 'map_core_gate_topdown',
         spawnPoints: fieldSpawns(2000, 2400, 6, [10]),  // 爐心門 = 輻射機甲蟲(真‧獨立新 sprite)
         npcs: [],
         shopNpcs: [],

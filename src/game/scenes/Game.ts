@@ -335,8 +335,9 @@ export class Game extends Scene
         this.cameras.main.setBounds(0, camTop, mapW, camH);
 
         // Phase 4b-9 — GPT-4o painted top-down 廢土地圖(楓谷風,單張 opaque 全鋪滿)
-        // Phase 4c-1:town(公會/廢料鎮/鏽蝕巷)用室內 bg,field/boss 用廢土 bg(先復用,4c-5 各生 painted)
-        const bgKey = this.mapConfig.mapType === 'town' ? 'map_guild_hall_topdown' : 'map_wasteland_topdown';
+        // Phase 4c-5:各圖專屬 painted 底(mapConfig.bgKey);沒設的 fallback town/field 共用底(防新圖未生圖時破圖)
+        const bgKey = this.mapConfig.bgKey
+            ?? (this.mapConfig.mapType === 'town' ? 'map_guild_hall_topdown' : 'map_wasteland_topdown');
         // bg 鋪滿 camera 可視範圍:延伸帶 + 比螢幕小的地圖也補滿到 viewport,任何角度都不露 flat bgColor
         const bgH = Math.max(camH, VIEW_H);
         const bg = this.add.image(mapW / 2, camTop + bgH / 2, bgKey);

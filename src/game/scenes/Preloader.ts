@@ -64,6 +64,13 @@ export class Preloader extends Scene
         // Phase 4b-9 painted 廢土 backgrounds — GPT-4o top-down painted maps(楓谷風)
         this.load.image('map_wasteland_topdown', 'maps/zone1/map_wasteland_topdown.png');
         this.load.image('map_guild_hall_topdown', 'maps/zone1/map_guild_hall_topdown.png');
+        // Phase 4c-5:6 張各圖專屬 painted 底(GPT-4o,取代純色/共用底)
+        this.load.image('map_scrap_town_topdown', 'maps/zone1/map_scrap_town_topdown.png');
+        this.load.image('map_creeper_vale_topdown', 'maps/zone1/map_creeper_vale_topdown.png');
+        this.load.image('map_dry_well_road_topdown', 'maps/zone1/map_dry_well_road_topdown.png');
+        this.load.image('map_sand_pit_topdown', 'maps/zone1/map_sand_pit_topdown.png');
+        this.load.image('map_rust_alley_topdown', 'maps/zone1/map_rust_alley_topdown.png');
+        this.load.image('map_core_gate_topdown', 'maps/zone1/map_core_gate_topdown.png');
     }
 
     create ()
