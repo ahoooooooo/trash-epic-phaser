@@ -157,6 +157,10 @@ const BOSS_GIANTRAT: MobBlueprint = {
 };
 
 const BOSS_TRIGGER_KILLS = 50; // 殺 50 mob 觸發 boss
+// Boss 尾巴橫掃(per 02_boss_giantrat.md 設計招式:大範圍 telegraph AoE)— 預警圈 windup 後結算,玩家可走出躲開
+const BOSS_SWEEP_RADIUS = 340;       // world 單位橫掃半徑
+const BOSS_SWEEP_WINDUP_MS = 950;    // 預警時間(玩家反應窗)
+const BOSS_SWEEP_CD_MS = 4800;       // 橫掃冷卻(rage 時減半)
 
 interface MobData {
     blueprint: MobBlueprint;
@@ -215,6 +219,10 @@ export class Game extends Scene
     private bossHpBarText?: Phaser.GameObjects.Text;
     private bossHpBarInnerW = 0;
     private bossMaxHp = 1;
+    // Boss 尾巴橫掃 telegraph 狀態
+    private bossSweepNextAt = 0;       // 下次可起手時間
+    private bossSweepResolveAt = 0;    // >0 = windup 中,到此時間結算
+    private bossSweepRing?: Phaser.GameObjects.Arc;  // 預警圈(world space)
     // Phase 4b-14 player action lock — 'attacking' / 'hurt' 期間禁切 idle/walking
     private playerActionAnim: 'attacking' | 'hurt' | null = null;
     // Phase 4c B fix:攻擊後此時間內 flipX 鎖朝目標怪,handleMovement 不覆蓋(防往後走背打)
@@ -307,6 +315,9 @@ export class Game extends Scene
         this.bossHpBarBg = undefined;     // scene restart:舊 bar 物件已隨 scene 銷毀,清欄位防 stale ref
         this.bossHpBarFill = undefined;
         this.bossHpBarText = undefined;
+        this.bossSweepRing = undefined;   // 同理清橫掃 telegraph 欄位
+        this.bossSweepNextAt = 0;
+        this.bossSweepResolveAt = 0;
         this.mobs = [];
         this.portals = [];
         this.npcClerk = undefined;
@@ -998,7 +1009,7 @@ export class Game extends Scene
         this.handleMovement(delta);
         this.handleSpawn(time);
         this.trySpawnBoss(time);
-        if (this.bossActive) this.updateBossHpBar();
+        if (this.bossActive) { this.updateBossHpBar(); this.updateBossAttack(time); }
         this.handleMobAI(time, delta);
         this.handleMobContactDamage(time);
         if (this.isGameOver) return;
@@ -1805,6 +1816,7 @@ export class Game extends Scene
         this.bossActive = false;
         this.sessionKills = 0; // 下隻 boss 重數
         this.destroyBossHpBar();
+        this.destroyBossSweep(); this.bossSweepResolveAt = 0;
         this.cameras.main.shake(500, 0.025);
         // 大號 BOSS DEFEATED popup
         const popup = this.add.text(VIEW_W / 2, VIEW_H / 2, 'BOSS 擊破!', {
@@ -1871,6 +1883,52 @@ export class Game extends Scene
         this.bossHpBarFill.fillColor = data.isRaging ? 0xff2020 : 0xc23a1a;
     }
 
+    // Boss 尾巴橫掃(設計招式):預警圈 windup → 結算大範圍 AoE,玩家可走出躲開(技巧表現)
+    private updateBossAttack(time: number) {
+        const bossMob = this.mobs.find(m => (m.getData('mob') as MobData | undefined)?.blueprint.isBoss);
+        if (!bossMob) { this.destroyBossSweep(); this.bossSweepResolveAt = 0; return; }
+        const data = bossMob.getData('mob') as MobData;
+
+        // windup 中:預警圈跟著 boss + 到時間結算
+        if (this.bossSweepResolveAt > 0) {
+            if (this.bossSweepRing) { this.bossSweepRing.x = bossMob.x; this.bossSweepRing.y = bossMob.y; }
+            if (time >= this.bossSweepResolveAt) {
+                this.resolveBossSweep(bossMob.x, bossMob.y, time);
+                this.bossSweepResolveAt = 0;
+                this.bossSweepNextAt = time + (data.isRaging ? BOSS_SWEEP_CD_MS / 2 : BOSS_SWEEP_CD_MS);
+            }
+            return;
+        }
+        // 起手:冷卻到 + 玩家在合理範圍內才放(離太遠不放)
+        if (time >= this.bossSweepNextAt) {
+            const d = Math.hypot(this.player.x - bossMob.x, this.player.y - bossMob.y);
+            if (d > BOSS_SWEEP_RADIUS + 200) { this.bossSweepNextAt = time + 600; return; }
+            // 預警圈(world space,鏽紅警示;不用 setTintFill 直接 circle fill+stroke)
+            this.bossSweepRing = this.add.circle(bossMob.x, bossMob.y, BOSS_SWEEP_RADIUS, 0xff2020, 0.14)
+                .setStrokeStyle(8, 0xff4040, 0.85).setDepth(6);
+            this.tweens.add({ targets: this.bossSweepRing, alpha: 0.4, duration: 220, yoyo: true, repeat: -1 });
+            this.bossSweepResolveAt = time + BOSS_SWEEP_WINDUP_MS;
+        }
+    }
+
+    private resolveBossSweep(bx: number, by: number, time: number) {
+        this.destroyBossSweep();
+        // 橫掃命中視覺:鏽紅環擴散
+        const hit = this.add.circle(bx, by, BOSS_SWEEP_RADIUS, 0xff3020, 0.35).setDepth(7);
+        this.tweens.add({ targets: hit, alpha: 0, scale: 1.15, duration: 320, onComplete: () => hit.destroy() });
+        this.cameras.main.shake(260, 0.016);
+        // 結算:玩家在範圍內 + 非無敵 + 沒 game over → 受傷(可被 windup 期間走出躲開)
+        const d = Math.hypot(this.player.x - bx, this.player.y - by);
+        if (d <= BOSS_SWEEP_RADIUS && time >= this.playerInvulnUntilMs && !this.isGameOver) {
+            this.takeDamage(Math.round(BOSS_GIANTRAT.contactDamage * 2), time);
+        }
+    }
+
+    private destroyBossSweep() {
+        this.bossSweepRing?.destroy();
+        this.bossSweepRing = undefined;
+    }
+
     // Boss 頂部血條:銷毀(boss 擊敗時)
     private destroyBossHpBar() {
         this.bossHpBarBg?.destroy(); this.bossHpBarBg = undefined;
@@ -1914,6 +1972,8 @@ export class Game extends Scene
         mob.setData('shadow', this.makeGroundShadow(mob.x, mob.y, Math.max(80, mob.displayWidth * 0.7)));
         this.mobs.push(mob);
         this.createBossHpBar(BOSS_GIANTRAT.hp, '廢料巨鼠王');
+        this.bossSweepNextAt = time + 2800;  // 出現後緩衝才放首次橫掃
+        this.bossSweepResolveAt = 0;
 
         // Boss spawn 視覺
         this.cameras.main.shake(400, 0.020);

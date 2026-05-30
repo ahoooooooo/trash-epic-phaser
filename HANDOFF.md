@@ -46,6 +46,8 @@
 
 12. **[x] 裝備頁重設計 + 裝備種類擴充**(2026-05-30 user「裝備頁也要重新設計 更精美 裝備的種類也要設計」)— **A 種類擴充** `ArmorService.ts`:每部位 base 名 4-5→8-10 個(廢土風:鉛襯/骨製/輪胎/管線/焊接/防化/廢核…);新增 optional `ArmorDef.bonus`(ArmorBonus stat hp/atk/crit/dodge + value,tier 越高機率帶 TIER_BONUS_CHANCE N10%→SSR100%,generateRandomArmor roll);純顯示用**不接 maxHP HUD**;新 export armorBonusLabel/armorBonusColor;effectiveDefense/armorEnhanceCost/armorDisplayName/各既有 export 不破壞;optional 欄位向後相容舊存檔。**B 裝備頁** `Inventory.ts`:paper-doll 中央改正面立繪 `player_portrait`(fallback player_idle)+ 框→立繪連線(graphics,已裝 rarity 亮線/空槽暗線)+ 底座暖橙光暈;裝備框雙層鏽蝕框 + rarity 邊框(N灰/R藍/SR紫/SSR金)+ 部位 icon 名牌 + 鉚釘 + bonus 標籤 + 空槽「＋ 空」;摘要面板加「套裝加成」總計列(已裝 bonus 依 stat 加總,顯示用)。既有互動全保留(picker/裝/卸/強化/返回/attack+totalDef)。tsc 0 error + build 過 + Codex APPROVE(1 輪 clean,確認 optional bonus 相容 getTotalArmorDefense + 無 forbidden Phaser pattern)+ Playwright 端到端:進裝備頁截圖(立繪+連線+rarity框+bonus 標籤)→點頭盔框開 picker(顯示卸下/強化/SSR暴擊+5%金框/R閃避+3%藍框)→換裝 R 頭盔→總防禦 79→60、套裝加成即時更新實測。
 
+13. **[x] Boss 尾巴橫掃 telegraph 招式**(2026-05-30,backlog 清完後從 design doc 02_boss_giantrat.md 挑「設計已定未實作」招式)— 廢料巨鼠原本只碰撞+rage,設計的「尾巴橫掃 大範圍 telegraph」未實作。加:玩家靠近時 boss 出鏽紅預警圈(windup 950ms 跟著 boss)→ 結算 contactDamage×2 範圍 AoE,玩家可在 windup 走出躲開(技巧表現),rage 時冷卻減半。狀態機 windup→resolve→cooldown;create/handleBossDefeated/boss死於windup 各路徑清 ring 防洩漏;takeDamage 尊重 i-frame。Codex APPROVE(1 輪 clean)+ Playwright 暫設 trigger=3 farm boss 實測預警弧出現+boss 傷害提升(level60 被打死/level300 存活)+無 crash,還原 50。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)
