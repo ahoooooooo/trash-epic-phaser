@@ -234,6 +234,9 @@ export class Game extends Scene
     private bossHpBarBg?: Phaser.GameObjects.Rectangle;
     private bossHpBarFill?: Phaser.GameObjects.Rectangle;
     private bossHpBarText?: Phaser.GameObjects.Text;
+    private bossHpBarGlow?: Phaser.GameObjects.Rectangle;
+    private bossHpBarGloss?: Phaser.GameObjects.Rectangle;
+    private bossHpBarDecor?: Phaser.GameObjects.Graphics;
     private bossHpBarInnerW = 0;
     private bossMaxHp = 1;
     // Boss 尾巴橫掃 telegraph 狀態
@@ -340,6 +343,9 @@ export class Game extends Scene
         this.bossHpBarBg = undefined;     // scene restart:舊 bar 物件已隨 scene 銷毀,清欄位防 stale ref
         this.bossHpBarFill = undefined;
         this.bossHpBarText = undefined;
+        this.bossHpBarGlow = undefined;
+        this.bossHpBarGloss = undefined;
+        this.bossHpBarDecor = undefined;
         this.bossSweepRing = undefined;   // 同理清橫掃 telegraph 欄位
         this.bossSweepNextAt = 0;
         this.bossSweepResolveAt = 0;
@@ -920,7 +926,7 @@ export class Game extends Scene
     }
 
     // HUD 能量錶質感:分段刻度 + 上亮下暗 bevel(讓扁平 bar 有金屬錶面感)
-    private decorateHudBar(x: number, y: number, w: number, h: number, segments: number, depth: number) {
+    private decorateHudBar(x: number, y: number, w: number, h: number, segments: number, depth: number): Phaser.GameObjects.Graphics {
         const g = this.add.graphics().setDepth(depth).setScrollFactor(0);
         // 分段刻度(垂直暗線)
         g.lineStyle(1, 0x1a1612, 0.40);
@@ -933,6 +939,7 @@ export class Game extends Scene
         g.lineBetween(x + 3, y + 2, x + w - 3, y + 2);
         g.lineStyle(2, 0x1a1612, 0.35);
         g.lineBetween(x + 3, y + h - 2, x + w - 3, y + h - 2);
+        return g;
     }
 
     private refreshPotionHotbar() {
@@ -2053,10 +2060,18 @@ export class Game extends Scene
         this.bossMaxHp = maxHp;
         const barW = 880, barH = 40, barX = (VIEW_W - barW) / 2, barY = 150;
         this.bossHpBarInnerW = barW - 6;
+        // 外發光(危險紅暈)
+        this.bossHpBarGlow = this.add.rectangle(barX - 6, barY - 6, barW + 12, barH + 12, 0x8b1a0f, 0.22)
+            .setOrigin(0, 0).setDepth(1399).setScrollFactor(0);
         this.bossHpBarBg = this.add.rectangle(barX, barY, barW, barH, 0x1a1612, 0.92)
             .setOrigin(0, 0).setStrokeStyle(3, 0x8b3a1f, 1).setDepth(1400).setScrollFactor(0);
         this.bossHpBarFill = this.add.rectangle(barX + 3, barY + 3, barW - 6, barH - 6, 0xc23a1a)
             .setOrigin(0, 0).setDepth(1401).setScrollFactor(0);
+        // 頂部 gloss 反光
+        this.bossHpBarGloss = this.add.rectangle(barX + 3, barY + 3, barW - 6, 8, 0xffe0c0, 0.16)
+            .setOrigin(0, 0).setDepth(1402).setScrollFactor(0);
+        // 分段刻度 + bevel(與玩家血條同能量錶質感)
+        this.bossHpBarDecor = this.decorateHudBar(barX, barY, barW, barH, 22, 1402);
         this.bossHpBarText = this.add.text(VIEW_W / 2, barY + barH / 2, `☠ ${name}`, {
             fontFamily: 'sans-serif', fontSize: 26, color: '#ffe0c0', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 4
@@ -2148,8 +2163,11 @@ export class Game extends Scene
 
     // Boss 頂部血條:銷毀(boss 擊敗時)
     private destroyBossHpBar() {
+        this.bossHpBarGlow?.destroy(); this.bossHpBarGlow = undefined;
         this.bossHpBarBg?.destroy(); this.bossHpBarBg = undefined;
         this.bossHpBarFill?.destroy(); this.bossHpBarFill = undefined;
+        this.bossHpBarGloss?.destroy(); this.bossHpBarGloss = undefined;
+        this.bossHpBarDecor?.destroy(); this.bossHpBarDecor = undefined;
         this.bossHpBarText?.destroy(); this.bossHpBarText = undefined;
     }
 

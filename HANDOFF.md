@@ -66,6 +66,8 @@
 
 22. **[x] 技能鈕(震波)圓形能量鈕質感**(2026-05-30 user「畫面精緻度」續做)— 原本方形紅 Rectangle。改 field 型別 Rectangle→Arc + drawSkillButton 用 this.add.circle:外發光環(橙 0.14)+ 暗框環 + 主圓鈕(紅橙描邊)+ 內頂高光,文字/CD 倒數不變。refreshSkillButton 對 Arc 的 setFillStyle/setStrokeStyle 相容(CD 灰/ready 紅橙)。tsc 0+build+Codex APPROVE(1 輪 clean,確認 Arc setInteractive 預設 bounding-box hit area 仍 116×116 可點/CD 刷新相容/無 prod pitfall)+ Playwright 截圖圓形能量鈕+點擊正常觸發震波 AoE(玩家周圍橙環+怪掉血)+console 0 error。**可續**:boss 血條/minimap 框/傷害數字 同質感。
 
+23. **[x] Boss 血條能量錶質感 + lifecycle 修正**(2026-05-30 user「畫面精緻度」續做)— createBossHpBar 加外發光(危險紅暈)+ 頂 gloss + decorateHudBar(22 段刻度+bevel),對齊玩家血條能量錶。**Codex 抓 lifecycle bug**:新增的 glow/gloss/decor graphics 原本沒存 ref → destroyBossHpBar 清不到 → boss 死後殘留 + 重複疊層(我只測 spawn 沒測死亡)。修:加 3 欄位 bossHpBarGlow/Gloss/Decor + decorateHudBar 回傳 Graphics + create 存 ref + destroyBossHpBar 一起 destroy + scene-restart reset 補。tsc 0+build+Codex APPROVE(2 輪:lifecycle leak,修完)+ Playwright trigger=3 連 farm ~40s 多次 boss 生死**始終單一血條無疊層** + boss 死亡走 destroyBossHpBar(Game.ts:2016)清乾淨,還原 trigger=50+移除測試武器+smoke 0 error。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)
