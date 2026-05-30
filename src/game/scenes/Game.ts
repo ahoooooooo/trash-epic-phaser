@@ -561,13 +561,12 @@ export class Game extends Scene
         if (!this.anims.exists('player_walk')) {
             this.anims.create({
                 key: 'player_walk',
-                // 8 幀 palindrome:contact-R(0)→中間(1)→passing(2)→中間(3)→contact-L(4)→中間(3)→passing(2)→中間(1)→loop
-                // 接觸幀(0/4)= bob 最低、passing(2)= bob 最高,RIFE 補的中間幀讓肢體漸變不跳
+                // 真 walk cycle:GPT-4o 一張 sheet 生 4 個清楚腿位(0 接觸大張 / 1 通過抬膝 / 2 接觸反向 / 3 通過反向),
+                // 全部頭頂 188、腳 1243(身高一致零抖動)、硬切 alpha 去毛邊。腿張開↔併攏對比 = 楓谷式踏步感。
                 frames: [
-                    { key: 'player_walk_0' }, { key: 'player_walk_1' }, { key: 'player_walk_2' }, { key: 'player_walk_3' },
-                    { key: 'player_walk_4' }, { key: 'player_walk_3' }, { key: 'player_walk_2' }, { key: 'player_walk_1' }
+                    { key: 'player_walk_0' }, { key: 'player_walk_1' }, { key: 'player_walk_2' }, { key: 'player_walk_3' }
                 ],
-                frameRate: 16,
+                frameRate: 8,
                 repeat: -1
             });
         }

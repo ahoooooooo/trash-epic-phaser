@@ -42,9 +42,8 @@ export class Preloader extends Scene
         // V1 主角 frame anim(Phase 4b-10:idle/walk + 4b-14:attack/hurt)
         this.load.image('player_idle', 'characters/player_scavver_sideview_idle.png');
         this.load.image('player_portrait', 'characters/player_scavver_portrait.png');  // 正面全身立繪(登入/選單/裝備頁用,地圖才側視)
-        // 走路 5 distinct 幀(contact-R / 中間 / passing / 中間 / contact-L,RIFE 補中間幀統一 canvas+腳底對齊)
-        // 8 幀 palindrome cycle + 垂直 bob + lean → 楓谷風順暢走路
-        for (let i = 0; i < 5; i++) this.load.image(`player_walk_${i}`, `characters/player_scavver_walk_${i}.png`);
+        // 走路 4 幀真 walk cycle(GPT-4o 一張 sheet 生:接觸大張 / 通過抬膝 / 接觸反向 / 通過反向,頭腳對齊零抖動)
+        for (let i = 0; i < 4; i++) this.load.image(`player_walk_${i}`, `characters/player_scavver_walk_${i}.png`);
         this.load.image('player_atk_windup', 'characters/player_scavver_attack_windup.png');
         this.load.image('player_atk_impact', 'characters/player_scavver_attack_impact.png');
         this.load.image('player_hurt', 'characters/player_scavver_hurt.png');
