@@ -205,6 +205,7 @@ interface BossDef {
     sweepHit: number;          // 命中擴散環
     biteFill: number;          // rage 連咬 內圈
     biteStroke: number;        // rage 連咬 外環
+    acidSpit?: boolean;        // 酸液噴吐(地面酸池 DoT zone)— acidsire 限定第 2 招
 }
 
 const BOSS_DEFS: Record<string, BossDef> = {
@@ -216,7 +217,7 @@ const BOSS_DEFS: Record<string, BossDef> = {
     acidsire: {
         blueprint: BOSS_ACIDSIRE, displayName: '蝕骨蜈蚣巢母',
         sweepFill: 0x40ff40, sweepStroke: 0x80ff50, sweepHit: 0x50d020,
-        biteFill: 0x90e040, biteStroke: 0xc0ff60
+        biteFill: 0x90e040, biteStroke: 0xc0ff60, acidSpit: true
     }
 };
 
@@ -228,6 +229,12 @@ const BOSS_SWEEP_CD_MS = 4800;       // 橫掃冷卻(rage 時減半)
 // Boss 狂咬(per 02_boss_giantrat.md「< 50% 怒氣後 連 3 咬 + 黃牙血效」)— rage 限定貼身 burst
 const BOSS_BITE_RANGE = 240;         // 狂咬貼身範圍
 const BOSS_BITE_CD_MS = 2600;        // 狂咬冷卻(rage 限定)
+// 酸液噴吐(per 03_boss_acidsire.md §9 招式 1「酸液噴射 直線範圍 telegraph 綠 decal」)— acidsire 限定:地面鎖定酸池 DoT zone
+const ACID_SPIT_RADIUS = 230;        // 酸池半徑
+const ACID_SPIT_WINDUP_MS = 900;     // 預警時間(玩家走出窗)
+const ACID_SPIT_CD_MS = 5600;        // 酸液冷卻(rage 減半)
+const ACID_POOL_LIFE_MS = 3600;      // 酸池殘留時間
+const ACID_POOL_TICK_MS = 500;       // 酸池 DoT tick 間隔
 
 interface MobData {
     blueprint: MobBlueprint;
@@ -299,6 +306,13 @@ export class Game extends Scene
     private bossSweepResolveAt = 0;    // >0 = windup 中,到此時間結算
     private bossSweepRing?: Phaser.GameObjects.Arc;  // 預警圈(world space)
     private bossBiteNextAt = 0;        // Boss 狂咬冷卻(rage 限定貼身 burst)
+    // 酸液噴吐 telegraph + 酸池 DoT 狀態(acidsire 限定)
+    private acidSpitNextAt = 0;        // 下次可噴
+    private acidSpitResolveAt = 0;     // >0 = telegraph windup 中,到此時間結算
+    private acidSpitTelegraph?: Phaser.GameObjects.Arc;  // 地面預警圈(鎖定落點)
+    private acidSpitTargetX = 0;
+    private acidSpitTargetY = 0;
+    private acidPools: { circle: Phaser.GameObjects.Arc; untilMs: number; nextTickMs: number }[] = [];  // 殘留酸池
     // Phase 4b-14 player action lock — 'attacking' / 'hurt' 期間禁切 idle/walking
     private playerActionAnim: 'attacking' | 'hurt' | null = null;
     // Phase 4c B fix:攻擊後此時間內 flipX 鎖朝目標怪,handleMovement 不覆蓋(防往後走背打)
@@ -405,6 +419,10 @@ export class Game extends Scene
         this.bossSweepRing = undefined;   // 同理清橫掃 telegraph 欄位
         this.bossSweepNextAt = 0;
         this.bossSweepResolveAt = 0;
+        this.acidSpitTelegraph = undefined;  // 酸液 telegraph/酸池欄位 scene restart 清(舊物件已隨 scene 銷毀)
+        this.acidSpitResolveAt = 0;
+        this.acidSpitNextAt = 0;
+        this.acidPools = [];
         this.bossBiteNextAt = 0;
         this.mobs = [];
         this.portals = [];
@@ -1190,7 +1208,7 @@ export class Game extends Scene
         this.handleMovement(delta);
         this.handleSpawn(time);
         this.trySpawnBoss(time);
-        if (this.bossActive) { this.updateBossHpBar(); this.updateBossAttack(time); }
+        if (this.bossActive) { this.updateBossHpBar(); this.updateBossAttack(time); this.updateAcidPools(time); }
         this.handleMobAI(time, delta);
         this.handleMobContactDamage(time);
         if (this.isGameOver) return;
@@ -2113,6 +2131,7 @@ export class Game extends Scene
         this.sessionKills = 0; // 下隻 boss 重數
         this.destroyBossHpBar();
         this.destroyBossSweep(); this.bossSweepResolveAt = 0;
+        this.destroyAcidPools();
         this.cameras.main.shake(500, 0.025);
         // 大號 BOSS DEFEATED popup
         const popup = this.add.text(VIEW_W / 2, VIEW_H / 2, 'BOSS 擊破!', {
@@ -2194,6 +2213,15 @@ export class Game extends Scene
         if (!bossMob) { this.destroyBossSweep(); this.bossSweepResolveAt = 0; return; }
         const data = bossMob.getData('mob') as MobData;
 
+        // 酸液噴吐 windup 中:地面預警圈固定在鎖定落點 + 到時間結算生酸池(與 sweep 互斥,優先結算)
+        if (this.acidSpitResolveAt > 0) {
+            if (time >= this.acidSpitResolveAt) {
+                this.resolveAcidSpit(time);
+                this.acidSpitResolveAt = 0;
+                this.acidSpitNextAt = time + (data.isRaging ? ACID_SPIT_CD_MS / 2 : ACID_SPIT_CD_MS);
+            }
+            return;
+        }
         // windup 中:預警圈跟著 boss + 到時間結算
         if (this.bossSweepResolveAt > 0) {
             if (this.bossSweepRing) { this.bossSweepRing.x = bossMob.x; this.bossSweepRing.y = bossMob.y; }
@@ -2224,7 +2252,76 @@ export class Game extends Scene
                 .setStrokeStyle(8, ss, 0.85).setDepth(6);
             this.tweens.add({ targets: this.bossSweepRing, alpha: 0.4, duration: 220, yoyo: true, repeat: -1 });
             this.bossSweepResolveAt = time + BOSS_SWEEP_WINDUP_MS;
+            return;
         }
+        // 酸液噴吐起手(acidsire 限定第 2 招):鎖定玩家當下位置生地面預警圈 → windup → 結算成酸池
+        if (this.activeBoss?.acidSpit && time >= this.acidSpitNextAt) {
+            const d = Math.hypot(this.player.x - bossMob.x, this.player.y - bossMob.y);
+            if (d > 900) { this.acidSpitNextAt = time + 700; return; }  // 太遠不噴
+            this.acidSpitTargetX = this.player.x;
+            this.acidSpitTargetY = this.player.y;
+            // 地面預警圈(酸綠,鎖定落點不跟玩家 → 可走出)
+            this.acidSpitTelegraph = this.add.circle(this.acidSpitTargetX, this.acidSpitTargetY, ACID_SPIT_RADIUS, 0x4cff60, 0.12)
+                .setStrokeStyle(6, 0x4cff60, 0.8).setDepth(6);
+            this.tweens.add({ targets: this.acidSpitTelegraph, alpha: 0.32, duration: 200, yoyo: true, repeat: -1 });
+            this.acidSpitResolveAt = time + ACID_SPIT_WINDUP_MS;
+        }
+    }
+
+    // 清酸液預警圈(連同 repeat:-1 pulse tween 一起 kill,防洩漏)— resolve/destroy 共用
+    private destroyAcidSpitTelegraph() {
+        if (!this.acidSpitTelegraph) return;
+        this.tweens.killTweensOf(this.acidSpitTelegraph);
+        this.acidSpitTelegraph.destroy();
+        this.acidSpitTelegraph = undefined;
+    }
+
+    // 酸液噴吐結算:清預警圈 → 生殘留酸池(綠 puddle,持續 DoT zone)
+    private resolveAcidSpit(time: number) {
+        this.destroyAcidSpitTelegraph();
+        const x = this.acidSpitTargetX, y = this.acidSpitTargetY;
+        // 濺射視覺
+        const splash = this.add.circle(x, y, ACID_SPIT_RADIUS, 0x4cff60, 0.4).setDepth(7);
+        this.tweens.add({ targets: splash, alpha: 0, scale: 1.2, duration: 280, onComplete: () => splash.destroy() });
+        this.cameras.main.shake(160, 0.010);
+        // 殘留酸池(深綠底 + 螢光綠邊,DoT zone)
+        const pool = this.add.circle(x, y, ACID_SPIT_RADIUS, 0x2a8030, 0.34)
+            .setStrokeStyle(4, 0x4cff60, 0.6).setDepth(5);
+        this.tweens.add({ targets: pool, alpha: 0.18, duration: 600, yoyo: true, repeat: -1 });  // 沸騰呼吸感
+        this.acidPools.push({ circle: pool, untilMs: time + ACID_POOL_LIFE_MS, nextTickMs: time + ACID_POOL_TICK_MS });
+    }
+
+    // 每幀更新酸池:站內玩家受 DoT(可走出)+ 到期淡出移除
+    private updateAcidPools(time: number) {
+        if (this.acidPools.length === 0) return;
+        const dmg = Math.max(1, Math.round((this.activeBoss?.blueprint.contactDamage ?? 30) * 0.5));
+        const survivors: { circle: Phaser.GameObjects.Arc; untilMs: number; nextTickMs: number }[] = [];
+        for (const p of this.acidPools) {
+            if (time >= p.untilMs) {
+                const c = p.circle;
+                this.tweens.killTweensOf(c);
+                this.tweens.add({ targets: c, alpha: 0, duration: 280, onComplete: () => c.destroy() });
+                continue;
+            }
+            if (time >= p.nextTickMs) {
+                p.nextTickMs = time + ACID_POOL_TICK_MS;
+                const inside = Math.hypot(this.player.x - p.circle.x, this.player.y - p.circle.y) <= ACID_SPIT_RADIUS;
+                if (inside && time >= this.playerInvulnUntilMs && !this.isGameOver) {
+                    this.takeDamage(dmg, time);
+                    this.spawnFloatingLabel(this.player.x, this.player.y - 60, `-${dmg} 酸蝕`, '#4cff60');
+                }
+            }
+            survivors.push(p);
+        }
+        this.acidPools = survivors;
+    }
+
+    // 清所有酸池 + 預警(boss 擊敗 / scene reset)
+    private destroyAcidPools() {
+        this.destroyAcidSpitTelegraph();
+        this.acidSpitResolveAt = 0;
+        for (const p of this.acidPools) { this.tweens.killTweensOf(p.circle); p.circle.destroy(); }
+        this.acidPools = [];
     }
 
     private resolveBossSweep(bx: number, by: number, time: number) {
