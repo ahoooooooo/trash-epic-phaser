@@ -2,6 +2,7 @@ import { Scene } from 'phaser';
 import { SaveService } from '../services/SaveService';
 import { SKINS, skinRarityColor, skinSlotLabel, skinPrice, SkinConfig } from '../services/SkinService';
 import { TOPUP_TIERS, GIFT_PACKS, packLimitLabel, TopupTier, PackConfig, DAILY_FREE_CRYSTAL } from '../services/PackService';
+import { drawSceneHeader } from '../ui/UiPanel';
 
 const W = 1080;
 const H = 1920;
@@ -32,10 +33,7 @@ export class Shop extends Scene {
         if (this.scene.isActive('Game')) this.scene.pause('Game');
         this.add.rectangle(0, 0, W, H, 0x1a1612, 0.97).setOrigin(0, 0);
 
-        this.add.text(W / 2, 52, '◤  廢土商店  ◢', {
-            fontFamily: 'sans-serif', fontSize: 50, color: '#ff8830', fontStyle: 'bold',
-            stroke: '#1a1612', strokeThickness: 6
-        }).setOrigin(0.5);
+        drawSceneHeader(this, '◤  廢土商店  ◢', W, { height: 88 });
 
         // 貨幣列:金幣(左) + 廢土晶體(右)
         this.goldDisplay = this.add.text(60, 110, '', {

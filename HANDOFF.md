@@ -72,6 +72,8 @@
 
 25. **[x] 虛擬搖桿 dpad 質感**(2026-05-30 user「畫面精緻度」續做)— VirtualJoystick 原本 base+stick 兩素橙圈。加 `deco`(Graphics depth 999:外暗環+內圈+4 方向 N/S/W/E 短刻度,dpad 感)+ `stickHi`(搖桿頭高光 circle depth 1002 偏上 radius*0.12 給 3D 旋鈕感)。base 移到觸點時 drawDeco 重畫(g.clear 防累積);新增 setStickPos 同步 stick+stickHi 取代所有 stick.setPosition;destroy 加 deco/stickHi。tsc 0+build+Codex APPROVE(1 輪 clean,確認 setStickPos 全覆蓋無殘留/drawDeco clear 無洩漏/stickHi 偏移一致/destroy 齊)+ Playwright 截圖搖桿顯外環+4 刻度+搖桿頭高光+拖曳 stick 跟手 deco 重定位 movement 正常+console 0 error。
 
+26. **[x] 共用 rusty-panel header helper + 套 Shop**(2026-05-30 user「畫面精緻度」續做,抽共用)— 新 `src/game/ui/UiPanel.ts` export `drawSceneHeader(scene,title,width,opts?)`:鏽帶 rect(深底+鏽橙邊)+ 上沿亮帶 + 底部橙 accent 線 + 標題 + 兩端鉚釘(depth 50-52,純繪製無 ref)。Shop.ts 原浮空標題改 `drawSceneHeader(this,'◤ 廢土商店 ◢',W,{height:88})`。tsc 0+build+Codex APPROVE(1 輪 clean,確認 header depth 50-52 不遮貨幣 y110/tab y244/list mask y290 且無 setInteractive 不攔 pointer/純函數無洩漏)+ Playwright 開商店截圖 header 鏽帶+鉚釘+橙 accent,貨幣/tab/購買鈕全正常+console 0 error。**下批沿用**:Gacha/Talent/Quest 對話框接同 helper。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)
