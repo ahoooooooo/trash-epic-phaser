@@ -103,7 +103,7 @@ const MAPS: Record<string, MapConfig> = {
         ],
         portals: [
             { x: 600, y: 200, targetMapId: 'guild_hall', targetX: 600, targetY: 1200, label: '← 公會' },
-            { x: 200, y: 1400, targetMapId: 'wasteland_outskirts', targetX: 1200, targetY: 300, label: '廢土外圍 ↓' },
+            { x: 200, y: 1400, targetMapId: 'wasteland_outskirts', targetX: 1800, targetY: 450, label: '廢土外圍 ↓' },
             { x: 1200, y: 1400, targetMapId: 'rust_alley', targetX: 700, targetY: 300, label: '鏽蝕巷 →' }
         ],
         bossEnabled: false,
@@ -112,72 +112,72 @@ const MAPS: Record<string, MapConfig> = {
     // === 廢土外圍(field 1-40,新手獵場)===
     wasteland_outskirts: {
         id: 'wasteland_outskirts', nameZH: '廢土外圍', mapType: 'field', levelRange: [1, 40], regionId: 'scrap',
-        width: 2400, height: 3200, bgColor: '#2a2520', bgKey: 'map_wasteland_topdown',
-        spawnPoints: fieldSpawns(2400, 3200, 16, [0]),  // 一圖一怪:廢土外圍 = 廢料巨鼠 only(q1)
+        width: 3600, height: 4800, bgColor: '#2a2520', bgKey: 'map_wasteland_topdown',
+        spawnPoints: fieldSpawns(3600, 4800, 16, [0]),  // 一圖一怪:廢土外圍 = 廢料巨鼠 only(q1)— 放大圖走路刷
         npcs: [],
         shopNpcs: [],
         portals: [
-            { x: 1200, y: 200, targetMapId: 'scrap_town', targetX: 600, targetY: 1300, label: '← 廢料鎮' },
-            { x: 300, y: 1600, targetMapId: 'creeper_vale', targetX: 1000, targetY: 400, label: '毒花谷 →' },
-            { x: 1200, y: 3000, targetMapId: 'dry_well_road', targetX: 900, targetY: 300, label: '乾井路 ↓' }
+            { x: 1800, y: 300, targetMapId: 'scrap_town', targetX: 600, targetY: 1300, label: '← 廢料鎮' },
+            { x: 450, y: 2400, targetMapId: 'creeper_vale', targetX: 1500, targetY: 600, label: '毒花谷 →' },
+            { x: 1800, y: 4500, targetMapId: 'dry_well_road', targetX: 1350, targetY: 450, label: '乾井路 ↓' }
         ],
         bossEnabled: true,
-        playerStartX: 1200, playerStartY: 1600
+        playerStartX: 1800, playerStartY: 2400
     },
     // === 毒花谷(field 1-40,食人花獵場 — 一圖一怪)===
     creeper_vale: {
         id: 'creeper_vale', nameZH: '毒花谷', mapType: 'field', levelRange: [1, 40], regionId: 'scrap',
-        width: 2000, height: 2800, bgColor: '#26301f', bgKey: 'map_creeper_vale_topdown',
-        spawnPoints: fieldSpawns(2000, 2800, 14, [11]),  // 一圖一怪:毒花谷 = 變異食人花 only(q2/q6)
+        width: 3000, height: 4200, bgColor: '#26301f', bgKey: 'map_creeper_vale_topdown',
+        spawnPoints: fieldSpawns(3000, 4200, 14, [11]),  // 一圖一怪:毒花谷 = 變異食人花 only(q2/q6)
         npcs: [],
         shopNpcs: [],
         portals: [
-            { x: 1000, y: 200, targetMapId: 'wasteland_outskirts', targetX: 300, targetY: 1700, label: '← 廢土外圍' }
+            { x: 1500, y: 300, targetMapId: 'wasteland_outskirts', targetX: 450, targetY: 2550, label: '← 廢土外圍' }
         ],
         bossEnabled: false,
-        playerStartX: 1000, playerStartY: 1400
+        playerStartX: 1500, playerStartY: 2100
     },
     // === 乾井路(field 40-90,進階獵場)===
     dry_well_road: {
         id: 'dry_well_road', nameZH: '乾井路', mapType: 'field', levelRange: [40, 90], regionId: 'scrap',
-        width: 1800, height: 2800, bgColor: '#33291c', bgKey: 'map_dry_well_road_topdown',
-        spawnPoints: fieldSpawns(1800, 2800, 14, [9]),  // 乾井路 = 鏽蝕機械蜘蛛(真‧獨立新 sprite,非換色)
+        width: 2700, height: 4200, bgColor: '#33291c', bgKey: 'map_dry_well_road_topdown',
+        spawnPoints: fieldSpawns(2700, 4200, 14, [9]),  // 乾井路 = 鏽蝕機械蜘蛛(真‧獨立新 sprite,非換色)
         npcs: [],
         shopNpcs: [],
         portals: [
-            { x: 900, y: 200, targetMapId: 'wasteland_outskirts', targetX: 1200, targetY: 2900, label: '← 廢土外圍' },
-            { x: 900, y: 2600, targetMapId: 'rust_alley', targetX: 700, targetY: 1400, label: '鏽蝕巷 ↓' },
-            { x: 300, y: 1400, targetMapId: 'sand_pit', targetX: 1000, targetY: 400, label: '鏽蝕沙坑 →' }
+            { x: 1350, y: 300, targetMapId: 'wasteland_outskirts', targetX: 1800, targetY: 4350, label: '← 廢土外圍' },
+            { x: 1350, y: 3900, targetMapId: 'rust_alley', targetX: 700, targetY: 1400, label: '鏽蝕巷 ↓' },
+            { x: 450, y: 2100, targetMapId: 'sand_pit', targetX: 1500, targetY: 600, label: '鏽蝕沙坑 →' }
         ],
         bossEnabled: true,
-        playerStartX: 900, playerStartY: 1400
+        playerStartX: 1350, playerStartY: 2100
     },
     // === 鏽蝕沙坑(field 40-90,廢土巨蠍獵場 — 一圖一怪)===
     sand_pit: {
         id: 'sand_pit', nameZH: '鏽蝕沙坑', mapType: 'field', levelRange: [40, 90], regionId: 'scrap',
-        width: 2000, height: 2800, bgColor: '#33291c', bgKey: 'map_sand_pit_topdown',
-        spawnPoints: fieldSpawns(2000, 2800, 14, [12]),  // 一圖一怪:鏽蝕沙坑 = 廢土巨蠍 only
+        width: 3000, height: 4200, bgColor: '#33291c', bgKey: 'map_sand_pit_topdown',
+        spawnPoints: fieldSpawns(3000, 4200, 14, [12]),  // 一圖一怪:鏽蝕沙坑 = 廢土巨蠍 only
         npcs: [],
         shopNpcs: [],
         portals: [
-            { x: 1000, y: 200, targetMapId: 'dry_well_road', targetX: 300, targetY: 1500, label: '← 乾井路' },
-            { x: 200, y: 1400, targetMapId: 'acid_brood', targetX: 900, targetY: 300, label: '蝕骨蜈蚣巢 →' }
+            { x: 1500, y: 300, targetMapId: 'dry_well_road', targetX: 450, targetY: 2250, label: '← 乾井路' },
+            { x: 300, y: 2100, targetMapId: 'acid_brood', targetX: 1350, targetY: 450, label: '蝕骨蜈蚣巢 →' }
         ],
         bossEnabled: false,
-        playerStartX: 1000, playerStartY: 1400
+        playerStartX: 1500, playerStartY: 2100
     },
     // === 蝕骨蜈蚣巢(field 90-180,蝕骨蜈蚣獵場 — 一圖一怪;殺 50 隻召喚 acidsire 巢母 boss)===
     acid_brood: {
         id: 'acid_brood', nameZH: '蝕骨蜈蚣巢', mapType: 'field', levelRange: [90, 180], regionId: 'scrap',
-        width: 1800, height: 2600, bgColor: '#1a2515',
-        spawnPoints: fieldSpawns(1800, 2600, 8, [13]),  // 一圖一怪:蝕骨蜈蚣巢 = 蝕骨蜈蚣 only
+        width: 2700, height: 3900, bgColor: '#1a2515',
+        spawnPoints: fieldSpawns(2700, 3900, 8, [13]),  // 一圖一怪:蝕骨蜈蚣巢 = 蝕骨蜈蚣 only
         npcs: [],
         shopNpcs: [],
         portals: [
-            { x: 900, y: 200, targetMapId: 'sand_pit', targetX: 200, targetY: 1500, label: '← 鏽蝕沙坑' }
+            { x: 1350, y: 300, targetMapId: 'sand_pit', targetX: 300, targetY: 2250, label: '← 鏽蝕沙坑' }
         ],
         bossEnabled: true, bossId: 'acidsire',
-        playerStartX: 900, playerStartY: 1300
+        playerStartX: 1350, playerStartY: 1950
     },
     // === 鏽蝕巷(town 80-180,中繼村,賣中低階藥)===
     rust_alley: {
@@ -191,8 +191,8 @@ const MAPS: Record<string, MapConfig> = {
         ],
         portals: [
             { x: 700, y: 200, targetMapId: 'scrap_town', targetX: 1200, targetY: 1300, label: '← 廢料鎮' },
-            { x: 200, y: 1400, targetMapId: 'dry_well_road', targetX: 900, targetY: 2500, label: '← 乾井路' },
-            { x: 1300, y: 1400, targetMapId: 'core_gate', targetX: 1200, targetY: 400, label: '☢ 爐心門' }
+            { x: 200, y: 1400, targetMapId: 'dry_well_road', targetX: 1350, targetY: 3750, label: '← 乾井路' },
+            { x: 1300, y: 1400, targetMapId: 'core_gate', targetX: 1800, targetY: 600, label: '☢ 爐心門' }
         ],
         bossEnabled: false,
         playerStartX: 700, playerStartY: 800
@@ -200,29 +200,29 @@ const MAPS: Record<string, MapConfig> = {
     // === 爐心門(boss 區)===
     core_gate: {
         id: 'core_gate', nameZH: '爐心門', mapType: 'boss', levelRange: [180, 300], regionId: 'reactor',
-        width: 2000, height: 2400, bgColor: '#241a16', bgKey: 'map_core_gate_topdown',
-        spawnPoints: fieldSpawns(2000, 2400, 6, [10]),  // 爐心門 = 輻射機甲蟲(真‧獨立新 sprite)
+        width: 3000, height: 3600, bgColor: '#241a16', bgKey: 'map_core_gate_topdown',
+        spawnPoints: fieldSpawns(3000, 3600, 6, [10]),  // 爐心門 = 輻射機甲蟲(真‧獨立新 sprite)
         npcs: [],
         shopNpcs: [],
         portals: [
-            { x: 1200, y: 200, targetMapId: 'rust_alley', targetX: 1300, targetY: 1300, label: '← 鏽蝕巷' },
-            { x: 1000, y: 2200, targetMapId: 'ancient_ruins', targetX: 1000, targetY: 400, label: '古文明遺跡 ↓' }
+            { x: 1800, y: 300, targetMapId: 'rust_alley', targetX: 1300, targetY: 1300, label: '← 鏽蝕巷' },
+            { x: 1500, y: 3300, targetMapId: 'ancient_ruins', targetX: 1500, targetY: 600, label: '古文明遺跡 ↓' }
         ],
         bossEnabled: true, bossId: 'kraz',  // 終極區 boss = 哥布林戰酋 克拉茲(取代預設巨鼠)
-        playerStartX: 1000, playerStartY: 1800
+        playerStartX: 1500, playerStartY: 2700
     },
     // === 古文明遺跡(隱藏 boss 區 lv300+,銹蝕審判官)— 鏡像 acid_brood 一圖一怪 + boss ===
     ancient_ruins: {
         id: 'ancient_ruins', nameZH: '古文明遺跡', mapType: 'boss', levelRange: [300, 500], regionId: 'reactor',
-        width: 2000, height: 2800, bgColor: '#1a1a16',
-        spawnPoints: fieldSpawns(2000, 2800, 6, [10]),  // 一圖一怪:遺跡 = 輻射機甲蟲(古哨兵機械,殺 50 召銹蝕審判官)
+        width: 3000, height: 4200, bgColor: '#1a1a16',
+        spawnPoints: fieldSpawns(3000, 4200, 6, [10]),  // 一圖一怪:遺跡 = 輻射機甲蟲(古哨兵機械,殺 50 召銹蝕審判官)
         npcs: [],
         shopNpcs: [],
         portals: [
-            { x: 1000, y: 200, targetMapId: 'core_gate', targetX: 1000, targetY: 2100, label: '← 爐心門' }
+            { x: 1500, y: 300, targetMapId: 'core_gate', targetX: 1500, targetY: 3150, label: '← 爐心門' }
         ],
         bossEnabled: true, bossId: 'arbiter',
-        playerStartX: 1000, playerStartY: 1400
+        playerStartX: 1500, playerStartY: 2100
     }
 };
 
