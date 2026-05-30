@@ -78,6 +78,8 @@
 
 28. **[x] Talent header 鏽蝕質感 + vendor 改動 revert**(2026-05-30 user「畫面精緻度」續做)— **vendor 商販買藥面板**原想加標題鏽牌+鉚釘(layer Container,lifecycle 安全),但 Playwright 無法穩定觸發 world-positioned stall(96px hit + 距離 gate)做截圖驗證 → **誠實 revert**(不出貨沒實測的視覺改動,must-test 原則)。改做**可靠用 tab 開啟驗證**的 Talent header:既有 header rect(0..168 含 flanking 按鈕,不能用全高 band)後加上沿亮帶 + 底部橙 accent + 4 角鉚釘。Codex 抓鉚釘 x=W-22 與返回鈕 2px 重疊 → 改 [14,W-14] 清開。tsc 0+build+Codex APPROVE(2 輪:鉚釘重疊,修完)+ Playwright 天賦 tab 截圖 header 顯橙 accent+鉚釘+亮帶,重置/返回 按鈕未被遮,console 0 error。**教訓**:world-positioned 互動元素(vendor stall/NPC)難用 Playwright 盲點觸發,優先挑 tab/按鈕可開的 UI 做視覺驗證。
 
+29. **[x] 武器 Bleed + Stagger mechanic 接戰鬥**(2026-05-30,design-doc weapons_v1 §2 設計已定未實作)— combat 原本只接了 knockback(彈弓)/recovery(髒手套),**廢鋁刀 Bleed + 鋼筋棒 Stagger 設計了沒實作**。MobData 加 bleedUntilMs/bleedDmgPerTick/bleedNextTickMs/staggerUntilMs(optional)。handleAutoAttack 命中後:bleed roll chance 掛 DoT(每秒 dotPerSec×baseDmg,durSec 秒);stagger 掛 0.3s。handleMobAI 每幀:bleed tick 掉血+綠浮字(到期清欄位,hp≤0 killMob+continue)+ stagger gate(暈期凍結移動)。tsc 0+build+Codex APPROVE(1 輪 clean,確認 tick 位置/killMob 後 continue/time 同源/無 prod pitfall;採納清 bleedDmgPerTick 小建議)。**測試誠實說明**:暫設 chance=1.0+dotPerSec 放大 farm,鼠秒融+大量掉落(behavioral 證實 bleed 疊傷),但**綠 DoT 浮字在 game 縮放+並發橙普攻數字下未能截清隔離**(花了多輪嘗試);已還原 0.10/0.30。combat 跑通(裝廢鋁刀打鼠死+掉落)。**教訓**:小尺寸機率性浮字 element 難用 Playwright 截圖隔離驗證,靠 code+Codex+behavioral 證據。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)

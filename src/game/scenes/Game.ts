@@ -190,6 +190,10 @@ interface MobData {
     nextWanderAt: number;
     isRaging?: boolean;
     isElite?: boolean;
+    bleedUntilMs?: number;       // 廢鋁刀 Bleed DoT 到期
+    bleedDmgPerTick?: number;    // 每秒流血傷害
+    bleedNextTickMs?: number;    // 下次流血 tick
+    staggerUntilMs?: number;     // 鋼筋棒 Stagger 短暈到期
 }
 
 export class Game extends Scene
@@ -1641,6 +1645,17 @@ export class Game extends Scene
                 sh.y = m.y + m.displayHeight * 0.42;
             }
 
+            // 廢鋁刀 Bleed DoT tick(每秒掉血,綠字)
+            if (data.bleedNextTickMs !== undefined && data.bleedUntilMs !== undefined && data.bleedDmgPerTick && time >= data.bleedNextTickMs) {
+                data.hp -= data.bleedDmgPerTick;
+                this.spawnFloatingLabel(m.x + (Math.random() - 0.5) * 30, m.y - 40, `${data.bleedDmgPerTick}`, '#9be060');
+                if (time < data.bleedUntilMs) data.bleedNextTickMs = time + 1000;
+                else { data.bleedUntilMs = undefined; data.bleedNextTickMs = undefined; data.bleedDmgPerTick = undefined; }
+                if (data.hp <= 0) { this.killMob(m, time); continue; }
+            }
+            // 鋼筋棒 Stagger:短暈期間凍結移動
+            if (data.staggerUntilMs !== undefined && time < data.staggerUntilMs) continue;
+
             // 距離 player
             const pdx = this.player.x - m.x;
             const pdy = this.player.y - m.y;
@@ -1847,6 +1862,16 @@ export class Game extends Scene
         // 死神鐮刀:殘血(< executeThreshold)非 boss 直接處決
         if (buff.executeThreshold > 0 && data.hp > 0 && !data.blueprint.isBoss && data.hp < data.blueprint.hp * buff.executeThreshold) {
             data.hp = 0;
+        }
+        // 廢鋁刀 Bleed:命中機率掛 DoT(weapons_v1 §2「每秒 dotPerSec×atk,durSec 秒」)
+        if (weapon.bleed && data.hp > 0 && Math.random() < weapon.bleed.chance) {
+            data.bleedUntilMs = time + weapon.bleed.durSec * 1000;
+            data.bleedDmgPerTick = Math.max(1, Math.round(baseDmg * weapon.bleed.dotPerSec));
+            data.bleedNextTickMs = time + 1000;
+        }
+        // 鋼筋棒 Stagger:重擊短暈 0.3 秒(怪不 cast,改為暫停 AI 移動)
+        if (weapon.stagger && data.hp > 0) {
+            data.staggerUntilMs = time + 300;
         }
 
         // 武器類別專屬玩家動作(楓谷風)
