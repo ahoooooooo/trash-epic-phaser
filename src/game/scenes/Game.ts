@@ -300,13 +300,21 @@ export class Game extends Scene
         const mapH = this.mapConfig.height;
 
         this.cameras.main.setBackgroundColor(this.mapConfig.bgColor);
-        this.cameras.main.setBounds(0, 0, mapW, mapH);
+        // camera bounds 上下各延伸 HUD 高度(全地圖一致):地圖頂落在血條下(y≈116)、底落在經驗條上(y≈1690),
+        // 角色走到地圖邊緣時不會被頂部血條 / 底部經驗條遮。Phaser bounds<viewport 時 scrollY pin 到 boundsTop=-116,
+        // 角色仍渲染在 HUD 下(y≈176),小地圖一樣安全。
+        const TOP_HUD = 116, BOTTOM_HUD = 230;
+        const camTop = -TOP_HUD;
+        const camH = mapH + TOP_HUD + BOTTOM_HUD;
+        this.cameras.main.setBounds(0, camTop, mapW, camH);
 
         // Phase 4b-9 — GPT-4o painted top-down 廢土地圖(楓谷風,單張 opaque 全鋪滿)
         // Phase 4c-1:town(公會/廢料鎮/鏽蝕巷)用室內 bg,field/boss 用廢土 bg(先復用,4c-5 各生 painted)
         const bgKey = this.mapConfig.mapType === 'town' ? 'map_guild_hall_topdown' : 'map_wasteland_topdown';
-        const bg = this.add.image(mapW / 2, mapH / 2, bgKey);
-        bg.setDisplaySize(mapW, mapH);
+        // bg 鋪滿 camera 可視範圍:延伸帶 + 比螢幕小的地圖也補滿到 viewport,任何角度都不露 flat bgColor
+        const bgH = Math.max(camH, VIEW_H);
+        const bg = this.add.image(mapW / 2, camTop + bgH / 2, bgKey);
+        bg.setDisplaySize(mapW, bgH);
         bg.setDepth(-100);
 
         // 玩家出生點:從 SaveService(若有 portal enter pos)或 mapConfig.playerStart

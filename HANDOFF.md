@@ -11,6 +11,7 @@
 - push main → GitHub Actions auto-deploy ~40-60s。
 - Phase 4c 程式 roadmap + user 6 大需求 A-F + 變現 + FTUE + 每日簽到 + 主動技能 + 3 隻真新怪 sprite + 10 特色天賦 **全部已完成上線**。
 - build 狀態:綠(tsc 0 error / vite build 過 / live 200)。
+- 最近(本 session):①UI 直屏防誤觸(右列內縮/tab 間距/搖桿排除底部)②camera HUD-safe band(camera bounds 上下延伸 HUD 高度,角色走到地圖頂/底不被血條/經驗條遮;bg 補滿延伸帶)— 皆 Codex APPROVE + Playwright 實測上線。
 
 ## 你接手做事的鐵律(違背就停)
 1. **改完不准沒實測說「修好了」**:`npx tsc --noEmit` → `npm run build` → `npx vite preview --port 4180` 從 root `/` 開 → Playwright 1080×1920 設假存檔(localStorage)→ click(540,1610) 進 game → 截圖。三者+證據缺一不可。
