@@ -30,6 +30,12 @@ const RESPAWN_CYCLE_MS = 7560;
 
 // Phaser 4 TintModes.FILL enum value(production build 無 Phaser global namespace,hardcode 1)
 const TINT_FILL = 1;
+// 精英怪(掛機策略小目標):偶發強化怪,更大 / 金黃 tint / 更肉 / 大獎勵
+const ELITE_CHANCE = 0.08;
+const ELITE_HP_MULT = 3.5;
+const ELITE_SCALE_MULT = 1.5;
+const ELITE_REWARD_MULT = 4;
+const ELITE_TINT = 0xffd040;
 // Phase 4c C-fix:玩家各 frame PNG 尺寸不一(BiRefNet crop bbox 852~1209 寬 1043~1254 高),
 // fixed setScale(0.3) 讓 render 高度脈動(頭忽大忽小)。改鎖固定 display 高度,scale 依 frame 動態算。
 const PLAYER_DISPLAY_H = 376;
@@ -156,6 +162,7 @@ interface MobData {
     wanderTargetY: number;
     nextWanderAt: number;
     isRaging?: boolean;
+    isElite?: boolean;
 }
 
 export class Game extends Scene
@@ -1314,15 +1321,19 @@ export class Game extends Scene
                     continue;
                 }
                 const bp = MOB_BLUEPRINTS[sp.blueprintIdx];
-                const mob = this.add.sprite(sp.x, sp.y, bp.spriteKey).setScale(bp.scale);
-                if (bp.tint !== undefined) {
+                const isElite = Math.random() < ELITE_CHANCE;        // 偶發精英怪(掛機狩獵小目標)
+                const mScale = isElite ? bp.scale * ELITE_SCALE_MULT : bp.scale;
+                const mob = this.add.sprite(sp.x, sp.y, bp.spriteKey).setScale(mScale);
+                if (isElite) {
+                    mob.setTint(ELITE_TINT);                          // 金黃 multiply,蓋過 bp.tint(精英標識)
+                } else if (bp.tint !== undefined) {
                     // Phase 4b-13:multiply mode 保留紋路(避免全灰 fill 看起來像 bug)
                     mob.setTint(bp.tint);
                 }
                 // Phase 4b-11 play frame anim by blueprint id
                 // 真‧獨立新怪是單張 sprite(無 run frames)→ 不 play frame anim(否則會換到 giantrat/centipede 貼圖),改腳步輕微縮放抖動
                 if (bp.spriteKey === 'mob_rust_spider' || bp.spriteKey === 'mob_reactor_crawler' || bp.spriteKey === 'mob_mutant_creeper') {
-                    this.tweens.add({ targets: mob, scaleX: bp.scale * 1.06, scaleY: bp.scale * 0.96, duration: 380, yoyo: true, repeat: -1 });
+                    this.tweens.add({ targets: mob, scaleX: mScale * 1.06, scaleY: mScale * 0.96, duration: 380, yoyo: true, repeat: -1 });
                 } else if (bp.id === 'centipede' || bp.id === 'scrap_drone') {
                     mob.play('centipede_wave');
                 } else {
@@ -1330,15 +1341,23 @@ export class Game extends Scene
                 }
                 const data: MobData = {
                     blueprint: bp,
-                    hp: bp.hp,
+                    hp: isElite ? Math.round(bp.hp * ELITE_HP_MULT) : bp.hp,
                     spawnPoint: sp,
                     lastContactMs: -Infinity,
                     state: 'wander',
                     wanderTargetX: sp.x,
                     wanderTargetY: sp.y,
-                    nextWanderAt: 0
+                    nextWanderAt: 0,
+                    isElite
                 };
                 mob.setData('mob', data);
+                if (isElite) {
+                    // 精英登場:金環爆 + 公告
+                    this.flashHudMessage('⚠ 精英怪出現!', ELITE_TINT);
+                    const eRing = this.add.circle(mob.x, mob.y, 30, ELITE_TINT, 0)
+                        .setStrokeStyle(6, ELITE_TINT, 1).setDepth(450);
+                    this.tweens.add({ targets: eRing, radius: 180, alpha: 0, duration: 600, ease: 'Quad.out', onComplete: () => eRing.destroy() });
+                }
                 // VFX-A:怪落地陰影(依 mob displayWidth 縮放)
                 mob.setData('shadow', this.makeGroundShadow(mob.x, mob.y, Math.max(36, mob.displayWidth * 0.7)));
                 sp.mob = mob;
@@ -1591,6 +1610,8 @@ export class Game extends Scene
             if (!tData) { target.clearTint(); return; }
             if (tData.isRaging) {
                 target.setTint(0xff2020).setTintMode(TINT_FILL);
+            } else if (tData.isElite) {
+                target.setTint(ELITE_TINT).setTintMode(0);
             } else if (tData.blueprint.tint !== undefined) {
                 // multiply mode 保留紋路 — 必須 setTintMode(0) 切回 multiply,否則白閃的 fill mode 殘留→怪變純色剪影失去紋路(user 報「打擊後失去顏色」)
                 target.setTint(tData.blueprint.tint).setTintMode(0);
@@ -1664,8 +1685,12 @@ export class Game extends Scene
         }
         this.mobs = this.mobs.filter(m => m !== target);
         this.spawnGoldDrop(target.x, target.y, data.blueprint.goldReward);
-        this.grantKillReward(target.x, target.y, data.blueprint);
-        this.rollMobDrops(target.x, target.y, data.blueprint.isBoss === true);
+        this.grantKillReward(target.x, target.y, data.blueprint, data.isElite === true);
+        this.rollMobDrops(target.x, target.y, data.blueprint.isBoss === true, data.isElite === true);
+        if (data.isElite) {
+            this.flashHudMessage('★ 精英擊破!', ELITE_TINT);
+            this.cameras.main.shake(140, 0.01);
+        }
         if (data.blueprint.isBoss) {
             this.handleBossDefeated(target.x, target.y);
         }
@@ -1686,11 +1711,11 @@ export class Game extends Scene
     }
 
     // Phase 4b-7 掉落系統
-    private rollMobDrops(x: number, y: number, isBoss: boolean) {
+    private rollMobDrops(x: number, y: number, isBoss: boolean, isElite = false) {
         const save = SaveService.instance;
-        // Phase 4c-D3 天賦掉落率加成(拾荒者之心/幸運拾荒/囤積之王)
+        // Phase 4c-D3 天賦掉落率加成(拾荒者之心/幸運拾荒/囤積之王)+ 精英怪 ×3 掉落機率
         const buff = computeTalentBuff();
-        const dropMult = 1 + buff.dropRatePct;
+        const dropMult = (1 + buff.dropRatePct) * (isElite ? 3 : 1);
         // 強化石(50% / boss 100%)+ 廢土煉金:doubleMatChance 機率翻倍
         if (isBoss || Math.random() < 0.5 * dropMult) {
             let mat = isBoss ? 5 : 1;
@@ -1828,13 +1853,14 @@ export class Game extends Scene
         void time;
     }
 
-    private grantKillReward(x: number, y: number, bp: MobBlueprint)
+    private grantKillReward(x: number, y: number, bp: MobBlueprint, isElite = false)
     {
         const save = SaveService.instance;
         const buff = computeTalentBuff();
+        const eliteMult = isElite ? ELITE_REWARD_MULT : 1;
         save.addKill();
-        // Phase 4b-15 talent: gold buff(金幣不再 HUD 顯示,各 scene 內看)
-        save.addGold(Math.round(bp.goldReward * (1 + buff.goldGainPct)));
+        // Phase 4b-15 talent: gold buff(金幣不再 HUD 顯示,各 scene 內看)+ 精英怪 ×倍
+        save.addGold(Math.round(bp.goldReward * (1 + buff.goldGainPct) * eliteMult));
         if (!bp.isBoss) this.sessionKills++;
 
         // Quest progress(自動 track 殺怪)
@@ -1849,7 +1875,7 @@ export class Game extends Scene
         }
 
         // Phase 4b-15 talent: exp buff(buff 已在上面 compute)
-        const expGain = Math.round(bp.expReward * (1 + buff.expGainPct));
+        const expGain = Math.round(bp.expReward * (1 + buff.expGainPct) * eliteMult);
         const result = save.addExp(expGain);
         const expText = this.add.text(x, y - 80, `+${expGain} EXP`, {
             fontFamily: 'monospace', fontSize: 22, color: '#4a5d3a', fontStyle: 'bold',
