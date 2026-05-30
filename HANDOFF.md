@@ -54,6 +54,8 @@
 
 16. **[x] Boss 狂咬招式(廢料巨鼠設計 3 招補齊)**(2026-05-30,design doc 設計已定未實作)— 02_boss_giantrat.md §9 列 3 招,已做碰撞+尾巴橫掃,補第 3 招「狂咬(<50% rage 後 連 3 咬 + 黃牙血效)」:boss rage 時玩家貼身(240px)+ 冷卻到 → 3 連黃牙咬視覺 + 1 次 burst 傷害(contactDamage×2.2,因 PLAYER_INVULN_MS=500 連咬只 1 次中,故視覺 3 咬 + 邏輯 1 burst 尊重 i-frame)。接 updateBossAttack 內與橫掃各自獨立冷卻。Codex APPROVE(1 輪 clean)+ Playwright trigger=3 farm boss 打到 rage(HP 條亮紅)貼身實測無 crash。廢料巨鼠設計招式全補齊。
 
+17. **[x] 武器元素 vs 怪抗性表**(2026-05-30,design doc weapons_v1.md §4 設計已定未實作)— 武器有 element(Physical/Fire/Acid/Shock/Toxin)、怪有 type(Rat/Insect/Robot/Plant)+ isBoss,但戰鬥從沒套抗性表(元素系統半殘)。加 `ELEMENT_RESIST` 5×5 表(照 §4 原數值)+ `elementResistMult(mobType,isBoss,element)`(未知 type/element fallback 1.0 不 crash);handleAutoAttack 命中後 `dmg = max(1, round(dmg × resistMult))`(在 execute 判定+popup **之前**,順序正確);damage popup 加剋制提示(mult≥1.15 亮綠+↑ / mult≤0.85 暗灰+↓)讓玩家看得到元素互動。**註**:目前 5 把 base 武器全 Physical,但 Physical 欄本身隨怪變(Robot 0.7↓ / Boss 0.5↓ / Plant 1.1),已有戰略意義(物理剋不動機械/裝甲);生成武器 element 進戰鬥的裝備路徑是另一輪。tsc 0+build 過+Codex APPROVE(1 輪 clean,零 critical)+ Playwright 進 core_gate 木棍打機甲蟲 popup 實測「11 ↓」灰字(Physical vs Robot 0.7×)無 crash。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)

@@ -54,6 +54,19 @@ type MobState = 'wander' | 'chase';
 // per weapons_v1 §4 mob resist matrix:Rat / Mutant / Robot / Plant / Insect / BossArmored
 type MobType = 'Rat' | 'Insect' | 'Robot' | 'Plant';
 
+// weapons_v1 §4 Element vs Mob Resist 表(1.0=標準,<1 抗,>1 加成);boss 用 Boss-armored 列
+const ELEMENT_RESIST: Record<string, Record<string, number>> = {
+    Rat:    { Physical: 1.0, Fire: 0.9, Acid: 1.2, Shock: 1.1, Toxin: 0.8 },
+    Insect: { Physical: 1.0, Fire: 1.0, Acid: 1.1, Shock: 1.2, Toxin: 1.4 },
+    Robot:  { Physical: 0.7, Fire: 0.5, Acid: 0.9, Shock: 1.5, Toxin: 0.4 },
+    Plant:  { Physical: 1.1, Fire: 1.5, Acid: 1.3, Shock: 0.9, Toxin: 0.6 },
+    Boss:   { Physical: 0.5, Fire: 1.2, Acid: 1.4, Shock: 1.3, Toxin: 1.0 }
+};
+function elementResistMult(mobType: string, isBoss: boolean, element: string): number {
+    const row = ELEMENT_RESIST[isBoss ? 'Boss' : mobType];
+    return row ? (row[element] ?? 1) : 1;
+}
+
 interface MobBlueprint {
     id: string;
     type: MobType;
@@ -1707,7 +1720,7 @@ export class Game extends Scene
         // 嗜血狂亂:HP 越低額外傷害(滿血+0 → 瀕死 +berserkLowHpDmg)
         const berserkBonus = buff.berserkLowHpDmg * (1 - this.playerHP / this.playerMaxHp);
         const totalDmgMult = (1 + buff.dmgPct + this.potionAtkPct() + berserkBonus) * (isCrit ? (Game.CRIT_MULT + buff.critDmgPct) : 1);
-        const dmg = Math.round(baseDmg * totalDmgMult);
+        let dmg = Math.round(baseDmg * totalDmgMult);
 
         // Hand Rag recovery — 命中回血 0.5% × baseDmg
         if (weapon.recoveryPercent && this.playerHP < this.playerMaxHp) {
@@ -1726,6 +1739,9 @@ export class Game extends Scene
         }
 
         const data = target.getData('mob') as MobData;
+        // weapons_v1 §4 元素 vs 怪抗性:武器 element 對 mob type 加成/抗性(build diversity)
+        const resistMult = elementResistMult(data.blueprint.type, data.blueprint.isBoss === true, weapon.element);
+        dmg = Math.max(1, Math.round(dmg * resistMult));
         data.hp -= dmg;
         // 死神鐮刀:殘血(< executeThreshold)非 boss 直接處決
         if (buff.executeThreshold > 0 && data.hp > 0 && !data.blueprint.isBoss && data.hp < data.blueprint.hp * buff.executeThreshold) {
@@ -1769,11 +1785,14 @@ export class Game extends Scene
         });
 
         // Damage popup — crit:大、亮黃紅、彈跳重擊感;普通:小、暖橙、輕飄
+        // 元素剋制提示:剋制(>1.15)亮綠 + ↑;抗性(<0.85)暗灰 + ↓(讓玩家看得到元素系統)
+        const effLabel = resistMult >= 1.15 ? ' ↑' : resistMult <= 0.85 ? ' ↓' : '';
+        const baseColor = isCrit ? '#ffe060' : (resistMult >= 1.15 ? '#9be060' : resistMult <= 0.85 ? '#9a8a78' : '#ff8830');
         const jitterX = (Math.random() - 0.5) * 40;
-        const dmgText = this.add.text(target.x + jitterX, target.y - 56, isCrit ? `${dmg}!` : `${dmg}`, {
+        const dmgText = this.add.text(target.x + jitterX, target.y - 56, (isCrit ? `${dmg}!` : `${dmg}`) + effLabel, {
             fontFamily: 'sans-serif',
             fontSize: isCrit ? 78 : 36,
-            color: isCrit ? '#ffe060' : '#ff8830',
+            color: baseColor,
             stroke: isCrit ? '#8b3a1f' : '#1a1612', strokeThickness: isCrit ? 10 : 4,
             fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(460);
