@@ -2,6 +2,8 @@ import { Boot } from './scenes/Boot';
 import { GameOver } from './scenes/GameOver';
 import { Game as MainGame } from './scenes/Game';
 import { MainMenu } from './scenes/MainMenu';
+import { Login } from './scenes/Login';
+import { Register } from './scenes/Register';
 import { Inventory } from './scenes/Inventory';
 import { Gacha } from './scenes/Gacha';
 import { Storage } from './scenes/Storage';
@@ -25,6 +27,8 @@ const config: Phaser.Types.Core.GameConfig = {
         width: 1080,
         height: 1920
     },
+    // 登入/註冊頁文字輸入需要 DOM input overlay(隨 FIT scale 自動縮放)
+    dom: { createContainer: true },
     pixelArt: false, // user 拍板:不要像素風,走 BiRefNet 廢土手繪
     // 4G 弱網單檔卡住會讓 loader 永遠卡在載入頁 → 每檔 30s timeout,逾時當錯誤繼續(不無限等)
     loader: { timeout: 30000 },
@@ -33,6 +37,8 @@ const config: Phaser.Types.Core.GameConfig = {
     scene: [
         Boot,
         Preloader,
+        Login,
+        Register,
         MainMenu,
         MainGame,
         Inventory,

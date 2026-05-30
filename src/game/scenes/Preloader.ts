@@ -1,4 +1,5 @@
 import { Scene } from 'phaser';
+import { AccountService } from '../services/AccountService';
 
 // 螢幕中心 — 1080x1920 portrait
 const CX = 540;
@@ -65,6 +66,7 @@ export class Preloader extends Scene
 
     create ()
     {
-        this.scene.start('MainMenu');
+        // 已登入(含訪客)→ 直接進主選單;否則先過登入頁
+        this.scene.start(AccountService.isLoggedIn() ? 'MainMenu' : 'Login');
     }
 }

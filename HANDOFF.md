@@ -38,6 +38,8 @@
 
 8. **[x] Boss 頂部 HP 血條**(2026-05-30 完成 — boss 戰深度)— 原本 boss 只有出現橫幅+震屏,**無持續血條**,玩家不知剩多少 HP。加頂部「☠ 廢料巨鼠王」紅色血條(player plate 下方 barY=150,depth 1400):boss spawn 建立 / update 每幀讀 boss mob.hp 刷新 fill 寬(rage 時轉鮮紅 0xff2020)/ 擊敗 destroyBossHpBar。create() reset 欄位防 scene restart stale ref。Codex APPROVE(1 輪 clean,逐一驗 boss死/玩家死/換地圖/restart 各路徑清除)+ Playwright 暫設 trigger=3 farm boss 實測血條出現/跨 10+ cycle 無 stacking/死亡後消失,還原 50 + 出貨版 smoke 0 error。
 
+9. **[x] 註冊頁 / 登入頁**(2026-05-30 user 要求「像其他手遊直式遊戲要有註冊頁登入頁」)— 本地帳號系統(localStorage,無後端,Cloud Save 留 Phase 4d):`AccountService`(register/login/loginGuest/currentUser,密碼簡易 hash 僅避明文,所有 storage read/write/remove 都 try/catch guard)+ `Login` scene(廢土風 + DOM input 帳密 + 登入/註冊/訪客 三鈕)+ `Register` scene(帳號/密碼/確認密碼)。main.ts 加 `dom:{createContainer:true}`;Preloader 改 `isLoggedIn()?MainMenu:Login`(auto-login)。Codex APPROVE(3 輪:抓到「寫入失敗假成功」+「開機讀取路徑 crash」storage 健壯性,修完過)+ Playwright 全流程:Login 渲染/註冊建帳號→MainMenu/auto-login 跳過/登出回 Login/錯密碼擋下/對密碼登入/訪客試玩。**註**:帳號目前只 gate 進入,存檔仍共用單一 key(per-account 隔離留 Phase 4d)。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)
