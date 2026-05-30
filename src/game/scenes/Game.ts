@@ -83,6 +83,7 @@ interface MobBlueprint {
     goldReward: number;
     isBoss?: boolean;       // boss 不從 spawn point 生,死掉不 cycle 重生
     rageThreshold?: number; // HP 百分比 < 觸發 rage(boss only)
+    rageTint?: number;      // rage 時 fill 染色(boss only,預設鏽紅)
 }
 
 // Phase 4a 3 種怪
@@ -173,7 +174,50 @@ const BOSS_GIANTRAT: MobBlueprint = {
     expReward: 200,
     goldReward: 100,
     isBoss: true,
-    rageThreshold: 0.5     // HP < 50% 進入 rage
+    rageThreshold: 0.5,    // HP < 50% 進入 rage
+    rageTint: 0xff2020
+};
+
+// acidsire epic step 3:蝕骨蜈蚣巢母 boss(03_boss_acidsire,設計已定)— 強化版蝕骨蜈蚣,巢中孵化母蟲
+const BOSS_ACIDSIRE: MobBlueprint = {
+    id: 'boss_acidsire',
+    type: 'Insect',
+    spriteKey: 'mob_acidsire',
+    scale: 0.5,            // 巢母遠大於巢中小蜈蚣(field mob 0.22)
+    hp: 2200,
+    speedChase: 0.075,
+    speedWander: 0,
+    contactDamage: 60,
+    expReward: 600,
+    goldReward: 300,
+    isBoss: true,
+    rageThreshold: 0.4,    // HP < 40% 酸怒
+    rageTint: 0x40ff40     // 酸綠狂暴
+};
+
+// Boss 泛化:data-driven BossDef registry(sprite/血條名/anim/招式視覺色),per-map bossId 選用
+interface BossDef {
+    blueprint: MobBlueprint;
+    displayName: string;       // boss 血條名 + 出現警告
+    animKey?: string;          // 有 frame anim 就 play;無(單張 sprite)則 idle wobble tween
+    sweepFill: number;         // 體節橫掃/尾掃 預警圈 fill
+    sweepStroke: number;       // 預警圈 stroke
+    sweepHit: number;          // 命中擴散環
+    biteFill: number;          // rage 連咬 內圈
+    biteStroke: number;        // rage 連咬 外環
+}
+
+const BOSS_DEFS: Record<string, BossDef> = {
+    giantrat: {
+        blueprint: BOSS_GIANTRAT, displayName: '廢料巨鼠王', animKey: 'giantrat_run',
+        sweepFill: 0xff2020, sweepStroke: 0xff4040, sweepHit: 0xff3020,
+        biteFill: 0xffe040, biteStroke: 0xfff080
+    },
+    acidsire: {
+        blueprint: BOSS_ACIDSIRE, displayName: '蝕骨蜈蚣巢母',
+        sweepFill: 0x40ff40, sweepStroke: 0x80ff50, sweepHit: 0x50d020,
+        biteFill: 0x90e040, biteStroke: 0xc0ff60
+    }
 };
 
 const BOSS_TRIGGER_KILLS = 50; // 殺 50 mob 觸發 boss
@@ -240,6 +284,7 @@ export class Game extends Scene
     private pageHideHandler?: () => void;
     private sessionKills = 0;
     private bossActive = false;
+    private activeBoss: BossDef | null = null;  // 當前 boss 的 data-driven 設定(招式色/dmg 來源)
     // Boss 頂部血條(boss 戰可視化剩餘 HP,楓谷 boss 戰必備)
     private bossHpBarBg?: Phaser.GameObjects.Rectangle;
     private bossHpBarFill?: Phaser.GameObjects.Rectangle;
@@ -350,6 +395,7 @@ export class Game extends Scene
         this.isGameOver = false;
         this.sessionKills = 0;
         this.bossActive = false;
+        this.activeBoss = null;
         this.bossHpBarBg = undefined;     // scene restart:舊 bar 物件已隨 scene 銷毀,清欄位防 stale ref
         this.bossHpBarFill = undefined;
         this.bossHpBarText = undefined;
@@ -845,7 +891,7 @@ export class Game extends Scene
                 if (!m.active) return;
                 const td = m.getData('mob') as MobData | undefined;
                 if (!td) { m.clearTint(); return; }
-                if (td.isRaging) m.setTint(0xff2020).setTintMode(TINT_FILL);              // 暴怒怪保留紅 fill
+                if (td.isRaging) m.setTint(td.blueprint.rageTint ?? 0xff2020).setTintMode(TINT_FILL);   // 暴怒怪保留 boss 主題 rage fill
                 else if (td.blueprint.tint !== undefined) m.setTint(td.blueprint.tint).setTintMode(0);  // multiply 保留紋路
                 else m.clearTint();
             });
@@ -1905,7 +1951,7 @@ export class Game extends Scene
             const tData = target.getData('mob') as MobData | undefined;
             if (!tData) { target.clearTint(); return; }
             if (tData.isRaging) {
-                target.setTint(0xff2020).setTintMode(TINT_FILL);
+                target.setTint(tData.blueprint.rageTint ?? 0xff2020).setTintMode(TINT_FILL);
             } else if (tData.isElite) {
                 target.setTint(ELITE_TINT).setTintMode(0);
             } else if (tData.blueprint.tint !== undefined) {
@@ -1961,10 +2007,10 @@ export class Game extends Scene
         if (data.hp > 0 && data.blueprint.isBoss && data.blueprint.rageThreshold && !data.isRaging) {
             if (data.hp / data.blueprint.hp < data.blueprint.rageThreshold) {
                 data.isRaging = true;
-                // rage 視覺 + 加速 30%
-                target.setTint(0xff2020).setTintMode(TINT_FILL);
+                // rage 視覺 + 加速 30%(boss 主題 rage 色)
+                target.setTint(data.blueprint.rageTint ?? 0xff2020).setTintMode(TINT_FILL);
                 this.cameras.main.shake(300, 0.018);
-                this.spawnRageEffect(target.x, target.y);
+                this.spawnRageEffect(target.x, target.y, data.blueprint.rageTint ?? 0xff2020);
             }
         }
 
@@ -2063,6 +2109,7 @@ export class Game extends Scene
     private handleBossDefeated(x: number, y: number)
     {
         this.bossActive = false;
+        this.activeBoss = null;
         this.sessionKills = 0; // 下隻 boss 重數
         this.destroyBossHpBar();
         this.destroyBossSweep(); this.bossSweepResolveAt = 0;
@@ -2086,17 +2133,18 @@ export class Game extends Scene
         }
     }
 
-    private spawnRageEffect(x: number, y: number)
+    private spawnRageEffect(x: number, y: number, rageColor = 0xff2020)
     {
-        // 鮮紅光環擴散
-        const ring = this.add.circle(x, y, 40, 0xff2020, 0)
-            .setStrokeStyle(8, 0xff2020, 1).setDepth(500);
+        // 狂暴光環擴散(boss 主題 rage 色)
+        const hex = '#' + rageColor.toString(16).padStart(6, '0');
+        const ring = this.add.circle(x, y, 40, rageColor, 0)
+            .setStrokeStyle(8, rageColor, 1).setDepth(500);
         this.tweens.add({
             targets: ring, radius: 300, alpha: 0, duration: 700,
             onComplete: () => ring.destroy()
         });
         const txt = this.add.text(x, y - 100, '狂暴!', {
-            fontFamily: 'sans-serif', fontSize: 48, color: '#ff2020', fontStyle: 'bold',
+            fontFamily: 'sans-serif', fontSize: 48, color: hex, fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 6
         }).setOrigin(0.5).setDepth(2500);
         this.tweens.add({
@@ -2137,7 +2185,7 @@ export class Game extends Scene
         const data = bossMob.getData('mob') as MobData;
         const ratio = Math.max(0, Math.min(1, data.hp / this.bossMaxHp));
         this.bossHpBarFill.width = this.bossHpBarInnerW * ratio;
-        this.bossHpBarFill.fillColor = data.isRaging ? 0xff2020 : 0xc23a1a;
+        this.bossHpBarFill.fillColor = data.isRaging ? (data.blueprint.rageTint ?? 0xff2020) : 0xc23a1a;
     }
 
     // Boss 尾巴橫掃(設計招式):預警圈 windup → 結算大範圍 AoE,玩家可走出躲開(技巧表現)
@@ -2170,9 +2218,10 @@ export class Game extends Scene
         if (time >= this.bossSweepNextAt) {
             const d = Math.hypot(this.player.x - bossMob.x, this.player.y - bossMob.y);
             if (d > BOSS_SWEEP_RADIUS + 200) { this.bossSweepNextAt = time + 600; return; }
-            // 預警圈(world space,鏽紅警示;不用 setTintFill 直接 circle fill+stroke)
-            this.bossSweepRing = this.add.circle(bossMob.x, bossMob.y, BOSS_SWEEP_RADIUS, 0xff2020, 0.14)
-                .setStrokeStyle(8, 0xff4040, 0.85).setDepth(6);
+            // 預警圈(world space,boss 主題色警示;不用 setTintFill 直接 circle fill+stroke)
+            const sf = this.activeBoss?.sweepFill ?? 0xff2020, ss = this.activeBoss?.sweepStroke ?? 0xff4040;
+            this.bossSweepRing = this.add.circle(bossMob.x, bossMob.y, BOSS_SWEEP_RADIUS, sf, 0.14)
+                .setStrokeStyle(8, ss, 0.85).setDepth(6);
             this.tweens.add({ targets: this.bossSweepRing, alpha: 0.4, duration: 220, yoyo: true, repeat: -1 });
             this.bossSweepResolveAt = time + BOSS_SWEEP_WINDUP_MS;
         }
@@ -2180,21 +2229,23 @@ export class Game extends Scene
 
     private resolveBossSweep(bx: number, by: number, time: number) {
         this.destroyBossSweep();
-        // 橫掃命中視覺:鏽紅環擴散
-        const hit = this.add.circle(bx, by, BOSS_SWEEP_RADIUS, 0xff3020, 0.35).setDepth(7);
+        // 橫掃命中視覺:boss 主題色環擴散
+        const hit = this.add.circle(bx, by, BOSS_SWEEP_RADIUS, this.activeBoss?.sweepHit ?? 0xff3020, 0.35).setDepth(7);
         this.tweens.add({ targets: hit, alpha: 0, scale: 1.15, duration: 320, onComplete: () => hit.destroy() });
         this.cameras.main.shake(260, 0.016);
         // 結算:玩家在範圍內 + 非無敵 + 沒 game over → 受傷(可被 windup 期間走出躲開)
         const d = Math.hypot(this.player.x - bx, this.player.y - by);
         if (d <= BOSS_SWEEP_RADIUS && time >= this.playerInvulnUntilMs && !this.isGameOver) {
-            this.takeDamage(Math.round(BOSS_GIANTRAT.contactDamage * 2), time);
+            const dmg = this.activeBoss?.blueprint.contactDamage ?? BOSS_GIANTRAT.contactDamage;
+            this.takeDamage(Math.round(dmg * 2), time);
         }
     }
 
     // Boss 狂咬:3 連黃牙咬視覺(staggered)+ 1 次 burst 傷害(contactDamage×2.2「3 咬份」,尊重 i-frame)
     private doFrenzyBite(px: number, py: number, time: number) {
+        const bf = this.activeBoss?.biteFill ?? 0xffe040, bs = this.activeBoss?.biteStroke ?? 0xfff080;
         for (let i = 0; i < 3; i++) {
-            const bite = this.add.circle(px, py, 64, 0xffe040, 0).setStrokeStyle(6, 0xfff080, 0.9).setDepth(7);
+            const bite = this.add.circle(px, py, 64, bf, 0).setStrokeStyle(6, bs, 0.9).setDepth(7);
             this.tweens.add({
                 targets: bite, scale: { from: 0.4, to: 1.4 }, alpha: { from: 0.7, to: 0 },
                 duration: 200, delay: i * 140, onComplete: () => bite.destroy()
@@ -2203,7 +2254,8 @@ export class Game extends Scene
         this.cameras.main.shake(180, 0.012);
         const d = Math.hypot(this.player.x - px, this.player.y - py);
         if (d <= BOSS_BITE_RANGE && time >= this.playerInvulnUntilMs && !this.isGameOver) {
-            this.takeDamage(Math.round(BOSS_GIANTRAT.contactDamage * 2.2), time);
+            const dmg = this.activeBoss?.blueprint.contactDamage ?? BOSS_GIANTRAT.contactDamage;
+            this.takeDamage(Math.round(dmg * 2.2), time);
         }
     }
 
@@ -2228,6 +2280,10 @@ export class Game extends Scene
         if (this.bossActive) return;
         if (this.sessionKills < BOSS_TRIGGER_KILLS) return;
         this.bossActive = true;
+        // data-driven:該地圖指定 boss(預設廢料巨鼠);未知 id 也 fallback 巨鼠
+        const def = BOSS_DEFS[this.mapConfig.bossId ?? 'giantrat'] ?? BOSS_DEFS.giantrat;
+        this.activeBoss = def;
+        const bp = def.blueprint;
         // Boss 出現:離 player ≥ 400px,角落補償(per Codex review,防角落 clamp 後太近)
         const MIN_DIST = 400;
         let bx = this.player.x, by = this.player.y;
@@ -2237,14 +2293,22 @@ export class Game extends Scene
             by = Math.max(120, Math.min(H - 120, this.player.y + Math.sin(angle) * 600));
             if (Math.hypot(bx - this.player.x, by - this.player.y) >= MIN_DIST) break;
         }
-        const mob = this.add.sprite(bx, by, BOSS_GIANTRAT.spriteKey).setScale(BOSS_GIANTRAT.scale);
-        if (BOSS_GIANTRAT.tint !== undefined) {
-            mob.setTint(BOSS_GIANTRAT.tint); // multiply mode 保留紋路
+        const mob = this.add.sprite(bx, by, bp.spriteKey).setScale(bp.scale);
+        if (bp.tint !== undefined) {
+            mob.setTint(bp.tint); // multiply mode 保留紋路
         }
-        mob.play('giantrat_run');
+        // 有 frame anim 就 play;單張 sprite(如 acidsire)用 idle wobble tween(死亡 killMob 會 killTweensOf 清掉)
+        if (def.animKey && this.anims.exists(def.animKey)) {
+            mob.play(def.animKey);
+        } else {
+            this.tweens.add({
+                targets: mob, angle: { from: -3, to: 3 }, scaleX: { from: bp.scale, to: bp.scale * 1.04 },
+                duration: 620, yoyo: true, repeat: -1, ease: 'Sine.inOut'
+            });
+        }
         const data: MobData = {
-            blueprint: BOSS_GIANTRAT,
-            hp: BOSS_GIANTRAT.hp,
+            blueprint: bp,
+            hp: bp.hp,
             spawnPoint: null,
             lastContactMs: -Infinity,
             state: 'chase', // boss 永遠 chase
@@ -2257,14 +2321,14 @@ export class Game extends Scene
         // VFX-A:boss 大陰影
         mob.setData('shadow', this.makeGroundShadow(mob.x, mob.y, Math.max(80, mob.displayWidth * 0.7)));
         this.mobs.push(mob);
-        this.createBossHpBar(BOSS_GIANTRAT.hp, '廢料巨鼠王');
+        this.createBossHpBar(bp.hp, def.displayName);
         this.bossSweepNextAt = time + 2800;  // 出現後緩衝才放首次橫掃
         this.bossSweepResolveAt = 0;
         this.bossBiteNextAt = time + 2000;   // 狂咬首次緩衝(只在 rage 後實際生效)
 
         // Boss spawn 視覺
         this.cameras.main.shake(400, 0.020);
-        const warn = this.add.text(VIEW_W / 2, VIEW_H / 2 - 200, '⚠ BOSS 出現!', {
+        const warn = this.add.text(VIEW_W / 2, VIEW_H / 2 - 200, `⚠ ${def.displayName} 出現!`, {
             fontFamily: 'sans-serif', fontSize: 64, color: '#ff4040', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 8
         }).setOrigin(0.5).setDepth(3000).setScrollFactor(0);

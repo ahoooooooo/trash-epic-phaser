@@ -53,6 +53,7 @@ export interface MapConfig {
     shopNpcs: ShopNpcSpec[];
     portals: PortalSpec[];
     bossEnabled: boolean;
+    bossId?: string;          // 該地圖觸發的 boss(BOSS_DEFS key);省略 = giantrat
     playerStartX: number;
     playerStartY: number;
 }
@@ -165,7 +166,7 @@ const MAPS: Record<string, MapConfig> = {
         bossEnabled: false,
         playerStartX: 1000, playerStartY: 1400
     },
-    // === 蝕骨蜈蚣巢(field 90-180,蝕骨蜈蚣獵場 — 一圖一怪;acidsire boss sprite 先當強 mob 入場)===
+    // === 蝕骨蜈蚣巢(field 90-180,蝕骨蜈蚣獵場 — 一圖一怪;殺 50 隻召喚 acidsire 巢母 boss)===
     acid_brood: {
         id: 'acid_brood', nameZH: '蝕骨蜈蚣巢', mapType: 'field', levelRange: [90, 180], regionId: 'scrap',
         width: 1800, height: 2600, bgColor: '#1a2515',
@@ -175,7 +176,7 @@ const MAPS: Record<string, MapConfig> = {
         portals: [
             { x: 900, y: 200, targetMapId: 'sand_pit', targetX: 200, targetY: 1500, label: '← 鏽蝕沙坑' }
         ],
-        bossEnabled: false,
+        bossEnabled: true, bossId: 'acidsire',
         playerStartX: 900, playerStartY: 1300
     },
     // === 鏽蝕巷(town 80-180,中繼村,賣中低階藥)===
