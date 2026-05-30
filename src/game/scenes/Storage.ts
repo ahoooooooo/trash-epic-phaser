@@ -25,7 +25,10 @@ export class Storage extends Scene {
         // ── 素材 panel ──
         const materials = save.getAllMaterials();
         const matNames: Record<string, string> = {
-            strengthen_stone: '🔨 強化石'
+            strengthen_stone: '🔨 強化石',
+            acid_gland: '🧪 酸液腺',      // acidsire boss 戰利品
+            warchief_skull: '💀 戰酋頭顱', // kraz boss 戰利品
+            ancient_core: '🔮 古能源石'    // arbiter boss 戰利品
         };
         const matEntries = Object.entries(materials);
         const matPanelTop = 160;

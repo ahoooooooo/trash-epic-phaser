@@ -246,6 +246,7 @@ interface BossDef {
     addsBlueprintIdx?: number; // 召喚的 add 怪 blueprint idx(預設 13 蝕骨蜈蚣幼蟲)
     projectile?: boolean;      // 投射物招式(朝玩家發射直線飛行彈)— kraz 投矛 / arbiter 火箭
     projColor?: number;        // 投射物主題色(預設用 spitColor / 0xffd060)
+    signatureLoot?: { id: string; name: string };  // boss 擊敗必掉專屬戰利品(craft 素材,per 設計 doc loot)
 }
 
 const BOSS_DEFS: Record<string, BossDef> = {
@@ -259,7 +260,8 @@ const BOSS_DEFS: Record<string, BossDef> = {
         sweepFill: 0x40ff40, sweepStroke: 0x80ff50, sweepHit: 0x50d020,
         biteFill: 0x90e040, biteStroke: 0xc0ff60,
         acidSpit: true, spitColor: 0x4cff60, spitLabel: '酸蝕',
-        spawnAdds: 4, addsBlueprintIdx: 13  // 召蝕骨蜈蚣幼蟲
+        spawnAdds: 4, addsBlueprintIdx: 13,  // 召蝕骨蜈蚣幼蟲
+        signatureLoot: { id: 'acid_gland', name: '🧪 酸液腺' }  // 03 doc loot
     },
     kraz: {
         blueprint: BOSS_KRAZ, displayName: '哥布林戰酋 克拉茲',
@@ -267,7 +269,8 @@ const BOSS_DEFS: Record<string, BossDef> = {
         sweepFill: 0xff7020, sweepStroke: 0xffa040, sweepHit: 0xff5020,
         biteFill: 0xffb060, biteStroke: 0xffd090,
         acidSpit: true, spitColor: 0xff7020, spitLabel: '灼燒',  // 戰錘下砸地裂(04 §9 招式 2)
-        projectile: true, projColor: 0xd8c8a0  // 人骨投矛(04 §9 招式 3,骨白)
+        projectile: true, projColor: 0xd8c8a0,  // 人骨投矛(04 §9 招式 3,骨白)
+        signatureLoot: { id: 'warchief_skull', name: '💀 戰酋頭顱' }  // 04 doc loot
     },
     arbiter: {
         blueprint: BOSS_ARBITER, displayName: '銹蝕審判官',
@@ -276,7 +279,8 @@ const BOSS_DEFS: Record<string, BossDef> = {
         biteFill: 0xe04040, biteStroke: 0xff6060,
         acidSpit: true, spitColor: 0xc81830, spitLabel: '審判',  // 古能量地灼池
         spawnAdds: 2, addsBlueprintIdx: 10,  // 召輻射機甲蟲古哨兵(05 §9 招式 4)
-        projectile: true, projColor: 0xff3040  // 古文字符火箭(05 §9 招式 3,暗紅符光)
+        projectile: true, projColor: 0xff3040,  // 古文字符火箭(05 §9 招式 3,暗紅符光)
+        signatureLoot: { id: 'ancient_core', name: '🔮 古能源石' }  // 05 doc loot
     }
 };
 
@@ -2204,6 +2208,7 @@ export class Game extends Scene
 
     private handleBossDefeated(x: number, y: number)
     {
+        const def = this.activeBoss;  // null 化前捕捉,讀專屬戰利品
         this.bossActive = false;
         this.activeBoss = null;
         this.sessionKills = 0; // 下隻 boss 重數
@@ -2212,15 +2217,34 @@ export class Game extends Scene
         this.destroyAcidPools();
         this.destroyBossProjectiles();
         this.cameras.main.shake(500, 0.025);
+        // boss 擊敗必掉:專屬戰利品(craft 素材)+ 額外強化石獎勵
+        const save = SaveService.instance;
+        const bonusStone = 8;
+        save.addMaterial('strengthen_stone', bonusStone);
+        let lootLine = `+${bonusStone} 強化石`;
+        if (def?.signatureLoot) {
+            save.addMaterial(def.signatureLoot.id, 1);
+            lootLine = `★ ${def.signatureLoot.name} ×1\n${lootLine}`;
+        }
         // 大號 BOSS DEFEATED popup
-        const popup = this.add.text(VIEW_W / 2, VIEW_H / 2, 'BOSS 擊破!', {
+        const popup = this.add.text(VIEW_W / 2, VIEW_H / 2 - 60, 'BOSS 擊破!', {
             fontFamily: 'sans-serif', fontSize: 84, color: '#ffe0c0', fontStyle: 'bold',
             stroke: '#8b3a1f', strokeThickness: 10
         }).setOrigin(0.5).setDepth(3000).setScale(0.3).setScrollFactor(0);
         this.tweens.add({
             targets: popup, scale: 1.3, alpha: 0,
-            duration: 1500, ease: 'Back.out',
+            duration: 1800, ease: 'Back.out',
             onComplete: () => popup.destroy()
+        });
+        // 戰利品摘要(讀得到的具體掉落,鼓勵打 boss)
+        const lootText = this.add.text(VIEW_W / 2, VIEW_H / 2 + 70, lootLine, {
+            fontFamily: 'sans-serif', fontSize: 38, color: '#ffe060', fontStyle: 'bold',
+            align: 'center', stroke: '#1a1612', strokeThickness: 6
+        }).setOrigin(0.5).setDepth(3000).setScrollFactor(0);
+        this.tweens.add({
+            targets: lootText, y: lootText.y - 50, alpha: 0,
+            duration: 2400, delay: 400, ease: 'Quad.out',
+            onComplete: () => lootText.destroy()
         });
         // 大金幣 burst(8 個)
         for (let i = 0; i < 8; i++) {
