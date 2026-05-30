@@ -192,6 +192,10 @@ export class Game extends Scene
     private levelText!: Phaser.GameObjects.Text;
     private mpBarFill!: Phaser.GameObjects.Rectangle;
     private mpText!: Phaser.GameObjects.Text;
+    // 週挑戰 HUD 進度條(minimap 下方,可視化本週擊殺進度)
+    private weekBarFill!: Phaser.GameObjects.Rectangle;
+    private weekBarText!: Phaser.GameObjects.Text;
+    private weekBarInnerW: number = 0;
     // R-LAYOUT:layout 動態算的 bar 寬,給 update path 用(避免 hard-coded HP_BAR_WIDTH)
     private hudPlateBarW: number = 700;
     private hudExpBarW: number = 1080;
@@ -499,6 +503,21 @@ export class Game extends Scene
         this.add.text(MM_PAD + MM / 2, MM_PAD + MM - 22, '🔍 點開全圖', {
             fontFamily: 'monospace', fontSize: 15, color: '#b08850'
         }).setOrigin(0.5).setDepth(1004).setScrollFactor(0);
+
+        // --- minimap 下方:週挑戰進度條(可視化本週擊殺,取代純 toast)---
+        const wbY = MM_PAD + MM + 12, wbH = 26, wbX = MM_PAD;
+        this.add.rectangle(wbX - 4, wbY - 4, MM + 8, wbH + 8, 0x1a1612, 0.92)
+            .setOrigin(0, 0).setStrokeStyle(2, 0x8b6020, 0.9).setDepth(999).setScrollFactor(0);
+        this.add.rectangle(wbX, wbY, MM, wbH, 0x2a2520)
+            .setOrigin(0, 0).setStrokeStyle(2, 0xa05a30, 0.95).setDepth(1000).setScrollFactor(0);
+        this.weekBarInnerW = MM - 4;
+        this.weekBarFill = this.add.rectangle(wbX + 2, wbY + 2, 0, wbH - 4, 0x9bd0ff)
+            .setOrigin(0, 0).setDepth(1001).setScrollFactor(0);
+        this.weekBarText = this.add.text(wbX + MM / 2, wbY + wbH / 2, '', {
+            fontFamily: 'monospace', fontSize: 16, color: '#ffe0c0', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 3
+        }).setOrigin(0.5).setDepth(1002).setScrollFactor(0);
+        this.updateWeekChallengeBar();
 
         // --- HP + MP 等寬 bar,在 minimap 右側,頂部對齊 minimap 頂 ---
         const barX = MM_PAD + MM + 24;
@@ -1866,6 +1885,7 @@ export class Game extends Scene
         // 週挑戰(recurring 留存):本週擊殺達標領晶體
         const weekly = save.tickWeeklyChallenge();
         if (weekly) this.flashHudMessage(`週挑戰達成! 本週擊殺 ${weekly.goal}  +${weekly.crystal} 晶體`, 0x9bd0ff);
+        this.updateWeekChallengeBar();
         // Phase 4b-15 talent: gold buff(金幣不再 HUD 顯示,各 scene 內看)+ 精英怪 ×倍
         save.addGold(Math.round(bp.goldReward * (1 + buff.goldGainPct) * eliteMult));
         if (!bp.isBoss) this.sessionKills++;
@@ -1910,6 +1930,22 @@ export class Game extends Scene
         } else {
             // 普通殺怪 3s throttle persist(per Codex review:防 tab close 丟 exp/gold)
             this.saveProgressSoon();
+        }
+    }
+
+    // 週挑戰 HUD 進度條:每殺後刷新本週進度(達標顯示金黃「已達成」)
+    private updateWeekChallengeBar(): void {
+        if (!this.weekBarFill) return;
+        const w = SaveService.instance.getWeekStatus();
+        const ratio = Math.max(0, Math.min(1, w.kills / w.goal));
+        this.weekBarFill.width = this.weekBarInnerW * ratio;
+        if (w.claimed) {
+            this.weekBarFill.fillColor = 0xffd040;
+            this.weekBarFill.width = this.weekBarInnerW;
+            this.weekBarText.setText(`週挑戰 已達成 ★`);
+        } else {
+            this.weekBarFill.fillColor = 0x9bd0ff;
+            this.weekBarText.setText(`週挑戰 ${w.kills}/${w.goal}`);
         }
     }
 

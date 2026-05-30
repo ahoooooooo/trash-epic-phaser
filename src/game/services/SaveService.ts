@@ -8,6 +8,9 @@ import type { SkinSlot } from './SkinService';
 const STORAGE_KEY = 'trash-epic-save-v1';
 const SAVE_VERSION = 1;
 
+// 週挑戰參數(HUD 進度條與結算共用,避免漂移;WEEK_MS 在下方既有宣告)
+const WEEK_GOAL = 300, WEEK_CRYSTAL = 30;
+
 // Phase 4c 設計修正:maxMp 隨等級成長(每級 +5)
 function computeMaxMp(level: number): number { return 50 + (level - 1) * 5; }
 
@@ -311,20 +314,29 @@ export class SaveService {
 
     // 週挑戰(recurring 留存):本週擊殺達標領晶體,每 7 天桶重置。每殺呼叫一次。
     tickWeeklyChallenge(): { goal: number; crystal: number } | null {
-        const bucket = Math.floor(Date.now() / 604800000); // 7 天一桶
+        const bucket = Math.floor(Date.now() / WEEK_MS); // 7 天一桶
         if (bucket !== this.data.weekBucket) {
             this.data.weekBucket = bucket;
             this.data.weekKills = 0;
             this.data.weekRewardClaimed = false;
         }
         this.data.weekKills++;
-        const GOAL = 300, CRYSTAL = 30;
-        if (!this.data.weekRewardClaimed && this.data.weekKills >= GOAL) {
+        if (!this.data.weekRewardClaimed && this.data.weekKills >= WEEK_GOAL) {
             this.data.weekRewardClaimed = true;
-            this.addCrystal(CRYSTAL);
-            return { goal: GOAL, crystal: CRYSTAL };
+            this.addCrystal(WEEK_CRYSTAL);
+            return { goal: WEEK_GOAL, crystal: WEEK_CRYSTAL };
         }
         return null;
+    }
+    // 週挑戰 read-only 狀態(HUD 進度條用,不 mutate;跨週時回報已重置的 0/未領)
+    getWeekStatus(): { kills: number; goal: number; claimed: boolean } {
+        const bucket = Math.floor(Date.now() / WEEK_MS);
+        const fresh = bucket !== this.data.weekBucket;
+        return {
+            kills: fresh ? 0 : this.data.weekKills,
+            goal: WEEK_GOAL,
+            claimed: fresh ? false : this.data.weekRewardClaimed
+        };
     }
     addPlaytimeSec(sec: number): void { this.data.playtimeSec += sec; }
 
