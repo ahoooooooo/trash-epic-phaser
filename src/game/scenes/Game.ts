@@ -204,6 +204,12 @@ export class Game extends Scene
     private pageHideHandler?: () => void;
     private sessionKills = 0;
     private bossActive = false;
+    // Boss 頂部血條(boss 戰可視化剩餘 HP,楓谷 boss 戰必備)
+    private bossHpBarBg?: Phaser.GameObjects.Rectangle;
+    private bossHpBarFill?: Phaser.GameObjects.Rectangle;
+    private bossHpBarText?: Phaser.GameObjects.Text;
+    private bossHpBarInnerW = 0;
+    private bossMaxHp = 1;
     // Phase 4b-14 player action lock — 'attacking' / 'hurt' 期間禁切 idle/walking
     private playerActionAnim: 'attacking' | 'hurt' | null = null;
     // Phase 4c B fix:攻擊後此時間內 flipX 鎖朝目標怪,handleMovement 不覆蓋(防往後走背打)
@@ -293,6 +299,9 @@ export class Game extends Scene
         this.isGameOver = false;
         this.sessionKills = 0;
         this.bossActive = false;
+        this.bossHpBarBg = undefined;     // scene restart:舊 bar 物件已隨 scene 銷毀,清欄位防 stale ref
+        this.bossHpBarFill = undefined;
+        this.bossHpBarText = undefined;
         this.mobs = [];
         this.portals = [];
         this.npcClerk = undefined;
@@ -983,6 +992,7 @@ export class Game extends Scene
         this.handleMovement(delta);
         this.handleSpawn(time);
         this.trySpawnBoss(time);
+        if (this.bossActive) this.updateBossHpBar();
         this.handleMobAI(time, delta);
         this.handleMobContactDamage(time);
         if (this.isGameOver) return;
@@ -1788,6 +1798,7 @@ export class Game extends Scene
     {
         this.bossActive = false;
         this.sessionKills = 0; // 下隻 boss 重數
+        this.destroyBossHpBar();
         this.cameras.main.shake(500, 0.025);
         // 大號 BOSS DEFEATED popup
         const popup = this.add.text(VIEW_W / 2, VIEW_H / 2, 'BOSS 擊破!', {
@@ -1827,6 +1838,40 @@ export class Game extends Scene
         });
     }
 
+    // Boss 頂部血條:建立(boss spawn 時)
+    private createBossHpBar(maxHp: number, name: string) {
+        this.destroyBossHpBar();
+        this.bossMaxHp = maxHp;
+        const barW = 880, barH = 40, barX = (VIEW_W - barW) / 2, barY = 150;
+        this.bossHpBarInnerW = barW - 6;
+        this.bossHpBarBg = this.add.rectangle(barX, barY, barW, barH, 0x1a1612, 0.92)
+            .setOrigin(0, 0).setStrokeStyle(3, 0x8b3a1f, 1).setDepth(1400).setScrollFactor(0);
+        this.bossHpBarFill = this.add.rectangle(barX + 3, barY + 3, barW - 6, barH - 6, 0xc23a1a)
+            .setOrigin(0, 0).setDepth(1401).setScrollFactor(0);
+        this.bossHpBarText = this.add.text(VIEW_W / 2, barY + barH / 2, `☠ ${name}`, {
+            fontFamily: 'sans-serif', fontSize: 26, color: '#ffe0c0', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 4
+        }).setOrigin(0.5).setDepth(1402).setScrollFactor(0);
+    }
+
+    // Boss 頂部血條:每幀刷新(update 呼叫,讀 boss mob 當前 HP)
+    private updateBossHpBar() {
+        if (!this.bossHpBarFill) return;
+        const bossMob = this.mobs.find(m => (m.getData('mob') as MobData | undefined)?.blueprint.isBoss);
+        if (!bossMob) return;
+        const data = bossMob.getData('mob') as MobData;
+        const ratio = Math.max(0, Math.min(1, data.hp / this.bossMaxHp));
+        this.bossHpBarFill.width = this.bossHpBarInnerW * ratio;
+        this.bossHpBarFill.fillColor = data.isRaging ? 0xff2020 : 0xc23a1a;
+    }
+
+    // Boss 頂部血條:銷毀(boss 擊敗時)
+    private destroyBossHpBar() {
+        this.bossHpBarBg?.destroy(); this.bossHpBarBg = undefined;
+        this.bossHpBarFill?.destroy(); this.bossHpBarFill = undefined;
+        this.bossHpBarText?.destroy(); this.bossHpBarText = undefined;
+    }
+
     private trySpawnBoss(time: number)
     {
         if (!this.mapConfig.bossEnabled) return; // 公會地圖無 boss
@@ -1862,6 +1907,7 @@ export class Game extends Scene
         // VFX-A:boss 大陰影
         mob.setData('shadow', this.makeGroundShadow(mob.x, mob.y, Math.max(80, mob.displayWidth * 0.7)));
         this.mobs.push(mob);
+        this.createBossHpBar(BOSS_GIANTRAT.hp, '廢料巨鼠王');
 
         // Boss spawn 視覺
         this.cameras.main.shake(400, 0.020);
