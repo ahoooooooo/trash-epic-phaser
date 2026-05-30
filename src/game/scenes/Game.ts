@@ -151,6 +151,11 @@ const MOB_BLUEPRINTS: MobBlueprint[] = [
     {
         id: 'rust_scorpion', type: 'Insect', spriteKey: 'mob_rust_scorpion', scale: 0.16,
         hp: 320, speedChase: 0.12, speedWander: 0.04, contactDamage: 34, expReward: 40, goldReward: 24
+    },
+    // acidsire epic step 2:蝕骨蜈蚣(boss sprite 先當強 Insect mob 入場;boss 化留後)— idx 13,蝕骨蜈蚣巢 signature
+    {
+        id: 'acid_centipede', type: 'Insect', spriteKey: 'mob_acidsire', scale: 0.22,
+        hp: 720, speedChase: 0.10, speedWander: 0.03, contactDamage: 52, expReward: 90, goldReward: 55
     }
 ];
 

@@ -23,6 +23,7 @@ const NODES: WorldNode[] = [
     { mapId: 'creeper_vale', x: 80, y: 760 },
     { mapId: 'dry_well_road', x: 300, y: 1290 },
     { mapId: 'sand_pit', x: 110, y: 1490 },
+    { mapId: 'acid_brood', x: 110, y: 1690 },
     { mapId: 'rust_alley', x: 680, y: 1120 },
     { mapId: 'core_gate', x: 840, y: 1440 }
 ];
@@ -35,6 +36,7 @@ const EDGES: [string, string][] = [
     ['wasteland_outskirts', 'creeper_vale'],
     ['wasteland_outskirts', 'dry_well_road'],
     ['dry_well_road', 'sand_pit'],
+    ['sand_pit', 'acid_brood'],
     ['dry_well_road', 'rust_alley'],
     ['rust_alley', 'core_gate']
 ];

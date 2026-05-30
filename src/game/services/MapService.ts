@@ -159,10 +159,24 @@ const MAPS: Record<string, MapConfig> = {
         npcs: [],
         shopNpcs: [],
         portals: [
-            { x: 1000, y: 200, targetMapId: 'dry_well_road', targetX: 300, targetY: 1500, label: '← 乾井路' }
+            { x: 1000, y: 200, targetMapId: 'dry_well_road', targetX: 300, targetY: 1500, label: '← 乾井路' },
+            { x: 200, y: 1400, targetMapId: 'acid_brood', targetX: 900, targetY: 300, label: '蝕骨蜈蚣巢 →' }
         ],
         bossEnabled: false,
         playerStartX: 1000, playerStartY: 1400
+    },
+    // === 蝕骨蜈蚣巢(field 90-180,蝕骨蜈蚣獵場 — 一圖一怪;acidsire boss sprite 先當強 mob 入場)===
+    acid_brood: {
+        id: 'acid_brood', nameZH: '蝕骨蜈蚣巢', mapType: 'field', levelRange: [90, 180], regionId: 'scrap',
+        width: 1800, height: 2600, bgColor: '#1a2515',
+        spawnPoints: fieldSpawns(1800, 2600, 8, [13]),  // 一圖一怪:蝕骨蜈蚣巢 = 蝕骨蜈蚣 only
+        npcs: [],
+        shopNpcs: [],
+        portals: [
+            { x: 900, y: 200, targetMapId: 'sand_pit', targetX: 200, targetY: 1500, label: '← 鏽蝕沙坑' }
+        ],
+        bossEnabled: false,
+        playerStartX: 900, playerStartY: 1300
     },
     // === 鏽蝕巷(town 80-180,中繼村,賣中低階藥)===
     rust_alley: {
