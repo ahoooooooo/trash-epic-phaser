@@ -1,6 +1,6 @@
 import { Scene } from 'phaser';
 import { SaveService } from '../services/SaveService';
-import { getWeapon, effectiveDamage } from '../services/WeaponService';
+import { getWeapon, effectiveDamage, enhanceCost } from '../services/WeaponService';
 import {
     ArmorDef, EquipSlot, equipSlotLabel,
     armorSlotForEquipSlot, armorDisplayName, armorRarityColor
@@ -223,6 +223,48 @@ export class Inventory extends Scene {
         this.drawSummaryChip(W / 2 - 200, top + 130, '攻擊', `${dmg}`, '#ffe060');
         this.drawSummaryChip(W / 2, top + 130, '總防禦', `${totalDef}`, '#80c0ff');
         this.drawSummaryChip(W / 2 + 200, top + 130, 'Lv', `${save.level}`, '#ffe0c0');
+
+        this.drawEnhanceButton();
+    }
+
+    // 武器強化按鈕(花金幣 +1,無上限,成功 restart 重繪;不足彈訊息)
+    private drawEnhanceButton() {
+        const save = SaveService.instance;
+        const wid = save.getCurrentWeaponId();
+        const enh = save.getWeaponEnh(wid);
+        const cost = enhanceCost(enh);
+        const gold = save.get().gold;
+        const can = gold >= cost;
+        const by = H - 205;
+        const bg = this.add.rectangle(W / 2, by, 470, 56, can ? 0xff8830 : 0x2a2520, 1)
+            .setStrokeStyle(3, can ? 0x1a1612 : 0x5a4a38, 1)
+            .setInteractive({ useHandCursor: true });
+        this.add.text(W / 2, by - 12, `⚒ 強化武器  +${enh} → +${enh + 1}`, {
+            fontFamily: 'sans-serif', fontSize: 26, color: can ? '#1a1612' : '#8a7a68', fontStyle: 'bold'
+        }).setOrigin(0.5);
+        this.add.text(W / 2, by + 16, `花費 ${cost} 金  (持有 ${gold})`, {
+            fontFamily: 'monospace', fontSize: 20, color: can ? '#1a1612' : '#8a7a68'
+        }).setOrigin(0.5);
+        bg.on('pointerdown', () => {
+            const s = SaveService.instance;
+            const id = s.getCurrentWeaponId();
+            const c = enhanceCost(s.getWeaponEnh(id));
+            if (s.spendGold(c)) {
+                s.addWeaponEnh(id);
+                s.save();
+                this.scene.restart();   // 重繪:武器 +N / 攻擊上升 / 新花費
+            } else {
+                this.flashMsg('金幣不足', '#c23a1a');
+            }
+        });
+    }
+
+    private flashMsg(msg: string, color: string) {
+        const t = this.add.text(W / 2, H / 2 - 100, msg, {
+            fontFamily: 'sans-serif', fontSize: 44, color, fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 6
+        }).setOrigin(0.5).setDepth(3000);
+        this.tweens.add({ targets: t, y: t.y - 50, alpha: 0, duration: 900, onComplete: () => t.destroy() });
     }
 
     private drawSummaryChip(cx: number, cy: number, label: string, value: string, vColor: string) {
