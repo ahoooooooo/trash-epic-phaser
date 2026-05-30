@@ -42,6 +42,8 @@
 
 10. **[x] 一圖一怪真正做到**(2026-05-30 user 指出沒做到)— 查證起始圖 wasteland_outskirts spawn idxs 是 `[0,11]`=巨鼠+食人花(**2 種,違反**)。修:wasteland 改 `[0]` 純巨鼠 + 新增獨立 field 圖 `creeper_vale`(毒花谷)`[11]` 純食人花 + 雙向 portal + WorldMap 節點/邊 + q2/q6 描述改指毒花谷。現 4 戰鬥圖各一怪:廢土外圍=巨鼠 / 毒花谷=食人花 / 乾井路=機械蜘蛛 / 爐心門=輻射機甲蟲。Codex APPROVE + Playwright 實測兩圖各自只見對應怪。
 
+11. **[x] 登入/註冊頁美感升級**(2026-05-30 user「要有美感 現在完全沒有」)— visual-iterate agent 迭代 3 輪:新增 `authUi.ts` 共用 helper(廢土背景+vignette+暖光、厚重多層標題、鏽蝕金屬卡+鉚釘、鏽橙 header 牌、發光 CTA、DOM input focus 發光、裝飾 decals)+ rewrite `Login.ts`(加主角立繪 hero)+ `Register.ts`。廢土 palette 嚴守。Codex APPROVE + Playwright 註冊/登入/錯密碼/訪客全流程實測沒破壞 + live 確認上線。commit 7fc1feb。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)
