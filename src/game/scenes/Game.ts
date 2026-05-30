@@ -131,6 +131,11 @@ const MOB_BLUEPRINTS: MobBlueprint[] = [
     {
         id: 'mutant_creeper', type: 'Plant', spriteKey: 'mob_mutant_creeper', scale: 0.13,
         hp: 80, speedChase: 0.06, speedWander: 0.02, contactDamage: 12, expReward: 8, goldReward: 5
+    },
+    // Phase 4c-20 真‧獨立新怪(廢土巨蠍)— idx 12,鏽蝕沙坑 signature(乾井路鄰圖 lv40-90)
+    {
+        id: 'rust_scorpion', type: 'Insect', spriteKey: 'mob_rust_scorpion', scale: 0.16,
+        hp: 320, speedChase: 0.12, speedWander: 0.04, contactDamage: 34, expReward: 40, goldReward: 24
     }
 ];
 
@@ -1365,7 +1370,7 @@ export class Game extends Scene
                 }
                 // Phase 4b-11 play frame anim by blueprint id
                 // 真‧獨立新怪是單張 sprite(無 run frames)→ 不 play frame anim(否則會換到 giantrat/centipede 貼圖),改腳步輕微縮放抖動
-                if (bp.spriteKey === 'mob_rust_spider' || bp.spriteKey === 'mob_reactor_crawler' || bp.spriteKey === 'mob_mutant_creeper') {
+                if (bp.spriteKey === 'mob_rust_spider' || bp.spriteKey === 'mob_reactor_crawler' || bp.spriteKey === 'mob_mutant_creeper' || bp.spriteKey === 'mob_rust_scorpion') {
                     this.tweens.add({ targets: mob, scaleX: mScale * 1.06, scaleY: mScale * 0.96, duration: 380, yoyo: true, repeat: -1 });
                 } else if (bp.id === 'centipede' || bp.id === 'scrap_drone') {
                     mob.play('centipede_wave');

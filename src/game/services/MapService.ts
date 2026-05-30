@@ -144,10 +144,24 @@ const MAPS: Record<string, MapConfig> = {
         shopNpcs: [],
         portals: [
             { x: 900, y: 200, targetMapId: 'wasteland_outskirts', targetX: 1200, targetY: 2900, label: '← 廢土外圍' },
-            { x: 900, y: 2600, targetMapId: 'rust_alley', targetX: 700, targetY: 1400, label: '鏽蝕巷 ↓' }
+            { x: 900, y: 2600, targetMapId: 'rust_alley', targetX: 700, targetY: 1400, label: '鏽蝕巷 ↓' },
+            { x: 300, y: 1400, targetMapId: 'sand_pit', targetX: 1000, targetY: 400, label: '鏽蝕沙坑 →' }
         ],
         bossEnabled: true,
         playerStartX: 900, playerStartY: 1400
+    },
+    // === 鏽蝕沙坑(field 40-90,廢土巨蠍獵場 — 一圖一怪)===
+    sand_pit: {
+        id: 'sand_pit', nameZH: '鏽蝕沙坑', mapType: 'field', levelRange: [40, 90], regionId: 'scrap',
+        width: 2000, height: 2800, bgColor: '#33291c',
+        spawnPoints: fieldSpawns(2000, 2800, 14, [12]),  // 一圖一怪:鏽蝕沙坑 = 廢土巨蠍 only
+        npcs: [],
+        shopNpcs: [],
+        portals: [
+            { x: 1000, y: 200, targetMapId: 'dry_well_road', targetX: 300, targetY: 1500, label: '← 乾井路' }
+        ],
+        bossEnabled: false,
+        playerStartX: 1000, playerStartY: 1400
     },
     // === 鏽蝕巷(town 80-180,中繼村,賣中低階藥)===
     rust_alley: {
