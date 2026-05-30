@@ -45,6 +45,9 @@ const FAM_FILES: Record<string, string> = {
 
 // Phase 4a-20 抽卡 banner UI(Phase 4b-17 視覺升級)
 export class Gacha extends Scene {
+    // 追蹤 repeat:-1 tween 避免洩漏
+    private loopTweens: Phaser.Tweens.Tween[] = [];
+
     constructor() { super('Gacha'); }
 
     init() {
@@ -66,57 +69,72 @@ export class Gacha extends Scene {
 
     create() {
         if (this.scene.isActive('Game')) this.scene.pause('Game');
+        this.loopTweens = [];
 
-        // 廢土底:炭黑(不透明,避免底層 scene 透出)+ 暗角 vignette
-        this.add.rectangle(0, 0, W, H, 0x1a1612, 1).setOrigin(0, 0);
+        // 廢土底:深炭黑 + 層次感
+        this.add.rectangle(0, 0, W, H, 0x100d0a, 1).setOrigin(0, 0);
         this.addVignette();
+
+        // 頂部橙 accent 線
+        const topAccent = this.add.rectangle(0, 0, W, 4, 0xff8830, 0.8).setOrigin(0, 0);
+        const ta = this.tweens.add({ targets: topAccent, alpha: 0.3, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.loopTweens.push(ta);
 
         const save = SaveService.instance.get();
 
-        // ── 頂部 header panel ──
-        const headerPanel = this.add.rectangle(W / 2, 150, W - 80, 220, 0x2a2520, 0.92)
-            .setStrokeStyle(3, 0xa05a30, 0.9);
+        // ── 頂部 header panel — 金屬鏽板質感 ──
+        const headerPanel = this.add.rectangle(W / 2, 155, W - 60, 230, 0x1e1a16, 0.97)
+            .setStrokeStyle(3, 0xa05a30, 0.9).setAlpha(0);
+        // header 上沿亮帶(金屬反光)
+        const headerSheen = this.add.rectangle(W / 2, 47, W - 60, 28, 0x3a342c, 0.45).setAlpha(0);
+        // header 底部橙分隔線
+        const headerDiv = this.add.rectangle(W / 2, 270, W - 60, 2, 0xa05a30, 0.6).setAlpha(0);
         this.addRivets(headerPanel.x, headerPanel.y, headerPanel.width, headerPanel.height);
 
-        // Title
-        this.add.text(W / 2, 80, '◤ 廢墟同盟 招募 ◢', {
-            fontFamily: 'sans-serif', fontSize: 56, color: '#b08850', fontStyle: 'bold',
+        // Title — 進場上滑淡入
+        const titleTxt = this.add.text(W / 2, 88, '◤ 廢墟同盟 招募 ◢', {
+            fontFamily: 'sans-serif', fontSize: 52, color: '#c89050', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 8
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setAlpha(0).setY(100);
 
-        // 金幣 + pity 一行(數字鏽金)
-        this.add.text(W / 2, 150, `素材 ${formatStat(save.gold)}`, {
-            fontFamily: 'monospace', fontSize: 30, color: '#ffe060', fontStyle: 'bold',
+        // 金幣
+        const goldTxt = this.add.text(W / 2, 152, `素材 ${formatStat(save.gold)}`, {
+            fontFamily: 'monospace', fontSize: 32, color: '#ffe060', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 3
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setAlpha(0);
 
-        this.add.text(W / 2, 195, `自上次 SSR ${save.gachaPullsSinceSSR}   ·   總招募 ${save.gachaTotalPulls}`, {
+        const pityTxt = this.add.text(W / 2, 198, `自上次 SSR ${save.gachaPullsSinceSSR}   ·   總招募 ${save.gachaTotalPulls}`, {
             fontFamily: 'monospace', fontSize: 20, color: '#a05a30'
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setAlpha(0);
 
         // 收藏進度
         const owned = SaveService.instance.getCollectionCount();
-        this.add.text(W / 2, 232, `圖鑑收藏  ${owned} / ${FAMILIAR_POOL.length}`, {
+        const collTxt = this.add.text(W / 2, 234, `圖鑑收藏  ${owned} / ${FAMILIAR_POOL.length}`, {
             fontFamily: 'monospace', fontSize: 20, color: '#b08850'
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setAlpha(0);
 
-        // ── 機率公開 panel(法規強制,排版美化）──
-        const ratePanel = this.add.rectangle(W / 2, 320, W - 120, 110, 0x2a2520, 0.85)
-            .setStrokeStyle(2, 0x8b6020, 0.7);
-        this.add.text(W / 2, 290, '招募機率公示', {
+        // header 進場動畫
+        this.tweens.add({ targets: [headerPanel, headerSheen, headerDiv], alpha: 1, duration: 280 });
+        this.tweens.add({ targets: titleTxt, alpha: 1, y: 88, duration: 300, ease: 'Quad.easeOut' });
+        this.tweens.add({ targets: [goldTxt, pityTxt, collTxt], alpha: 1, duration: 260, delay: 120 });
+
+        // ── 機率公開 panel(法規強制)──
+        const ratePanel = this.add.rectangle(W / 2, 325, W - 100, 118, 0x221e1a, 0.95)
+            .setStrokeStyle(2, 0x6a5020, 0.8).setAlpha(0);
+        const rateTitle = this.add.text(W / 2, 293, '招募機率公示', {
             fontFamily: 'sans-serif', fontSize: 20, color: '#b08850', fontStyle: 'bold'
-        }).setOrigin(0.5);
-        this.add.text(W / 2, 322, 'UR 1%   ·   SSR 5%   ·   SR 19%   ·   R 75%', {
+        }).setOrigin(0.5).setAlpha(0);
+        const rateTxt = this.add.text(W / 2, 325, 'UR 1%   ·   SSR 5%   ·   SR 19%   ·   R 75%', {
             fontFamily: 'monospace', fontSize: 20, color: '#ffe0c0'
-        }).setOrigin(0.5);
-        this.add.text(W / 2, 350, '50 招募後 SSR 機率漸升,80 招募保底 SSR 以上', {
-            fontFamily: 'monospace', fontSize: 16, color: '#a05a30'
-        }).setOrigin(0.5);
-        void ratePanel;
+        }).setOrigin(0.5).setAlpha(0);
+        const pityHint = this.add.text(W / 2, 354, '50 招募後 SSR 機率漸升,80 招募保底 SSR 以上', {
+            fontFamily: 'monospace', fontSize: 16, color: '#8a5a30'
+        }).setOrigin(0.5).setAlpha(0);
+        this.tweens.add({ targets: [ratePanel, rateTitle, rateTxt, pityHint], alpha: 1, duration: 260, delay: 180 });
 
-        // ── 抽卡 button(鏽板 CTA)──
-        this.makePullButton(W / 2 - 200, 470, '單次招募', COST_PER_PULL, () => this.doPull(1));
-        this.makePullButton(W / 2 + 200, 470, '十次招募', COST_TEN_PULL, () => this.doPull(10), true);
+        // ── 抽卡 button(鏽板 CTA)— 進場從下滑入 ──
+        this.makePullButton(W / 2 - 200, 490, '單次招募', COST_PER_PULL, () => this.doPull(1), false, 260);
+        this.makePullButton(W / 2 + 200, 490, '十次招募', COST_TEN_PULL, () => this.doPull(10), true, 340);
 
         // ── 夥伴出戰 收藏區(已擁有可點選出戰)──
         this.buildRoster();
@@ -126,6 +144,16 @@ export class Gacha extends Scene {
 
         this.input.keyboard?.on('keydown-ESC', () => this.closeGacha());
         this.input.keyboard?.on('keydown-G', () => this.closeGacha());
+
+        // 確保 shutdown() 在 Phaser scene lifecycle 時被呼叫
+        this.events.once('shutdown', this.shutdown, this);
+    }
+
+    shutdown() {
+        for (const t of this.loopTweens) {
+            if (t && t.isPlaying()) t.stop();
+        }
+        this.loopTweens = [];
     }
 
     private addVignette() {
@@ -150,43 +178,56 @@ export class Gacha extends Scene {
         }
     }
 
-    private makePullButton(x: number, y: number, label: string, cost: number, onClick: () => void, hot = false) {
-        const c = this.add.container(x, y);
-        const baseColor = hot ? 0xff8830 : 0xb08850;
-        const bg = this.add.rectangle(0, 0, 300, 170, baseColor, 0.95)
+    private makePullButton(x: number, y: number, label: string, cost: number, onClick: () => void, hot = false, enterDelay = 0) {
+        const baseColor = hot ? 0xff8830 : 0x9a7840;
+        const hoverColor = hot ? 0xffaa55 : 0xc09a58;
+        const c = this.add.container(x, y + 30).setAlpha(0); // 從下方滑入
+        const bg = this.add.rectangle(0, 0, 310, 175, baseColor, 0.96)
             .setStrokeStyle(4, 0x1a1612, 1);
-        const inner = this.add.rectangle(0, 0, 290, 160, 0x000000, 0)
-            .setStrokeStyle(2, 0xffe0c0, 0.4);
-        const txt1 = this.add.text(0, -34, label, {
-            fontFamily: 'sans-serif', fontSize: 40, color: '#1a1612', fontStyle: 'bold'
+        // 金屬上沿反光
+        const sheen = this.add.rectangle(0, -175 / 2 + 22, 295, 28, 0xffffff, 0.07).setOrigin(0.5);
+        // 內框
+        const inner = this.add.rectangle(0, 0, 298, 163, 0x000000, 0)
+            .setStrokeStyle(2, 0xffe0c0, hot ? 0.55 : 0.25);
+        const txt1 = this.add.text(0, -36, label, {
+            fontFamily: 'sans-serif', fontSize: 42, color: '#1a1612', fontStyle: 'bold',
+            stroke: '#00000055', strokeThickness: 2
         }).setOrigin(0.5);
-        const div = this.add.rectangle(0, 4, 200, 2, 0x1a1612, 0.5);
-        const txt2 = this.add.text(0, 36, `素材 ${cost}`, {
+        const div = this.add.rectangle(0, 4, 210, 2, 0x1a1612, 0.5);
+        const txt2 = this.add.text(0, 38, `素材 ${cost}`, {
             fontFamily: 'monospace', fontSize: 28, color: '#1a1612', fontStyle: 'bold'
         }).setOrigin(0.5);
-        c.add([bg, inner, txt1, div, txt2]);
-        c.setSize(300, 170);
+        c.add([bg, sheen, inner, txt1, div, txt2]);
+        c.setSize(310, 175);
         c.setInteractive({ useHandCursor: true });
+        c.on('pointerover', () => { bg.setFillStyle(hoverColor); });
+        c.on('pointerout', () => { bg.setFillStyle(baseColor); });
         c.on('pointerdown', () => {
             this.tweens.add({ targets: c, scaleX: 0.93, scaleY: 0.93, duration: 80, yoyo: true });
             onClick();
         });
+        // 進場動畫
+        this.tweens.add({ targets: c, alpha: 1, y: y, duration: 300, delay: enterDelay, ease: 'Back.easeOut' });
     }
 
     private makeBackButton(x: number, y: number, label: string, onClick: () => void) {
-        const c = this.add.container(x, y);
-        const bg = this.add.rectangle(0, 0, 320, 76, 0x2a2520, 0.95)
-            .setStrokeStyle(3, 0xa05a30, 0.9);
+        const c = this.add.container(x, y).setAlpha(0);
+        const bg = this.add.rectangle(0, 0, 340, 80, 0x221e1a, 0.97)
+            .setStrokeStyle(3, 0xa05a30, 0.85);
         const txt = this.add.text(0, 0, label, {
-            fontFamily: 'sans-serif', fontSize: 40, color: '#a05a30', fontStyle: 'bold'
+            fontFamily: 'sans-serif', fontSize: 40, color: '#a05a30', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 3
         }).setOrigin(0.5);
         c.add([bg, txt]);
-        c.setSize(320, 76);
+        c.setSize(340, 80);
         c.setInteractive({ useHandCursor: true });
+        c.on('pointerover', () => { bg.setFillStyle(0x3a3028); });
+        c.on('pointerout', () => { bg.setFillStyle(0x221e1a); });
         c.on('pointerdown', () => {
-            this.tweens.add({ targets: c, scaleX: 0.95, scaleY: 0.95, duration: 80, yoyo: true });
-            onClick();
+            this.tweens.add({ targets: c, scaleX: 0.95, scaleY: 0.95, duration: 80, yoyo: true,
+                onComplete: onClick });
         });
+        this.tweens.add({ targets: c, alpha: 1, duration: 260, delay: 700 });
     }
 
     // ── 夥伴出戰收藏區 ──
@@ -195,94 +236,135 @@ export class Gacha extends Scene {
         const activeId = save.getActiveFamiliar();
         const activeDef = activeId ? FAMILIAR_POOL.find(f => f.id === activeId) ?? null : null;
 
-        const panelY = 620;
-        const panel = this.add.rectangle(W / 2, panelY, W - 80, 90, 0x2a2520, 0.92)
-            .setStrokeStyle(3, 0xff8830, 0.9);
-        void panel;
+        const panelY = 628;
+        const panel = this.add.rectangle(W / 2, panelY, W - 70, 96, 0x201c18, 0.96)
+            .setStrokeStyle(3, 0xff8830, 0.85).setAlpha(0);
+        // panel 進場
+        this.tweens.add({ targets: panel, alpha: 1, duration: 260, delay: 420 });
 
-        this.add.text(W / 2, panelY - 22, '◤ 出戰夥伴 ◢', {
-            fontFamily: 'sans-serif', fontSize: 28, color: '#ff8830', fontStyle: 'bold'
-        }).setOrigin(0.5);
+        const rosterTitle = this.add.text(W / 2, panelY - 24, '◤ 出戰夥伴 ◢', {
+            fontFamily: 'sans-serif', fontSize: 28, color: '#ff8830', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 4
+        }).setOrigin(0.5).setAlpha(0);
 
         const statusTxt = activeDef
             ? `${activeDef.nameZH}  ·  ${activeDef.effect.label}`
             : '未出戰 — 點下方已擁有夥伴出戰';
-        this.add.text(W / 2 - 80, panelY + 18, statusTxt, {
+        const statusText = this.add.text(W / 2 - 80, panelY + 20, statusTxt, {
             fontFamily: 'monospace', fontSize: 22, color: activeDef ? '#ffe060' : '#a05a30',
             align: 'center', wordWrap: { width: W - 320 }
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setAlpha(0);
+        this.tweens.add({ targets: [rosterTitle, statusText], alpha: 1, duration: 260, delay: 480 });
 
         // 卸下 button(僅在有出戰時可按)
         if (activeDef) {
-            const dc = this.add.container(W / 2 + 380, panelY + 16);
-            const dbg = this.add.rectangle(0, 0, 150, 56, 0x4a3a30, 0.95).setStrokeStyle(2, 0xa05a30, 0.9);
+            const dc = this.add.container(W / 2 + 380, panelY + 18).setAlpha(0);
+            const dbg = this.add.rectangle(0, 0, 155, 60, 0x4a3a30, 0.95).setStrokeStyle(2, 0xa05a30, 0.9);
             const dtxt = this.add.text(0, 0, '卸下', {
                 fontFamily: 'sans-serif', fontSize: 28, color: '#ffe0c0', fontStyle: 'bold'
             }).setOrigin(0.5);
             dc.add([dbg, dtxt]);
-            dc.setSize(150, 56);
+            dc.setSize(155, 60);
             dc.setInteractive({ useHandCursor: true });
+            dc.on('pointerover', () => { dbg.setFillStyle(0x6a5040); });
+            dc.on('pointerout', () => { dbg.setFillStyle(0x4a3a30); });
             dc.on('pointerdown', () => {
                 this.tweens.add({ targets: dc, scaleX: 0.95, scaleY: 0.95, duration: 80, yoyo: true });
                 this.setActive(null);
             });
+            this.tweens.add({ targets: dc, alpha: 1, duration: 260, delay: 480 });
         }
+
+        // 收藏格子標題
+        const gridTitle = this.add.text(W / 2, 730, '全部夥伴', {
+            fontFamily: 'sans-serif', fontSize: 22, color: '#6a5a4a', fontStyle: 'bold'
+        }).setOrigin(0.5).setAlpha(0);
+        this.tweens.add({ targets: gridTitle, alpha: 1, duration: 200, delay: 540 });
 
         // 格子網格:5 col,行依數量。已擁有可點;未擁有 dim + 鎖
         const cols = 5;
-        const cellW = 188, cellH = 132, gap = 12;
+        const cellW = 188, cellH = 140, gap = 14;
         const gridW = cols * cellW + (cols - 1) * gap;
         const startX = (W - gridW) / 2 + cellW / 2;
-        const startY = 760;
+        const startY = 768;
 
         FAMILIAR_POOL.forEach((fam, i) => {
             const cx = startX + (i % cols) * (cellW + gap);
             const cy = startY + Math.floor(i / cols) * (cellH + gap);
-            this.makeRosterCell(fam, cx, cy, cellW, cellH);
+            const rowDelay = 560 + Math.floor(i / cols) * 60 + (i % cols) * 20;
+            this.makeRosterCell(fam, cx, cy, cellW, cellH, rowDelay);
         });
     }
 
-    private makeRosterCell(fam: FamiliarDef, cx: number, cy: number, w: number, h: number) {
+    private makeRosterCell(fam: FamiliarDef, cx: number, cy: number, w: number, h: number, enterDelay = 0) {
         const save = SaveService.instance;
         const owned = save.getOwnedCount(fam.id) > 0;
         const isActive = save.getActiveFamiliar() === fam.id;
         const tier = TIER_COLOR[fam.rarity];
+        const isHighRarity = fam.rarity === 'SSR' || fam.rarity === 'UR';
 
-        const c = this.add.container(cx, cy);
-        const bg = this.add.rectangle(0, 0, w, h, 0x2a2520, owned ? 0.96 : 0.55)
-            .setStrokeStyle(isActive ? 5 : 3, isActive ? 0xff8830 : tier, owned ? 1 : 0.5);
-        const objs: Phaser.GameObjects.GameObject[] = [bg];
+        const c = this.add.container(cx, cy).setAlpha(0).setScale(0.8);
+        const objs: Phaser.GameObjects.GameObject[] = [];
+
+        // SSR/UR: 外層光暈
+        if (isHighRarity && owned) {
+            const halo = this.add.rectangle(0, 0, w + 16, h + 16, tier, 0)
+                .setStrokeStyle(3, tier, 0.5);
+            objs.push(halo);
+            const ht = this.tweens.add({
+                targets: halo, alpha: 0.6,
+                duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+                delay: enterDelay + 400
+            });
+            this.loopTweens.push(ht);
+        }
+
+        // 主卡底:SSR/UR 擁有時稍微亮一些
+        const bgAlpha = owned ? (isHighRarity ? 0.98 : 0.94) : 0.48;
+        const bgColor = owned ? (isHighRarity ? 0x2e2820 : 0x2a2520) : 0x1a1612;
+        const bg = this.add.rectangle(0, 0, w, h, bgColor, bgAlpha)
+            .setStrokeStyle(isActive ? 5 : (isHighRarity && owned ? 4 : 2),
+                isActive ? 0xff8830 : tier,
+                owned ? (isHighRarity ? 0.95 : 0.75) : 0.35);
+        objs.push(bg);
+
+        // 上沿 tier 色條(owned only)
+        if (owned) {
+            const topBar = this.add.rectangle(0, -h / 2 + 5, w - 8, 8, tier, 0.8);
+            objs.push(topBar);
+        }
 
         // 立繪 or placeholder
         if (owned && this.textures.exists(fam.spriteKey)) {
-            const img = this.add.image(0, -16, fam.spriteKey).setScale(0.085);
+            const img = this.add.image(0, -12, fam.spriteKey).setScale(0.088);
             objs.push(img);
         } else {
-            const ph = this.add.rectangle(0, -16, 64, 76, tier, owned ? 0.22 : 0.12)
-                .setStrokeStyle(2, tier, owned ? 0.7 : 0.35);
-            const q = this.add.text(0, -16, owned ? '?' : '鎖', {
-                fontFamily: 'sans-serif', fontSize: owned ? 40 : 28,
+            const ph = this.add.rectangle(0, -12, 60, 72, tier, owned ? 0.20 : 0.10)
+                .setStrokeStyle(2, tier, owned ? 0.55 : 0.25);
+            const q = this.add.text(0, -12, owned ? '?' : '鎖', {
+                fontFamily: 'sans-serif', fontSize: owned ? 38 : 26,
                 color: this.hex(tier), fontStyle: 'bold'
-            }).setOrigin(0.5).setAlpha(owned ? 1 : 0.5);
+            }).setOrigin(0.5).setAlpha(owned ? 0.9 : 0.45);
             objs.push(ph, q);
         }
 
         // tier 角標
-        const rar = this.add.text(-w / 2 + 8, -h / 2 + 6, RARITY_LABEL[fam.rarity], {
-            fontFamily: 'sans-serif', fontSize: 18, color: this.hex(tier), fontStyle: 'bold'
-        }).setOrigin(0, 0).setAlpha(owned ? 1 : 0.5);
+        const rar = this.add.text(-w / 2 + 7, -h / 2 + 7, RARITY_LABEL[fam.rarity], {
+            fontFamily: 'sans-serif', fontSize: 17, color: this.hex(tier), fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 3
+        }).setOrigin(0, 0).setAlpha(owned ? 1 : 0.45);
         objs.push(rar);
 
-        // effect label(底部,給玩家看效果)
-        const lab = this.add.text(0, h / 2 - 24, owned ? fam.effect.label : '未擁有', {
-            fontFamily: 'monospace', fontSize: 15, color: owned ? '#ffe0c0' : '#7a6a55',
-            align: 'center', wordWrap: { width: w - 12 }
+        // effect label(底部)
+        const lab = this.add.text(0, h / 2 - 22, owned ? fam.effect.label : '未擁有', {
+            fontFamily: 'monospace', fontSize: 14, color: owned ? '#ffe0c0' : '#6a5a45',
+            align: 'center', wordWrap: { width: w - 10 }
         }).setOrigin(0.5);
         objs.push(lab);
 
         // 出戰中標記
         if (isActive) {
-            const tag = this.add.text(0, -h / 2 + 18, '出戰中', {
+            const tag = this.add.text(0, -h / 2 + 20, '出戰中', {
                 fontFamily: 'sans-serif', fontSize: 16, color: '#1a1612', fontStyle: 'bold',
                 backgroundColor: '#ff8830', padding: { x: 8, y: 2 }
             }).setOrigin(0.5);
@@ -294,11 +376,16 @@ export class Gacha extends Scene {
 
         if (owned && !isActive) {
             c.setInteractive({ useHandCursor: true });
+            c.on('pointerover', () => { bg.setStrokeStyle(4, 0xff8830, 0.9); });
+            c.on('pointerout', () => { bg.setStrokeStyle(isHighRarity ? 4 : 2, tier, isHighRarity ? 0.95 : 0.75); });
             c.on('pointerdown', () => {
-                this.tweens.add({ targets: c, scaleX: 0.95, scaleY: 0.95, duration: 80, yoyo: true });
+                this.tweens.add({ targets: c, scaleX: 0.93, scaleY: 0.93, duration: 80, yoyo: true });
                 this.setActive(fam.id);
             });
         }
+
+        // 進場動畫:scale 0.8→1 + alpha 0→1
+        this.tweens.add({ targets: c, alpha: 1, scaleX: 1, scaleY: 1, duration: 220, delay: enterDelay, ease: 'Back.easeOut' });
     }
 
     // 設出戰並刷新 UI(SaveService 守門:只允許已擁有)
@@ -428,12 +515,13 @@ export class Gacha extends Scene {
                 delay, duration: 280, ease: 'Back.easeOut'
             });
 
-            // SSR/UR 卡:光暈呼吸閃
+            // SSR/UR 卡:光暈呼吸閃(追蹤進 loopTweens 確保 shutdown 清除)
             if (r.rarity === 'SSR' || r.rarity === 'UR') {
-                this.tweens.add({
+                const glowTween = this.tweens.add({
                     targets: glow, alpha: TIER_GLOW_ALPHA[r.rarity] + 0.2,
                     duration: 600, yoyo: true, repeat: -1
                 });
+                this.loopTweens.push(glowTween);
             }
         });
 
