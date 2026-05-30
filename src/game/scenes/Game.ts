@@ -432,12 +432,6 @@ export class Game extends Scene
     private static readonly CRIT_CHANCE = 0.15;
     private static readonly CRIT_MULT = 1.5;
     private static readonly MOVE_SPEED = 0.4;        // 玩家 px/ms
-    // 楓谷風走路 bob:身體隨步伐上下起伏(secondary motion,走路順暢關鍵)+ 輕微 lean
-    private static readonly WALK_BOB_AMP = 9;        // bob 振幅 px(通過幀升、接觸幀降)
-    private static readonly WALK_BOB_PERIOD = 250;   // 一步上下 ms(對齊 8 幀 frameRate 16:contact→passing→contact)
-    private static readonly WALK_LEAN_DEG = 2.5;     // 走路方向微傾角度
-    private walkBobTime = 0;
-    private playerBobApplied = 0;                    // 當前已加到 player.y 的 bob(下幀先扣再加,不污染邏輯座標)
     // 怪 speed 改 per-blueprint;以下參數仍 global
     private static readonly MOB_AGGRO_RANGE = 350;
     private static readonly MOB_LOST_RANGE = 500;
@@ -560,7 +554,6 @@ export class Game extends Scene
         // VFX-A:玩家落地陰影(在 player 下方,depth -10 蓋在地圖上、躲在 sprite 下)
         this.playerShadow = this.makeGroundShadow(startX, startY, 70);
         this.player = this.add.sprite(startX, startY, 'player_idle');
-        this.walkBobTime = 0; this.playerBobApplied = 0;  // scene.restart 重用 instance:重置 bob state 防污染新 player spawn y
         this.lockPlayerScale();
         // 跨 texture 動畫(walk/attack/hurt)每 frame 尺寸不同,逐 frame 重鎖 display 高度
         this.player.on('animationupdate', () => this.lockPlayerScale());
@@ -1286,14 +1279,12 @@ export class Game extends Scene
         if (!this.spawnGraceArmed) { this.spawnGraceArmed = true; this.startSpawnGrace(time); }
         if (this.skillRequested) { this.skillRequested = false; this.useSkill(time); }
         this.refreshSkillButton(time);
-        this.removePlayerWalkBob();  // 先扣回上幀 bob → player.y = 純 ground,讓 movement/clamp/shadow 都吃 ground y
         // VFX-A:玩家陰影跟腳(origin 中心,腳在下方 ~ displayHeight*0.42)
         if (this.playerShadow) {
             this.playerShadow.x = this.player.x;
-            this.playerShadow.y = this.player.y + this.player.displayHeight * 0.42;  // bob 已先扣回 ground
+            this.playerShadow.y = this.player.y + this.player.displayHeight * 0.42;
         }
         this.handleMovement(delta);
-        this.updatePlayerWalkBob(delta);
         this.handleSpawn(time);
         this.trySpawnBoss(time);
         if (this.bossActive) { this.updateBossHpBar(); this.updateBossAttack(time); this.updateAcidPools(time); this.updateBossProjectiles(time, delta); }
@@ -1621,32 +1612,6 @@ export class Game extends Scene
         this.lockPlayerScale();
     }
 
-    // 楓谷風走路 bob + 輕微 lean(secondary motion):身體隨步伐上下起伏。
-    // movement 前先 removePlayerWalkBob() 把 player.y 還原成純 ground(clamp/shadow/AI 都吃 ground),
-    // movement 後 updatePlayerWalkBob() 只「加」本幀 bob — 避免邊界 clamp 與 bob 互相污染、避免漂移。
-    private removePlayerWalkBob() {
-        if (this.player && this.playerBobApplied !== 0) {
-            this.player.y -= this.playerBobApplied;
-            this.playerBobApplied = 0;
-        }
-    }
-    private updatePlayerWalkBob(delta: number) {
-        if (!this.player) return;
-        const walking = this.playerAnimState === 'walking' && !this.playerActionAnim && !this.isGameOver;
-        let bob = 0;
-        if (walking) {
-            this.walkBobTime += delta;
-            // abs(sin):接觸幀 bob=0(最低)、通過幀 bob=-AMP(最高),每半週期一步
-            bob = -Game.WALK_BOB_AMP * Math.abs(Math.sin(this.walkBobTime / Game.WALK_BOB_PERIOD * Math.PI));
-            // 輕微 lean 走路方向(flipX=true 朝左);action anim 期間不動 angle
-            this.player.angle = this.player.flipX ? Game.WALK_LEAN_DEG : -Game.WALK_LEAN_DEG;
-        } else {
-            this.walkBobTime = 0;
-            if (this.player.angle !== 0 && !this.playerActionAnim) this.player.angle = 0;
-        }
-        this.player.y += bob;
-        this.playerBobApplied = bob;
-    }
 
     // Phase 4b-14:真 frame anim 揮擊。action lock 期間 handleMovement 不切 anim,
     // 防 once listener 累積:每次 play 前 off 同 event 然後 once。
