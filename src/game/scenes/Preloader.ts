@@ -57,6 +57,7 @@ export class Preloader extends Scene
         this.load.image('mob_mutant_creeper', 'mobs/mob_mutant_creeper.png');  // Phase 4c-19 變異食人花
         this.load.image('mob_rust_scorpion', 'mobs/mob_rust_scorpion.png');  // Phase 4c-20 廢土巨蠍
         this.load.image('mob_acidsire', 'mobs/mob_acidsire.png');  // acidsire 蝕骨蜈蚣巢母 boss sprite(先當強 mob)
+        this.load.image('mob_kraz', 'mobs/mob_kraz.png');  // 哥布林戰酋 克拉茲·黑鐵 boss sprite(GPT-4o+BiRefNet)
         this.load.image('npc_clerk', 'characters/npc_quest_clerk_greenscarf.png');
 
         // Phase 4c-11:14 隻 gacha 立繪(~28MB)移到 Gacha 場景 lazy-load,不在開機 Preloader

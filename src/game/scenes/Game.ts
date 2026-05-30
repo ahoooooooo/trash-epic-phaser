@@ -195,6 +195,23 @@ const BOSS_ACIDSIRE: MobBlueprint = {
     rageTint: 0x40ff40     // 酸綠狂暴
 };
 
+// 哥布林戰酋 克拉茲·黑鐵 boss(04_boss_kraz,終極 boss,黑市/爐心門深處)— 強過 acidsire 的後期 boss
+const BOSS_KRAZ: MobBlueprint = {
+    id: 'boss_kraz',
+    type: 'Rat',            // 走 ELEMENT_RESIST Boss 列(isBoss 已蓋過 type 判定)
+    spriteKey: 'mob_kraz',
+    scale: 0.42,            // 2.2m 大型哥布林,顯著大過玩家/小怪
+    hp: 4000,
+    speedChase: 0.085,
+    speedWander: 0,
+    contactDamage: 75,
+    expReward: 1200,
+    goldReward: 600,
+    isBoss: true,
+    rageThreshold: 0.3,    // < 30% 棄甲狂暴(per 04 doc phase 2)
+    rageTint: 0xff5a20     // 橙紅狂暴(鐵與血)
+};
+
 // Boss 泛化:data-driven BossDef registry(sprite/血條名/anim/招式視覺色),per-map bossId 選用
 interface BossDef {
     blueprint: MobBlueprint;
@@ -219,6 +236,12 @@ const BOSS_DEFS: Record<string, BossDef> = {
         blueprint: BOSS_ACIDSIRE, displayName: '蝕骨蜈蚣巢母',
         sweepFill: 0x40ff40, sweepStroke: 0x80ff50, sweepHit: 0x50d020,
         biteFill: 0x90e040, biteStroke: 0xc0ff60, acidSpit: true, spawnAdds: 4
+    },
+    kraz: {
+        blueprint: BOSS_KRAZ, displayName: '哥布林戰酋 克拉茲',
+        // 戰錘橫掃(sweep)鏽橙警示 + rage 戰錘連砸(bite)橙紅,單張 sprite wobble
+        sweepFill: 0xff7020, sweepStroke: 0xffa040, sweepHit: 0xff5020,
+        biteFill: 0xffb060, biteStroke: 0xffd090
     }
 };
 

@@ -207,7 +207,7 @@ const MAPS: Record<string, MapConfig> = {
         portals: [
             { x: 1200, y: 200, targetMapId: 'rust_alley', targetX: 1300, targetY: 1300, label: '← 鏽蝕巷' }
         ],
-        bossEnabled: true,
+        bossEnabled: true, bossId: 'kraz',  // 終極區 boss = 哥布林戰酋 克拉茲(取代預設巨鼠)
         playerStartX: 1000, playerStartY: 1800
     }
 };
