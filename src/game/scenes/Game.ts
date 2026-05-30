@@ -1685,7 +1685,7 @@ export class Game extends Scene
             sp.nextSpawnAt = time + RESPAWN_CYCLE_MS;
         }
         this.mobs = this.mobs.filter(m => m !== target);
-        this.spawnGoldDrop(target.x, target.y, data.blueprint.goldReward);
+        this.spawnGoldDrop(target.x, target.y, data.blueprint.goldReward * (data.isElite ? ELITE_REWARD_MULT : 1));
         this.grantKillReward(target.x, target.y, data.blueprint, data.isElite === true);
         this.rollMobDrops(target.x, target.y, data.blueprint.isBoss === true, data.isElite === true);
         if (data.isElite) {
@@ -2097,40 +2097,43 @@ export class Game extends Scene
     // Phase 4b-12 (B) 金幣 啵跳 + 閃光環 + 加進磁吸 queue
     private spawnGoldDrop(x: number, y: number, amount: number)
     {
-        void amount; // 不視覺顯示
-        const dropX = x + (Math.random() - 0.5) * 30;
-        const dropY = y + (Math.random() - 0.5) * 30;
-        // 金幣本體(更亮的金 + 較粗鏽金邊,立體幣感)
-        const coin = this.add.circle(dropX, dropY - 40, 15, 0xffe060, 1)
-            .setStrokeStyle(3, 0x8b6020).setDepth(400);
-        // 起跳瞬間的高光點 — 快速淡出(在磁吸前消失,不需跟隨)
-        const glint = this.add.circle(dropX - 4, dropY - 44, 4, 0xfff6d0, 0.95).setDepth(401);
-        this.tweens.add({
-            targets: glint, alpha: 0, scale: 0.3, duration: 280, ease: 'Quad.out',
-            onComplete: () => glint.destroy()
-        });
-        // 啵跳 — 上升再彈落
-        this.tweens.chain({
-            targets: coin,
-            tweens: [
-                { y: dropY - 84, duration: 180, ease: 'Quad.out' },
-                { y: dropY, duration: 220, ease: 'Bounce.out' }
-            ]
-        });
-        // 落地閃光環 ×2(交錯擴散)
+        // 金幣枚數隨金額(boss/精英多枚噴發,更爽)— cap 6 避免磁吸 queue 爆量
+        const coinCount = Math.max(1, Math.min(6, Math.round(amount / 12)));
+        for (let c = 0; c < coinCount; c++) {
+            const dropX = x + (Math.random() - 0.5) * (30 + coinCount * 8);
+            const dropY = y + (Math.random() - 0.5) * 30;
+            // 金幣本體(更亮的金 + 較粗鏽金邊,立體幣感)
+            const coin = this.add.circle(dropX, dropY - 40, 15, 0xffe060, 1)
+                .setStrokeStyle(3, 0x8b6020).setDepth(400);
+            // 起跳瞬間的高光點 — 快速淡出(在磁吸前消失,不需跟隨)
+            const glint = this.add.circle(dropX - 4, dropY - 44, 4, 0xfff6d0, 0.95).setDepth(401);
+            this.tweens.add({
+                targets: glint, alpha: 0, scale: 0.3, duration: 280, ease: 'Quad.out',
+                onComplete: () => glint.destroy()
+            });
+            // 啵跳 — 上升再彈落(多枚錯開時序)
+            this.tweens.chain({
+                targets: coin,
+                tweens: [
+                    { y: dropY - 84, duration: 180, delay: c * 40, ease: 'Quad.out' },
+                    { y: dropY, duration: 220, ease: 'Bounce.out' }
+                ]
+            });
+            // 加進磁吸 queue,player 靠近自動拾取
+            this.pendingPickups.push({
+                obj: coin,
+                collect: () => {} // gold 已在 grantKillReward 加進 save,coin 視覺到手即消
+            });
+        }
+        // 落地閃光環 ×2(交錯擴散,枚數多時環更大)
         for (let i = 0; i < 2; i++) {
-            const ring = this.add.circle(dropX, dropY, 18, 0xffe060, 0)
+            const ring = this.add.circle(x, y, 18, 0xffe060, 0)
                 .setStrokeStyle(3, 0xffe060, 0.8).setDepth(399);
             this.tweens.add({
-                targets: ring, radius: 64, alpha: 0, duration: 440, delay: i * 130,
+                targets: ring, radius: 64 + coinCount * 8, alpha: 0, duration: 440, delay: i * 130,
                 onComplete: () => ring.destroy()
             });
         }
-        // 加進磁吸 queue,player 靠近自動拾取
-        this.pendingPickups.push({
-            obj: coin,
-            collect: () => {} // gold 已在 grantKillReward 加進 save,coin 視覺到手即消
-        });
     }
 
     // Phase 4b-12 (B) 通用 dropped item spawn(武器 / 素材)— 啵跳 + 閃環 + 磁吸

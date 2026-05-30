@@ -28,7 +28,8 @@
 3. **[ ] 第 4+ 隻真新怪 sprite 或怪的 2-frame 動畫**— pipeline ~3.5min/隻(見下「美術 pipeline」)。目前 3 隻真新怪是單張 wobble,可生 walk frame 做真動畫;或新增廢土飛蟲/變種狗/巨型蠍。
 4. **[ ] 4c-5:6 張 painted 地圖**(GPT-4o)— 廢料鎮/乾井路/鏽蝕巷/爐心門等,目前是純色底。需專門 session 跑 pipeline(quota+慢+逐張接 bgKey),不適合長 loop 尾端硬跑。
 5. **[x] 核心循環單一 → 精英怪系統**(2026-05-30 完成)— 8% mob 變精英(MobData.isElite,不污染共用 blueprint):1.5× scale / 金黃 0xffd040 tint / 3.5× HP / 4× 金幣+EXP / ×3 掉落機率 / spawn 金環+「精英怪出現」公告 / kill「精英擊破」+shake。給掛機加狩獵小目標。Codex APPROVE(2 輪,抓到 EXP 漏倍率)+ Playwright ELITE_CHANCE=1.0 實測金黃+大+公告+更肉。**增強(同日)**:小地圖精英=金黃大點(一眼可獵)+ 接觸傷害 ×1.6(肉+痛=真風險決策)。可續加:事件波/小目標任務。
-6. **[ ] 防具強化 armorEnh**(可選)— 目前防具 defense-only 無強化系統。
+6. **[ ] 防具強化 armorEnh**(需專門 fire)— 鏡像武器強化(SaveService armorEnh + ArmorService.effectiveDefense + getTotalArmorDefense 套 enh + Inventory 強化按鈕)。**Explore 發現:武器強化 UI 其實沒實作**(#110 標 done 但只有 effectiveDamage/enhanceCost 函數、Storage/Inventory 無 enhance 按鈕)→ 防具強化沒現成 UI 範本,得從零建 enhance UI = 完整一個 fire,不適合塞批次。順帶可補做武器強化 UI(同樣缺)。
+7. **[x] 金幣掉落 juice**(2026-05-30,楓谷爽感)— spawnGoldDrop 改枚數隨金額(boss/精英多枚噴發,cap 6);killMob 傳精英 ×4 金額。純視覺不影響經濟。Codex APPROVE。
 
 做完一項:更新本檔(劃掉 + 補完成紀錄)→ commit/push → 一句話報告 user + live URL。
 
