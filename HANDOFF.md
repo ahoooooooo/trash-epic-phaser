@@ -80,6 +80,8 @@
 
 29. **[x] 武器 Bleed + Stagger mechanic 接戰鬥**(2026-05-30,design-doc weapons_v1 §2 設計已定未實作)— combat 原本只接了 knockback(彈弓)/recovery(髒手套),**廢鋁刀 Bleed + 鋼筋棒 Stagger 設計了沒實作**。MobData 加 bleedUntilMs/bleedDmgPerTick/bleedNextTickMs/staggerUntilMs(optional)。handleAutoAttack 命中後:bleed roll chance 掛 DoT(每秒 dotPerSec×baseDmg,durSec 秒);stagger 掛 0.3s。handleMobAI 每幀:bleed tick 掉血+綠浮字(到期清欄位,hp≤0 killMob+continue)+ stagger gate(暈期凍結移動)。tsc 0+build+Codex APPROVE(1 輪 clean,確認 tick 位置/killMob 後 continue/time 同源/無 prod pitfall;採納清 bleedDmgPerTick 小建議)。**測試誠實說明**:暫設 chance=1.0+dotPerSec 放大 farm,鼠秒融+大量掉落(behavioral 證實 bleed 疊傷),但**綠 DoT 浮字在 game 縮放+並發橙普攻數字下未能截清隔離**(花了多輪嘗試);已還原 0.10/0.30。combat 跑通(裝廢鋁刀打鼠死+掉落)。**教訓**:小尺寸機率性浮字 element 難用 Playwright 截圖隔離驗證,靠 code+Codex+behavioral 證據。
 
+30. **[x] 大數字壓縮顯示 formatStat(K/M/B/T/Q)**(2026-05-30,design-doc progression_v1 §3 Stat Compression UI 設計已定未實作)— 原本所有大數字顯示 raw(gold「101502」)。新 `src/game/services/StatFormat.ts` `formatStat(n)`:<1000 整數 / K/M/B/T/Q / >1Q 字母後綴 aa,ab…,~3 sig figs(對齊設計範例 12.5K/50.2M/1.27B)。純 display 套到 Shop gold/crystal、Game EXP bar(create+update)、vendor gold、Gacha 素材、Storage 材料 count(不動花費/存檔運算)。Codex 抓 3 edge(4 sig figs→`decimals=v<10?2:v<100?1:0`、邊界 999950→1000K 改進位 1M、負零 -0.1→-0 改 floor 判 sign)修完。tsc 0+build+Codex APPROVE(2 輪)+ node sanity 全對齊設計範例 + Playwright 開商店截圖 gold「💰 102K」crystal「💎 130」(整數)+console 0 error。**註**:設計 §2 stat 公式(HP=100×N^1.2 等)是刻意用 weapon-based combat+線性 HP 取代(Phase 4c 設計修正),不動。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)

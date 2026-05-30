@@ -3,6 +3,7 @@ import { SaveService } from '../services/SaveService';
 import { SKINS, skinRarityColor, skinSlotLabel, skinPrice, SkinConfig } from '../services/SkinService';
 import { TOPUP_TIERS, GIFT_PACKS, packLimitLabel, TopupTier, PackConfig, DAILY_FREE_CRYSTAL } from '../services/PackService';
 import { drawSceneHeader } from '../ui/UiPanel';
+import { formatStat } from '../services/StatFormat';
 
 const W = 1080;
 const H = 1920;
@@ -92,8 +93,8 @@ export class Shop extends Scene {
 
     private refreshCurrency() {
         const save = SaveService.instance.get();
-        this.goldDisplay?.setText(`💰 ${save.gold}`);
-        this.crystalDisplay?.setText(`💎 ${save.crystal}`);
+        this.goldDisplay?.setText(`💰 ${formatStat(save.gold)}`);
+        this.crystalDisplay?.setText(`💎 ${formatStat(save.crystal)}`);
         const s = SaveService.instance;
         const canFree = s.canClaimDailyCrystal();
         const canMc = s.canClaimMonthCardDaily();

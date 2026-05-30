@@ -4,6 +4,7 @@ import { VirtualJoystick } from '../services/VirtualJoystick';
 import { SaveService } from '../services/SaveService';
 import { effectiveDamage, WeaponDef } from '../services/WeaponService';
 import { getEquippedWeaponDef } from '../services/EquippedWeapon';
+import { formatStat } from '../services/StatFormat';
 import { computeTalentBuff } from '../services/TalentService';
 import { QUESTS, QuestDef } from '../services/QuestService';
 import { getMap, MapConfig, NpcSpec, PortalSpec, ShopNpcSpec } from '../services/MapService';
@@ -677,7 +678,7 @@ export class Game extends Scene
         // EXP text 中央
         this.add.rectangle(VIEW_W / 2, expBarY + expBarH / 2, 340, expBarH - 6, 0x1a1612, 0.5)
             .setOrigin(0.5).setDepth(1002).setScrollFactor(0);
-        this.expText = this.add.text(VIEW_W / 2, expBarY + expBarH / 2, `EXP ${save.exp} / ${SaveService.instance.expToNext()} (${Math.floor(expRatio * 100)}%)`, {
+        this.expText = this.add.text(VIEW_W / 2, expBarY + expBarH / 2, `EXP ${formatStat(save.exp)} / ${formatStat(SaveService.instance.expToNext())} (${Math.floor(expRatio * 100)}%)`, {
             fontFamily: 'monospace', fontSize: 22, color: '#ffe0c0', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 4
         }).setOrigin(0.5).setDepth(1003).setScrollFactor(0);
@@ -977,7 +978,7 @@ export class Game extends Scene
         layer.add(this.add.text(VIEW_W / 2, top + 42, `🧪 ${v.nameZH}`, {
             fontFamily: 'sans-serif', fontSize: 40, color: '#ffe060', fontStyle: 'bold', stroke: '#1a1612', strokeThickness: 5
         }).setOrigin(0.5));
-        const goldT = this.add.text(VIEW_W / 2, top + 96, `💰 ${SaveService.instance.get().gold}`, {
+        const goldT = this.add.text(VIEW_W / 2, top + 96, `💰 ${formatStat(SaveService.instance.get().gold)}`, {
             fontFamily: 'monospace', fontSize: 28, color: '#ffe0c0', fontStyle: 'bold'
         }).setOrigin(0.5);
         layer.add(goldT);
@@ -1003,7 +1004,7 @@ export class Game extends Scene
                 if (!SaveService.instance.spendGold(price)) { fb.setText('💰 金幣不足').setColor('#e2542a'); return; }
                 SaveService.instance.addPotion(id, 1);
                 SaveService.instance.save();
-                goldT.setText(`💰 ${SaveService.instance.get().gold}`);
+                goldT.setText(`💰 ${formatStat(SaveService.instance.get().gold)}`);
                 this.refreshPotionHotbar();
                 fb.setText(`+1 ${p.nameZH}  (持有 ×${SaveService.instance.getPotionCount(id)})`).setColor('#ffe060');
             });
@@ -2313,7 +2314,7 @@ export class Game extends Scene
         const cur = save.get();
         const ratio = cur.exp / save.expToNext();
         this.expBarFill.width = (this.hudExpBarW - 4) * ratio;
-        this.expText.setText(`EXP ${cur.exp} / ${save.expToNext()} (${Math.floor(ratio * 100)}%)`);
+        this.expText.setText(`EXP ${formatStat(cur.exp)} / ${formatStat(save.expToNext())} (${Math.floor(ratio * 100)}%)`);
 
         if (result.leveled) {
             this.levelText.setText(`Lv ${cur.level}`);

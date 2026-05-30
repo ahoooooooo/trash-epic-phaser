@@ -1,6 +1,7 @@
 import { Scene } from 'phaser';
 import { SaveService } from '../services/SaveService';
 import { weaponDisplayName, rarityColor, GeneratedWeapon } from '../services/WeaponGenerator';
+import { formatStat } from '../services/StatFormat';
 
 const W = 1080;
 const H = 1920;
@@ -43,7 +44,7 @@ export class Storage extends Scene {
                 this.add.text(cx, cy, matNames[id] ?? id, {
                     fontFamily: 'sans-serif', fontSize: 24, color: '#ffe0c0', fontStyle: 'bold'
                 }).setOrigin(0, 0.5);
-                this.add.text(cx + 150, cy, `×${count}`, {
+                this.add.text(cx + 150, cy, `×${formatStat(count)}`, {
                     fontFamily: 'monospace', fontSize: 24, color: '#ffe060', fontStyle: 'bold'
                 }).setOrigin(0, 0.5);
             });

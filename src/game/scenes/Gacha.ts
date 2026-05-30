@@ -1,5 +1,6 @@
 import { Scene } from 'phaser';
 import { SaveService } from '../services/SaveService';
+import { formatStat } from '../services/StatFormat';
 import {
     rollOne, rollTen, GachaResult, Rarity,
     COST_PER_PULL, COST_TEN_PULL,
@@ -84,7 +85,7 @@ export class Gacha extends Scene {
         }).setOrigin(0.5);
 
         // 金幣 + pity 一行(數字鏽金)
-        this.add.text(W / 2, 150, `素材 ${save.gold}`, {
+        this.add.text(W / 2, 150, `素材 ${formatStat(save.gold)}`, {
             fontFamily: 'monospace', fontSize: 30, color: '#ffe060', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 3
         }).setOrigin(0.5);
