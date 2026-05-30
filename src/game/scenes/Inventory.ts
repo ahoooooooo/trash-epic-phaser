@@ -8,6 +8,7 @@ import {
     armorSlotForEquipSlot, armorDisplayName, armorRarityColor,
     effectiveDefense, armorEnhanceCost, armorBonusLabel
 } from '../services/ArmorService';
+import { equippedCharacterPortraitKey } from '../services/SkinService';
 
 const W = 1080;
 const H = 1920;
@@ -78,8 +79,10 @@ export class Inventory extends Scene {
             this.drawSlotLink(sp);
         }
 
-        // 正面全身立繪(player_portrait,地圖才用 side idle)
-        const tex = this.textures.exists('player_portrait') ? 'player_portrait' : 'player_idle';
+        // 正面全身立繪(player_portrait,地圖才用 side idle)— 裝備角色 skin 換 skin 立繪
+        const portraitKey = equippedCharacterPortraitKey(SaveService.instance.getEquippedSkin('character'), 'player_portrait');
+        const tex = this.textures.exists(portraitKey) ? portraitKey
+            : this.textures.exists('player_portrait') ? 'player_portrait' : 'player_idle';
         const doll = this.add.sprite(DOLL_X, DOLL_Y, tex);
         if (doll.height > 0) doll.setScale(640 / doll.height);
 

@@ -1,5 +1,6 @@
 import { Scene } from 'phaser';
 import { SaveService } from '../services/SaveService';
+import { equippedCharacterPortraitKey } from '../services/SkinService';
 
 const W = 1080;
 const H = 1920;
@@ -38,8 +39,9 @@ export class MainMenu extends Scene
             fontFamily: 'monospace', fontSize: 22, color: '#6a5a4a'
         }).setOrigin(0.5);
 
-        // 3. 主角立繪(正面,per user;地圖才側視)
-        const sprite = this.add.image(W / 2, 720, 'player_portrait').setScale(1);
+        // 3. 主角立繪(正面,per user;地圖才側視)— 裝備角色 skin 則換成 skin 立繪
+        const portraitKey = equippedCharacterPortraitKey(SaveService.instance.getEquippedSkin('character'), 'player_portrait');
+        const sprite = this.add.image(W / 2, 720, this.textures.exists(portraitKey) ? portraitKey : 'player_portrait').setScale(1);
         sprite.setScale(460 / sprite.height);
         // 輕微 hover idle 動畫(只在 menu,Game scene 用真 frame anim)
         this.tweens.add({

@@ -165,10 +165,21 @@ export class Shop extends Scene {
             const y = 30 + i * rowH;
             const rc = skinRarityColor(skin.rarity);
             layer.add(this.add.rectangle(W / 2, y, W - 80, rowH - 12, 0x2a2520, 0.95).setStrokeStyle(3, rc, 0.95));
-            layer.add(this.add.text(80, y - 22, skin.nameZH, {
+            // 有真美術圖的 skin:左側顯示稀有度框 + 立繪縮圖,文字右移;無圖維持純文字
+            const hasArt = !!skin.previewKey && this.textures.exists(skin.previewKey);
+            const textX = hasArt ? 175 : 80;
+            if (hasArt) {
+                const thumbH = rowH - 24;
+                layer.add(this.add.rectangle(108, y, thumbH + 6, thumbH + 6, 0x1a1612, 1).setStrokeStyle(3, rc, 0.95));
+                const img = this.add.image(108, y, skin.previewKey!);
+                const sc = thumbH / img.height;
+                img.setScale(sc);
+                layer.add(img);
+            }
+            layer.add(this.add.text(textX, y - 22, skin.nameZH, {
                 fontFamily: 'sans-serif', fontSize: 30, color: '#ffe0c0', fontStyle: 'bold'
             }).setOrigin(0, 0.5));
-            layer.add(this.add.text(80, y + 22, `${skinSlotLabel(skin.slot)} · ${skin.rarity}`, {
+            layer.add(this.add.text(textX, y + 22, `${skinSlotLabel(skin.slot)} · ${skin.rarity}`, {
                 fontFamily: 'sans-serif', fontSize: 20, color: '#a05a30'
             }).setOrigin(0, 0.5));
             const price = skinPrice(skin);

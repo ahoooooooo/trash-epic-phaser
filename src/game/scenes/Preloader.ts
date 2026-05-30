@@ -61,6 +61,7 @@ export class Preloader extends Scene
         this.load.image('mob_kraz', 'mobs/mob_kraz.png');  // 哥布林戰酋 克拉茲·黑鐵 boss sprite(GPT-4o+BiRefNet)
         this.load.image('mob_arbiter', 'mobs/mob_arbiter.png');  // 銹蝕審判官 隱藏 boss sprite(GPT-4o+BiRefNet)
         this.load.image('npc_clerk', 'characters/npc_quest_clerk_greenscarf.png');
+        this.load.image('skin_blackrain', 'skins/skin_blackrain.png');  // Phase 4c-4 SR 角色 skin 黑雨巡者(GPT-4o+BiRefNet)— 商店縮圖 + 裝備換立繪
 
         // Phase 4c-11:14 隻 gacha 立繪(~28MB)移到 Gacha 場景 lazy-load,不在開機 Preloader
         // 拖慢 4G 開機載入(原 47MB 開機 → 卡在載入頁)。立繪只有開抽卡才需要。

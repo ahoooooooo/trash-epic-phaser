@@ -13,13 +13,14 @@ export interface SkinConfig {
     priceCrystal?: number;  // R/SR 用廢土晶體買(付費幣)
     rarity: SkinRarity;
     visualOnly: true;
+    previewKey?: string;    // 有真美術圖的 skin:Preloader load 的 texture key(商店縮圖 + 角色 slot 換立繪)
 }
 
 export const SKINS: SkinConfig[] = [
     // 角色外觀
     { id: 'skin_dust_coat', nameZH: '防塵長衣', slot: 'character', priceGold: 30000, rarity: 'U', visualOnly: true },
     { id: 'skin_crack_mask', nameZH: '裂面呼吸罩', slot: 'character', priceGold: 0, priceCrystal: 80, rarity: 'R', visualOnly: true },
-    { id: 'skin_blackrain', nameZH: '黑雨巡者', slot: 'character', priceGold: 0, priceCrystal: 250, rarity: 'SR', visualOnly: true },
+    { id: 'skin_blackrain', nameZH: '黑雨巡者', slot: 'character', priceGold: 0, priceCrystal: 250, rarity: 'SR', visualOnly: true, previewKey: 'skin_blackrain' },
     // 武器外觀
     { id: 'skin_saw_pipe', nameZH: '鋸齒鐵管', slot: 'weapon', priceGold: 20000, rarity: 'C', visualOnly: true },
     { id: 'skin_char_saber', nameZH: '焦黑軍刀', slot: 'weapon', priceGold: 0, priceCrystal: 70, rarity: 'R', visualOnly: true },
@@ -49,6 +50,12 @@ const SLOT_LABEL: Record<SkinSlot, string> = { character: '角色', weapon: '武
 
 export function getSkin(id: string): SkinConfig | undefined {
     return SKINS.find(s => s.id === id);
+}
+// 取已裝備角色 skin 的立繪 texture key;無裝備或該 skin 無圖 → 回 fallback(player_portrait)
+export function equippedCharacterPortraitKey(equippedCharacterSkinId: string | undefined, fallback: string): string {
+    if (!equippedCharacterSkinId) return fallback;
+    const s = SKINS.find(k => k.id === equippedCharacterSkinId);
+    return s?.previewKey ?? fallback;
 }
 export function skinRarityColor(r: SkinRarity): number { return RARITY_COLOR[r]; }
 export function skinSlotLabel(slot: SkinSlot): string { return SLOT_LABEL[slot]; }
