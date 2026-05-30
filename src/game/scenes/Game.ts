@@ -1148,6 +1148,8 @@ export class Game extends Scene
         const save = SaveService.instance;
         save.addGold(q.rewardGold);
         const res = save.addExp(q.rewardExp);
+        const crystal = q.rewardCrystal ?? 0;
+        if (crystal > 0) save.addCrystal(crystal);
         save.markQuestCompleted(q.id);
         save.save();
         if (res.leveled) {
@@ -1155,7 +1157,8 @@ export class Game extends Scene
             this.spawnLevelUpEffect(res.levelsGained);
         }
         // 完成 popup
-        const t = this.add.text(VIEW_W / 2, VIEW_H / 2 - 350, `任務完成!+${q.rewardGold}💰 +${q.rewardExp} EXP`, {
+        const crystalStr = crystal > 0 ? ` +${crystal}💎` : '';
+        const t = this.add.text(VIEW_W / 2, VIEW_H / 2 - 350, `任務完成!+${q.rewardGold}💰 +${q.rewardExp} EXP${crystalStr}`, {
             fontFamily: 'sans-serif', fontSize: 36, color: '#ffe060', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 5
         }).setOrigin(0.5).setDepth(3000).setScrollFactor(0);
