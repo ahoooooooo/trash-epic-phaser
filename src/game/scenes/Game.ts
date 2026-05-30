@@ -632,9 +632,9 @@ export class Game extends Scene
     // Phase 4c-2 手機藥水快捷列(右側 3 格)
     // ⑤ 主動技能按鈕(右側,藥水快捷列下方)
     private drawSkillButton() {
-        const x = VIEW_W - 70;
-        const y = 1230;
         const size = 116;
+        const x = VIEW_W - 46 - size / 2;   // 右緣留 46px margin,避免貼邊誤觸
+        const y = 1230;
         this.skillBtnBg = this.add.rectangle(x, y, size, size, 0x8b3a1f, 0.95)
             .setStrokeStyle(4, 0xff8830, 1).setDepth(1100).setScrollFactor(0)
             .setInteractive({ useHandCursor: true });
@@ -730,8 +730,8 @@ export class Game extends Scene
 
     private drawPotionHotbar() {
         const hotbar = SaveService.instance.getPotionHotbar();
-        const x = VIEW_W - 70;
         const size = 92;
+        const x = VIEW_W - 46 - size / 2;   // 右緣 46px margin(與技能鈕同右邊界)
         const gap = 16;
         const startY = 700;
         this.potionSlotCountTexts = [];
@@ -897,7 +897,7 @@ export class Game extends Scene
         tabs.forEach((t, i) => {
             const cx = tabW * (i + 0.5);
             const c = this.add.container(cx, tabY).setDepth(1001).setScrollFactor(0);
-            const bg = this.add.rectangle(0, 0, tabW - 12, tabH - 18, 0x2a2520, 0.85)
+            const bg = this.add.rectangle(0, 0, tabW - 24, tabH - 18, 0x2a2520, 0.85)
                 .setStrokeStyle(2, 0x4a3a30);
             const icon = this.add.text(0, -35, t.icon, {
                 fontFamily: 'sans-serif', fontSize: 56, color: '#ff8830'
@@ -906,7 +906,7 @@ export class Game extends Scene
                 fontFamily: 'sans-serif', fontSize: 32, color: '#ffe0c0', fontStyle: 'bold'
             }).setOrigin(0.5);
             c.add([bg, icon, label]);
-            c.setSize(tabW - 12, tabH - 18);
+            c.setSize(tabW - 24, tabH - 18);
             c.setInteractive({ useHandCursor: true });
             c.on('pointerdown', () => this.openTabScene(t.scene));
             this.input.keyboard?.on(`keydown-${t.key}`, () => this.openTabScene(t.scene));

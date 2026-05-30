@@ -45,6 +45,7 @@ export class VirtualJoystick {
             if (this.pointerId !== null) return;
             if (p.y < scene.scale.height * 0.5) return;
             if (p.x > scene.scale.width * 0.5) return;
+            if (p.y > scene.scale.height - 200) return; // 排除底部 tab bar 區,避免點左側 tab 誤觸搖桿
             this.pointerId = p.id;
             // joystick 是 UI(scrollFactor 0),要用 camera 內 screen coord 不是 world coord
             // Phaser 4:pointer.x/y 已是 viewport 座標(screen pixel)
