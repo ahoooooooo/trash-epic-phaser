@@ -36,6 +36,7 @@ interface SaveData {
     gachaCollection: Record<string, number>; // familiar id → owned count
     gachaPullsSinceSSR: number;
     gachaTotalPulls: number;
+    activeFamiliarId: string | null;          // 出戰夥伴 id(null = 未出戰),其 effect 摺進 computeTalentBuff
     // Phase 4b-3 地圖
     currentMapId: string;
     mapEnterX?: number;
@@ -119,6 +120,7 @@ function makeDefaultSave(): SaveData {
         gachaCollection: {},
         gachaPullsSinceSSR: 0,
         gachaTotalPulls: 0,
+        activeFamiliarId: null,
         currentMapId: 'wasteland_outskirts',
         mp: 50,
         maxMp: 50,
@@ -184,6 +186,8 @@ export class SaveService {
             merged.questProgress = { ...(parsed.questProgress ?? {}) };
             merged.questCompleted = { ...(parsed.questCompleted ?? {}) };
             merged.gachaCollection = { ...(parsed.gachaCollection ?? {}) };
+            // Phase 4c 夥伴出戰 forward-compat:舊 save 沒此欄 → null(未出戰)
+            merged.activeFamiliarId = typeof parsed.activeFamiliarId === 'string' ? parsed.activeFamiliarId : null;
             // Phase 4b-6 forward-compat:舊 save 沒 mp/potion → 用 default
             if (typeof parsed.mp !== 'number') merged.mp = makeDefaultSave().mp;
             if (typeof parsed.maxMp !== 'number') merged.maxMp = makeDefaultSave().maxMp;
@@ -381,6 +385,19 @@ export class SaveService {
     }
     getOwnedCount(id: string): number {
         return this.data.gachaCollection[id] ?? 0;
+    }
+
+    // 出戰夥伴 — effect 由 computeTalentBuff 摺進 buff
+    getActiveFamiliar(): string | null { return this.data.activeFamiliarId; }
+    // 只允許設成已擁有(count>0)的 familiar;傳 null 卸下。回傳是否成功
+    setActiveFamiliar(id: string | null): boolean {
+        if (id === null) {
+            this.data.activeFamiliarId = null;
+            return true;
+        }
+        if ((this.data.gachaCollection[id] ?? 0) <= 0) return false;
+        this.data.activeFamiliarId = id;
+        return true;
     }
 
     // Phase 4b-3 地圖

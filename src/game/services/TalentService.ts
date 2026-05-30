@@ -4,6 +4,7 @@
 // 23 節點 / 10 keystone / 7 depth tier。tier gate 取消(純 requires 鏈解鎖)。
 
 import { SaveService } from './SaveService';
+import { FAMILIAR_POOL, FamiliarEffect } from './GachaService';
 
 export type TalentRoute = 'attack' | 'defense' | 'support';
 export type TalentKind = 'minor' | 'keystone';
@@ -133,8 +134,17 @@ function wiredLv(id: string): number {
 
 function has(id: string): boolean { return wiredLv(id) > 0; }
 
+// 出戰夥伴 effect — 只在已擁有時生效(setActiveFamiliar 已守門,這裡再次防呆)
+function activeFamiliarEffect(): FamiliarEffect | null {
+    const id = SaveService.instance.getActiveFamiliar();
+    if (!id) return null;
+    if (SaveService.instance.getOwnedCount(id) <= 0) return null;
+    const def = FAMILIAR_POOL.find(f => f.id === id);
+    return def ? def.effect : null;
+}
+
 export function computeTalentBuff(): TalentBuff {
-    return {
+    const buff: TalentBuff = {
         dmgPct: wiredLv('brute_path') * 0.02 + wiredLv('glass_cannon') * 0.5 + wiredLv('wasteland_god') * 0.1,
         critRatePct: wiredLv('rusty_fangs') * 0.008,
         critDmgPct: wiredLv('exposed_nerve') * 0.04,
@@ -158,6 +168,12 @@ export function computeTalentBuff(): TalentBuff {
         autoMagnetAll: has('scrap_magnet'),
         doubleMatChance: has('alchemist') ? 0.25 : 0
     };
+    // 摺進出戰夥伴 effect(stat 必為 buff 的數值欄位,直接加到對應欄位)
+    const fam = activeFamiliarEffect();
+    if (fam) {
+        buff[fam.stat] += fam.value;
+    }
+    return buff;
 }
 
 // route 投入點數(顯示用;D3 已無 tier gate)

@@ -3,7 +3,7 @@ import { SaveService } from '../services/SaveService';
 import {
     rollOne, rollTen, GachaResult, Rarity,
     COST_PER_PULL, COST_TEN_PULL,
-    FAMILIAR_POOL, RARITY_LABEL
+    FAMILIAR_POOL, RARITY_LABEL, FamiliarDef
 } from '../services/GachaService';
 
 const W = 1080;
@@ -114,8 +114,11 @@ export class Gacha extends Scene {
         void ratePanel;
 
         // ── 抽卡 button(鏽板 CTA)──
-        this.makePullButton(W / 2 - 200, H / 2 + 80, '單次招募', COST_PER_PULL, () => this.doPull(1));
-        this.makePullButton(W / 2 + 200, H / 2 + 80, '十次招募', COST_TEN_PULL, () => this.doPull(10), true);
+        this.makePullButton(W / 2 - 200, 470, '單次招募', COST_PER_PULL, () => this.doPull(1));
+        this.makePullButton(W / 2 + 200, 470, '十次招募', COST_TEN_PULL, () => this.doPull(10), true);
+
+        // ── 夥伴出戰 收藏區(已擁有可點選出戰)──
+        this.buildRoster();
 
         // ── 返回 button(次按鈕)──
         this.makeBackButton(W / 2, H - 130, '◀ 返回戰鬥', () => this.closeGacha());
@@ -183,6 +186,130 @@ export class Gacha extends Scene {
             this.tweens.add({ targets: c, scaleX: 0.95, scaleY: 0.95, duration: 80, yoyo: true });
             onClick();
         });
+    }
+
+    // ── 夥伴出戰收藏區 ──
+    private buildRoster() {
+        const save = SaveService.instance;
+        const activeId = save.getActiveFamiliar();
+        const activeDef = activeId ? FAMILIAR_POOL.find(f => f.id === activeId) ?? null : null;
+
+        const panelY = 620;
+        const panel = this.add.rectangle(W / 2, panelY, W - 80, 90, 0x2a2520, 0.92)
+            .setStrokeStyle(3, 0xff8830, 0.9);
+        void panel;
+
+        this.add.text(W / 2, panelY - 22, '◤ 出戰夥伴 ◢', {
+            fontFamily: 'sans-serif', fontSize: 28, color: '#ff8830', fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        const statusTxt = activeDef
+            ? `${activeDef.nameZH}  ·  ${activeDef.effect.label}`
+            : '未出戰 — 點下方已擁有夥伴出戰';
+        this.add.text(W / 2 - 80, panelY + 18, statusTxt, {
+            fontFamily: 'monospace', fontSize: 22, color: activeDef ? '#ffe060' : '#a05a30',
+            align: 'center', wordWrap: { width: W - 320 }
+        }).setOrigin(0.5);
+
+        // 卸下 button(僅在有出戰時可按)
+        if (activeDef) {
+            const dc = this.add.container(W / 2 + 380, panelY + 16);
+            const dbg = this.add.rectangle(0, 0, 150, 56, 0x4a3a30, 0.95).setStrokeStyle(2, 0xa05a30, 0.9);
+            const dtxt = this.add.text(0, 0, '卸下', {
+                fontFamily: 'sans-serif', fontSize: 28, color: '#ffe0c0', fontStyle: 'bold'
+            }).setOrigin(0.5);
+            dc.add([dbg, dtxt]);
+            dc.setSize(150, 56);
+            dc.setInteractive({ useHandCursor: true });
+            dc.on('pointerdown', () => {
+                this.tweens.add({ targets: dc, scaleX: 0.95, scaleY: 0.95, duration: 80, yoyo: true });
+                this.setActive(null);
+            });
+        }
+
+        // 格子網格:5 col,行依數量。已擁有可點;未擁有 dim + 鎖
+        const cols = 5;
+        const cellW = 188, cellH = 132, gap = 12;
+        const gridW = cols * cellW + (cols - 1) * gap;
+        const startX = (W - gridW) / 2 + cellW / 2;
+        const startY = 760;
+
+        FAMILIAR_POOL.forEach((fam, i) => {
+            const cx = startX + (i % cols) * (cellW + gap);
+            const cy = startY + Math.floor(i / cols) * (cellH + gap);
+            this.makeRosterCell(fam, cx, cy, cellW, cellH);
+        });
+    }
+
+    private makeRosterCell(fam: FamiliarDef, cx: number, cy: number, w: number, h: number) {
+        const save = SaveService.instance;
+        const owned = save.getOwnedCount(fam.id) > 0;
+        const isActive = save.getActiveFamiliar() === fam.id;
+        const tier = TIER_COLOR[fam.rarity];
+
+        const c = this.add.container(cx, cy);
+        const bg = this.add.rectangle(0, 0, w, h, 0x2a2520, owned ? 0.96 : 0.55)
+            .setStrokeStyle(isActive ? 5 : 3, isActive ? 0xff8830 : tier, owned ? 1 : 0.5);
+        const objs: Phaser.GameObjects.GameObject[] = [bg];
+
+        // 立繪 or placeholder
+        if (owned && this.textures.exists(fam.spriteKey)) {
+            const img = this.add.image(0, -16, fam.spriteKey).setScale(0.085);
+            objs.push(img);
+        } else {
+            const ph = this.add.rectangle(0, -16, 64, 76, tier, owned ? 0.22 : 0.12)
+                .setStrokeStyle(2, tier, owned ? 0.7 : 0.35);
+            const q = this.add.text(0, -16, owned ? '?' : '鎖', {
+                fontFamily: 'sans-serif', fontSize: owned ? 40 : 28,
+                color: this.hex(tier), fontStyle: 'bold'
+            }).setOrigin(0.5).setAlpha(owned ? 1 : 0.5);
+            objs.push(ph, q);
+        }
+
+        // tier 角標
+        const rar = this.add.text(-w / 2 + 8, -h / 2 + 6, RARITY_LABEL[fam.rarity], {
+            fontFamily: 'sans-serif', fontSize: 18, color: this.hex(tier), fontStyle: 'bold'
+        }).setOrigin(0, 0).setAlpha(owned ? 1 : 0.5);
+        objs.push(rar);
+
+        // effect label(底部,給玩家看效果)
+        const lab = this.add.text(0, h / 2 - 24, owned ? fam.effect.label : '未擁有', {
+            fontFamily: 'monospace', fontSize: 15, color: owned ? '#ffe0c0' : '#7a6a55',
+            align: 'center', wordWrap: { width: w - 12 }
+        }).setOrigin(0.5);
+        objs.push(lab);
+
+        // 出戰中標記
+        if (isActive) {
+            const tag = this.add.text(0, -h / 2 + 18, '出戰中', {
+                fontFamily: 'sans-serif', fontSize: 16, color: '#1a1612', fontStyle: 'bold',
+                backgroundColor: '#ff8830', padding: { x: 8, y: 2 }
+            }).setOrigin(0.5);
+            objs.push(tag);
+        }
+
+        c.add(objs);
+        c.setSize(w, h);
+
+        if (owned && !isActive) {
+            c.setInteractive({ useHandCursor: true });
+            c.on('pointerdown', () => {
+                this.tweens.add({ targets: c, scaleX: 0.95, scaleY: 0.95, duration: 80, yoyo: true });
+                this.setActive(fam.id);
+            });
+        }
+    }
+
+    // 設出戰並刷新 UI(SaveService 守門:只允許已擁有)
+    private setActive(id: string | null) {
+        const save = SaveService.instance;
+        if (id !== null && save.getOwnedCount(id) <= 0) {
+            this.flashMsg('尚未擁有');
+            return;
+        }
+        save.setActiveFamiliar(id);
+        save.save();
+        this.scene.restart();
     }
 
     private doPull(times: number) {
