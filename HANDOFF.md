@@ -9,7 +9,7 @@
 ## 現在狀態(2026-05-30)
 - 專案:`D:\TrashEpic_Phaser`(Phaser 4 + TS + Vite),live https://ahoooooooo.github.io/trash-epic-phaser/(repo `ahoooooooo/trash-epic-phaser`,8 個 o)。
 - push main → GitHub Actions auto-deploy ~40-60s。
-- Phase 4c 程式 roadmap + user 6 大需求 A-F + 變現 + FTUE + 每日簽到 + 主動技能 + 3 隻真新怪 sprite + 10 特色天賦 **全部已完成上線**。
+- Phase 4c 程式 roadmap + user 6 大需求 A-F + 變現 + FTUE + 每日簽到 + 主動技能 + 4 隻真新怪 sprite + 10 特色天賦 **全部已完成上線**。
 - build 狀態:綠(tsc 0 error / vite build 過 / live 200)。
 - 最近(本 session):**裝備頁重設計 + 裝備種類擴充**(backlog #12)— ArmorService 每部位 base 8-10 個 + optional bonus 次要屬性(hp/atk/crit/dodge,tier 越高機率帶,顯示用不接 HUD);Inventory paper-doll 改 player_portrait 正面立繪 + 框→立繪連線 + rarity 精美框 + bonus 標籤 + 套裝加成總計。Codex APPROVE + Playwright 端到端(進頁/picker/換裝/屬性即時更新)實測上線。
 
@@ -27,7 +27,7 @@
    ※ 註:2026-05-30 曾誤記「lastLoginClaimAt 沒保存」為 bug,已查證 SaveService line 168/223 有正確還原,**非 bug**(舊存檔沒領過才每次彈,正常)。
 2.5 **[x] 廢土主線 quest 串接**(QA⑨,2026-05-30 完成)— 原本 quest 鏈只 3 段(q1 巨鼠 / q2 食人花 / q3 boss)。擴成 7 段廢土主線:q4 鏽巢清剿(rust_spider×8 乾井路)/ q5 爐心爬蟲(reactor_crawler×8 爐心門 +10💎)/ q6 焦土清剿(mutant_creeper×20 +15💎)/ q7 終章·巨鼠王再臨(boss×2 +30💎)。加 QuestDef.rewardCrystal 主線里程碑發晶體(premium 貨幣)。**先查證所有 targetMobId 都有 zone spawn**(避開沒生的 sentry_drone/rad_worm 否則卡死)。Codex APPROVE(1 輪 clean,還驗 q7 boss 殺50普通怪可重觸發)+ Playwright 端到端:q1-3 完成→clerk 出 q4;q1-4 完成+q5 滿→領獎 crystal 35→45(+10)/gold+280/自動推進 q6 實測。
 
-3. **[ ] 第 4+ 隻真新怪 sprite 或怪的 2-frame 動畫**— pipeline ~3.5min/隻(見下「美術 pipeline」)。目前 3 隻真新怪是單張 wobble,可生 walk frame 做真動畫;或新增廢土飛蟲/變種狗/巨型蠍。
+3. **[x] 第 4 隻真新怪 sprite — 廢土巨蠍**(Phase 4c-20,2026-05-30 完成)— GPT-4o(154s,一次過零 retry)+ BiRefNet(72s)生鏽蝕金屬巨蠍(雙鉗+尾刺+八腳俯視,廢土 palette),壓成 palette PNG 562KB(對齊其他 mob)。MOB_BLUEPRINTS idx 12 `rust_scorpion`(type Insect,hp320/dmg34/exp40/gold24,scale0.16,加入單幀 wobble 清單)。新增**鏽蝕沙坑 sand_pit**(field lv40-90,一圖一怪只 spawn idx12)鏡像 creeper_vale,從乾井路雙向 portal + WorldMap node/edge。tsc+build+Codex APPROVE(零 critical)+ Playwright 進沙坑實測多隻巨蠍 spawn 整圖只有蠍。**仍可續**:怪的 2-frame walk 真動畫(目前 4 隻真新怪都單張 wobble);或再生廢土飛蟲/變種狗。
 4. **[ ] 4c-5:6 張 painted 地圖**(GPT-4o)— 廢料鎮/乾井路/鏽蝕巷/爐心門等,目前是純色底。需專門 session 跑 pipeline(quota+慢+逐張接 bgKey),不適合長 loop 尾端硬跑。
 5. **[x] 核心循環單一 → 精英怪系統**(2026-05-30 完成)— 8% mob 變精英(MobData.isElite,不污染共用 blueprint):1.5× scale / 金黃 0xffd040 tint / 3.5× HP / 4× 金幣+EXP / ×3 掉落機率 / spawn 金環+「精英怪出現」公告 / kill「精英擊破」+shake。給掛機加狩獵小目標。Codex APPROVE(2 輪,抓到 EXP 漏倍率)+ Playwright ELITE_CHANCE=1.0 實測金黃+大+公告+更肉。**增強(同日)**:小地圖精英=金黃大點(一眼可獵)+ 接觸傷害 ×1.6(肉+痛=真風險決策)。可續加:事件波/小目標任務。
 6. **[x] 武器強化 UI**(2026-05-30 完成 — 修活死系統)— Explore 發現 weaponEnh 後端有但**從沒 UI**(enh 永遠 0)。Inventory 武器摘要下加「強化武器」按鈕:顯示 +enh/cost/持有金,點擊花金幣 +1(無上限)→ scene.restart 重繪。Codex APPROVE + Playwright 實測 +2→+3/gold -100/攻擊 13→14。
