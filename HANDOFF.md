@@ -50,6 +50,8 @@
 
 14. **[x] 夥伴(familiar)被動效果系統**(2026-05-30,「設計已定未實作」缺口 — 14 隻 familiar 純收集無戰鬥效果,整個 gacha/夥伴 loop 純裝飾)— 逐讀 docs/design/v2/16~28_familiar_*.md 取每隻角色定位,各定 ONE 個被動 effect(`FamiliarEffect={stat,value,label}`,stat 為 TalentBuff 數值欄位,方向嚴格照 design,數值 rarity 階梯 R<SR<SSR<UR):pip 撿取範圍+15% / mira 掉落+8% / grub 最大HP+150 / zix 金幣+10% / neek 傷害+5% / dorl 減傷+4% / fire_imp 傷害+10% / ironguard 減傷+8% / frost_witch 暴擊率+6% / axe_brothers 攻速+12% / blackmarket_fox 金幣+30% / prophet 傷害+18% / shadow_hunter 暴擊率+12% / appraisal_queen 掉落+25%。SaveService 加 `activeFamiliarId`(forward-compat merge + owned 守門 setter,只允許已擁有出戰、null 卸下);`computeTalentBuff()` 摺進 active familiar effect(TalentService import FAMILIAR_POOL,無循環依賴),戰鬥 9 處讀 buff 自動吃到。Gacha 夥伴頁加出戰收藏區(已擁有可點出戰 / 出戰中高亮 / 卸下 / owned-only / 未擁有鎖 / effect.label 顯示);不破壞 doPull/showResults。Codex APPROVE(1 輪 clean,確認 owned 雙守門 / 無循環 / forward-compat / TS 健全 / 無 forbidden Phaser pattern)+ Playwright prod-preview 實測:出戰 maxHpFlat+150 夥伴後 HUD HP 1280→1430(buff 真套到戰鬥)+ 點 fire_imp 出戰切換 + 卸下回 null + 未擁有鎖,全驗。commit 38c80a9。
 
+15. **[x] 傳送門站立 3 秒自動傳送 + 過場**(2026-05-30 user 要求)— 原本 tap 圓圈即時換圖。改:站圓圈 70px 內連續 3 秒 → 自動傳送(黃色進度弧 + 倒數),保留 tap 加速;傳送過場(廢土橙擴散環 + 「傳送中…」+ camera fadeOut 520ms → switchMap → 新 scene fadeIn 420ms,Game.portalArrival static flag 跨 restart)。**計時用 delta 累加非絕對 time**(Codex 抓到:絕對 time 會把 modal/pause 算進 3 秒 resume 瞬傳;改 delta 後 pause 早退不累加)。teleporting flag 凍結 gameplay + 防重觸發。Codex APPROVE(2 輪)+ Playwright 實測 guild_hall 站傳送門進度弧+倒數 → 3 秒自動傳到 scrap_town。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)

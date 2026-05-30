@@ -249,6 +249,13 @@ export class Game extends Scene
     private vendorShopOpen = false;
     private mapConfig!: MapConfig;
     private portals: Phaser.GameObjects.GameObject[] = [];
+    // 傳送門:站圓圈上 3 秒自動傳送(per user 2026-05-30)
+    private portalStandTarget: PortalSpec | null = null;  // 當前踩著的傳送門
+    private portalStandElapsedMs = 0;                      // 累積站立時間(用 delta 累加,pause/modal 不算)
+    private portalProgress?: Phaser.GameObjects.Graphics;  // 進度弧
+    private portalProgressText?: Phaser.GameObjects.Text;  // 倒數
+    private teleporting = false;                           // 傳送過場中,鎖住不重觸發
+    private static portalArrival = false;                  // 跨 scene.restart 標記:剛由傳送門抵達 → fadeIn
     // 主角動作 state machine — 楓谷風:不同武器類別不同 attack 動作
     private playerAnimState: 'idle' | 'walking' = 'idle';
     private playerStateTween?: Phaser.Tweens.Tween;
@@ -320,6 +327,16 @@ export class Game extends Scene
         this.bossSweepResolveAt = 0;
         this.mobs = [];
         this.portals = [];
+        // 傳送門站立傳送:scene restart 清欄位(物件已隨 scene 銷毀)
+        this.portalStandTarget = null;
+        this.portalProgress = undefined;
+        this.portalProgressText = undefined;
+        this.teleporting = false;
+        // 由傳送門抵達 → 廢土暗色 fadeIn 過場
+        if (Game.portalArrival) {
+            Game.portalArrival = false;
+            this.cameras.main.fadeIn(420, 26, 22, 18);
+        }
         this.npcClerk = undefined;
         this.npcBangMark = undefined;
         // Phase 4b-12 reset transient state for scene.restart()
@@ -997,6 +1014,7 @@ export class Game extends Scene
         if (this.isGameOver) return;
         if (this.questDialogOpen) return;
         if (this.vendorShopOpen) return;
+        if (this.teleporting) return;  // 傳送過場中凍結 gameplay(fadeOut 期間不移動/不受傷)
         // ④ 出生無敵:首個真正 gameplay tick(FTUE pause→resume 後才跑到這)才 arm,用 update 的 global time 與傷害判定同源
         if (!this.spawnGraceArmed) { this.spawnGraceArmed = true; this.startSpawnGrace(time); }
         if (this.skillRequested) { this.skillRequested = false; this.useSkill(time); }
@@ -1021,6 +1039,7 @@ export class Game extends Scene
         this.updateMagnet();
         // Phase 4b-13 小地圖 refresh
         this.updateMinimap();
+        this.updatePortalStand(delta);  // 傳送門站 3 秒自動傳(累加 delta,pause 不算)
     }
 
     // Phase 4b-13 小地圖 render — 等比例縮放整張 map,每 mob / player 一個圓點
@@ -1200,6 +1219,7 @@ export class Game extends Scene
         const ring = this.add.circle(p.x, p.y, 60, 0xff8830, 0.35)
             .setStrokeStyle(4, 0xffe0c0, 0.9);
         ring.setData('isPortalRing', true); // per Phaser 4 prod build no global Phaser fix
+        ring.setData('portalSpec', p);      // 給 updatePortalStand 讀目標
         ring.setInteractive({ useHandCursor: true });
         // 漂浮動畫
         this.tweens.add({
@@ -1211,18 +1231,91 @@ export class Game extends Scene
             stroke: '#1a1612', strokeThickness: 4
         }).setOrigin(0.5).setDepth(500);
         ring.on('pointerdown', () => {
-            // 必須玩家在 160px 內才能用
+            // tap 加速:玩家在 160px 內直接走過場傳送(站 3 秒自動也會傳)
             const d = Math.hypot(this.player.x - p.x, this.player.y - p.y);
             if (d > 160) return;
             this.joystick.cancel();
-            this.switchMap(p.targetMapId, p.targetX, p.targetY);
+            this.doPortalTeleport(p);
         });
         this.portals.push(ring, label);
+    }
+
+    // 傳送門:每幀檢查玩家是否站在某傳送門上,連續 3 秒 → 自動傳送(進度弧 + 倒數)
+    // 用 delta 累加(非絕對 time)→ modal/pause 期間 update 不跑,計時自然凍結不會誤觸
+    private updatePortalStand(delta: number) {
+        if (this.teleporting) return;
+        const TRIGGER_R = 70, HOLD_MS = 3000;
+        let onPortal: PortalSpec | null = null;
+        for (const obj of this.portals) {
+            const ring = obj as Phaser.GameObjects.Arc;
+            const spec = ring.getData?.('portalSpec') as PortalSpec | undefined;
+            if (!spec) continue;
+            if (Math.hypot(this.player.x - spec.x, this.player.y - spec.y) <= TRIGGER_R) { onPortal = spec; break; }
+        }
+        if (!onPortal) {
+            // 離開傳送門 → 清進度
+            if (this.portalStandTarget) {
+                this.portalStandTarget = null;
+                this.portalProgress?.destroy(); this.portalProgress = undefined;
+                this.portalProgressText?.destroy(); this.portalProgressText = undefined;
+            }
+            return;
+        }
+        // 新踩上 / 換一個門 → 重計時 + 建進度物件
+        if (this.portalStandTarget !== onPortal) {
+            this.portalStandTarget = onPortal;
+            this.portalStandElapsedMs = 0;
+            this.portalProgress?.destroy();
+            this.portalProgress = this.add.graphics().setDepth(501);
+            this.portalProgressText?.destroy();
+            this.portalProgressText = this.add.text(onPortal.x, onPortal.y, '', {
+                fontFamily: 'monospace', fontSize: 40, color: '#ffe0c0', fontStyle: 'bold',
+                stroke: '#1a1612', strokeThickness: 5
+            }).setOrigin(0.5).setDepth(502);
+        } else {
+            this.portalStandElapsedMs += delta;  // 只累加實際 active gameplay frame
+        }
+        const elapsed = this.portalStandElapsedMs;
+        const ratio = Math.max(0, Math.min(1, elapsed / HOLD_MS));
+        // 進度弧(順時針填滿)
+        if (this.portalProgress) {
+            this.portalProgress.clear();
+            this.portalProgress.lineStyle(8, 0xffe040, 0.95);
+            this.portalProgress.beginPath();
+            this.portalProgress.arc(onPortal.x, onPortal.y, 74, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ratio);
+            this.portalProgress.strokePath();
+        }
+        this.portalProgressText?.setText(`${Math.ceil((HOLD_MS - elapsed) / 1000)}`);
+        if (elapsed >= HOLD_MS) this.doPortalTeleport(onPortal);
+    }
+
+    // 傳送過場:鎖輸入 + 廢土橙擴散環 + camera fadeOut → 切圖(新 scene fadeIn)
+    private doPortalTeleport(spec: PortalSpec) {
+        if (this.teleporting) return;
+        this.teleporting = true;
+        this.joystick.cancel();
+        this.portalProgress?.destroy(); this.portalProgress = undefined;
+        this.portalProgressText?.destroy(); this.portalProgressText = undefined;
+        // 玩家身上擴散傳送環(廢土橙)
+        const fx = this.add.circle(this.player.x, this.player.y, 30, 0xff8830, 0.5).setDepth(900);
+        this.tweens.add({ targets: fx, scale: 6, alpha: 0, duration: 480, ease: 'Cubic.easeOut', onComplete: () => fx.destroy() });
+        const fx2 = this.add.circle(this.player.x, this.player.y, 30, 0xffe0c0, 0).setStrokeStyle(6, 0xffe040, 0.9).setDepth(901);
+        this.tweens.add({ targets: fx2, scale: 7, alpha: 0, duration: 600, ease: 'Cubic.easeOut', onComplete: () => fx2.destroy() });
+        // 「傳送中…」
+        this.add.text(VIEW_W / 2, VIEW_H / 2, '◢ 傳送中… ◣', {
+            fontFamily: 'sans-serif', fontSize: 56, color: '#ff8830', fontStyle: 'bold',
+            stroke: '#1a1612', strokeThickness: 6
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(3500);
+        this.cameras.main.fadeOut(520, 26, 22, 18);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+            this.switchMap(spec.targetMapId, spec.targetX, spec.targetY);
+        });
     }
 
     private switchMap(targetMapId: string, targetX: number, targetY: number) {
         SaveService.instance.setCurrentMap(targetMapId, targetX, targetY);
         SaveService.instance.save();
+        Game.portalArrival = true;  // 標記:下個 create() fadeIn 抵達
         this.scene.restart();
     }
 
