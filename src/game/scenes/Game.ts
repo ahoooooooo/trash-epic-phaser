@@ -202,7 +202,7 @@ export class Game extends Scene
     private hpRegenCarry = 0;         // 疤痕組織 每秒回血累積(不足 1 點累進)
     private skillReadyAt = 0;         // ⑤ 主動技能下次可用時間(update 的 global time 基準)
     private skillRequested = false;   // 按鈕/F 設旗標,update 用同一 time 處理(CD 判定與視覺同源)
-    private skillBtnBg!: Phaser.GameObjects.Rectangle;
+    private skillBtnBg!: Phaser.GameObjects.Arc;
     private skillCdText!: Phaser.GameObjects.Text;
     private isGameOver = false;
     private spawnPoints: SpawnPoint[] = [];
@@ -735,9 +735,14 @@ export class Game extends Scene
         const size = 116;
         const x = VIEW_W - 46 - size / 2;   // 右緣留 46px margin,避免貼邊誤觸
         const y = 1230;
-        this.skillBtnBg = this.add.rectangle(x, y, size, size, 0x8b3a1f, 0.95)
+        const rad = size / 2;
+        // 外發光環(能量感)+ 圓底鈕 + 內頂高光
+        this.add.circle(x, y, rad + 9, 0xff8830, 0.14).setDepth(1098).setScrollFactor(0);
+        this.add.circle(x, y, rad + 4, 0x1a1612, 0.6).setStrokeStyle(2, 0xff8830, 0.35).setDepth(1099).setScrollFactor(0);
+        this.skillBtnBg = this.add.circle(x, y, rad, 0x8b3a1f, 0.95)
             .setStrokeStyle(4, 0xff8830, 1).setDepth(1100).setScrollFactor(0)
             .setInteractive({ useHandCursor: true });
+        this.add.circle(x, y - rad * 0.34, rad * 0.5, 0xffe0c0, 0.10).setDepth(1101).setScrollFactor(0);
         this.add.text(x, y - 22, '震波', {
             fontFamily: 'sans-serif', fontSize: 32, color: '#ffe0c0', fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(1101).setScrollFactor(0);

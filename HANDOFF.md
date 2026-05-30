@@ -64,6 +64,8 @@
 
 21. **[x] 底部 5-tab bar 鏽蝕金屬按鈕質感**(2026-05-30 user「畫面精緻度」續做)— buildBottomTabs 每 tab 原本扁平 rect+emoji。升級成鏽蝕金屬按鈕:底+黑框 / 上沿亮帶 sheen(金屬反光)/ 底暗影 shade / 內鏽橙框 inner(fill alpha 0 只 stroke)/ 4 角鉚釘 rivet / icon 下橙 accent 線 / label,全 add 進同 container(c.setSize→setInteractive 順序不變,互動未壞)。tsc 0+build+Codex APPROVE(1 輪 clean,確認 container hit area/子物件不搶 input/fill-alpha-0+stroke 合法/效能 ok 55 物件)+ Playwright 截圖 5 顆變金屬按鈕+點倉庫 tab 正常開 Storage+console 0 error。**可續**:minimap 框/技能鈕/boss 血條同質感、emoji icon 換手繪。
 
+22. **[x] 技能鈕(震波)圓形能量鈕質感**(2026-05-30 user「畫面精緻度」續做)— 原本方形紅 Rectangle。改 field 型別 Rectangle→Arc + drawSkillButton 用 this.add.circle:外發光環(橙 0.14)+ 暗框環 + 主圓鈕(紅橙描邊)+ 內頂高光,文字/CD 倒數不變。refreshSkillButton 對 Arc 的 setFillStyle/setStrokeStyle 相容(CD 灰/ready 紅橙)。tsc 0+build+Codex APPROVE(1 輪 clean,確認 Arc setInteractive 預設 bounding-box hit area 仍 116×116 可點/CD 刷新相容/無 prod pitfall)+ Playwright 截圖圓形能量鈕+點擊正常觸發震波 AoE(玩家周圍橙環+怪掉血)+console 0 error。**可續**:boss 血條/minimap 框/傷害數字 同質感。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)
