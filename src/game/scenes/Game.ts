@@ -239,8 +239,11 @@ interface BossDef {
     sweepHit: number;          // 命中擴散環
     biteFill: number;          // rage 連咬 內圈
     biteStroke: number;        // rage 連咬 外環
-    acidSpit?: boolean;        // 酸液噴吐(地面酸池 DoT zone)— acidsire 限定第 2 招
-    spawnAdds?: number;        // 產卵:HP<60% 一次召喚 N 隻幼蟲 add(0/undefined=不召)— acidsire 限定第 3 招
+    acidSpit?: boolean;        // 地面噴吐池 DoT zone(acidsire 酸 / kraz 火塵 / arbiter 古能量)
+    spitColor?: number;        // 噴吐池/預警/濺射主題色(預設酸綠 0x4cff60)
+    spitLabel?: string;        // 站池 DoT 浮字(預設「酸蝕」)
+    spawnAdds?: number;        // HP<60% 一次召喚 N 隻 add(0/undefined=不召)
+    addsBlueprintIdx?: number; // 召喚的 add 怪 blueprint idx(預設 13 蝕骨蜈蚣幼蟲)
 }
 
 const BOSS_DEFS: Record<string, BossDef> = {
@@ -252,19 +255,24 @@ const BOSS_DEFS: Record<string, BossDef> = {
     acidsire: {
         blueprint: BOSS_ACIDSIRE, displayName: '蝕骨蜈蚣巢母',
         sweepFill: 0x40ff40, sweepStroke: 0x80ff50, sweepHit: 0x50d020,
-        biteFill: 0x90e040, biteStroke: 0xc0ff60, acidSpit: true, spawnAdds: 4
+        biteFill: 0x90e040, biteStroke: 0xc0ff60,
+        acidSpit: true, spitColor: 0x4cff60, spitLabel: '酸蝕',
+        spawnAdds: 4, addsBlueprintIdx: 13  // 召蝕骨蜈蚣幼蟲
     },
     kraz: {
         blueprint: BOSS_KRAZ, displayName: '哥布林戰酋 克拉茲',
-        // 戰錘橫掃(sweep)鏽橙警示 + rage 戰錘連砸(bite)橙紅,單張 sprite wobble
+        // 戰錘橫掃(sweep)鏽橙 + rage 連砸(bite)橙紅 + 戰錘下砸塵爆地裂池(spit 橙火)
         sweepFill: 0xff7020, sweepStroke: 0xffa040, sweepHit: 0xff5020,
-        biteFill: 0xffb060, biteStroke: 0xffd090
+        biteFill: 0xffb060, biteStroke: 0xffd090,
+        acidSpit: true, spitColor: 0xff7020, spitLabel: '灼燒'  // 戰錘下砸地裂(04 §9 招式 2)
     },
     arbiter: {
         blueprint: BOSS_ARBITER, displayName: '銹蝕審判官',
-        // 巨劍橫斬(sweep)暗紅古能量 + rage 核心爆發連擊(bite)暗紅,單張 sprite wobble
+        // 巨劍橫斬(sweep)暗紅 + rage 連擊(bite)暗紅 + 古能量池(spit 暗紅)+ 召古機械哨兵
         sweepFill: 0xc81830, sweepStroke: 0xff4050, sweepHit: 0xa01828,
-        biteFill: 0xe04040, biteStroke: 0xff6060
+        biteFill: 0xe04040, biteStroke: 0xff6060,
+        acidSpit: true, spitColor: 0xc81830, spitLabel: '審判',  // 古文字符火箭地灼(05 §9 招式 3)
+        spawnAdds: 2, addsBlueprintIdx: 10  // 召輻射機甲蟲古哨兵(05 §9 招式 4)
     }
 };
 
@@ -2263,10 +2271,12 @@ export class Game extends Scene
         this.bossHpBarFill.fillColor = data.isRaging ? (data.blueprint.rageTint ?? 0xff2020) : 0xc23a1a;
     }
 
-    // Boss 產卵(第 3 招):圍 boss 召喚 N 隻幼蟲 add(idx13 蝕骨蜈蚣縮小弱化版,單張 sprite wobble,用既有 mob 機制)
+    // Boss 召喚增援(第 3 招):圍 boss 召喚 N 隻 add(BossDef.addsBlueprintIdx 指定怪種縮小弱化,單張 sprite wobble,用既有 mob 機制)
     private spawnBroodAdds(bx: number, by: number, count: number, time: number) {
-        const bp = MOB_BLUEPRINTS[13];  // acid_centipede(spriteKey mob_acidsire)
-        const addScale = bp.scale * 0.6;        // 幼蟲遠小於巢母
+        const idx = this.activeBoss?.addsBlueprintIdx ?? 13;  // 預設蝕骨蜈蚣幼蟲;arbiter 召機甲蟲哨兵(10)等
+        const themeColor = this.activeBoss?.spitColor ?? 0x4cff60;
+        const bp = MOB_BLUEPRINTS[idx];
+        const addScale = bp.scale * 0.6;        // add 遠小於 boss
         const addHp = Math.max(1, Math.round(bp.hp * 0.12));  // 弱化:可快速清掉的 add
         for (let i = 0; i < count; i++) {
             const ang = (i / count) * Math.PI * 2 + Math.random() * 0.4;
@@ -2284,11 +2294,11 @@ export class Game extends Scene
             mob.setData('mob', data);
             mob.setData('shadow', this.makeGroundShadow(mob.x, mob.y, Math.max(24, mob.displayWidth * 0.7)));
             this.mobs.push(mob);
-            // 孵化視覺:綠卵爆
-            const hatch = this.add.circle(ax, ay, 14, 0x4cff60, 0).setStrokeStyle(4, 0x4cff60, 0.9).setDepth(450);
+            // 召喚視覺:主題色爆環
+            const hatch = this.add.circle(ax, ay, 14, themeColor, 0).setStrokeStyle(4, themeColor, 0.9).setDepth(450);
             this.tweens.add({ targets: hatch, radius: 70, alpha: 0, duration: 480, ease: 'Quad.out', onComplete: () => hatch.destroy() });
         }
-        this.flashHudMessage('☢ 巢母產卵 — 幼蟲孵化!', 0x4cff60);
+        this.flashHudMessage(`☢ ${this.activeBoss?.displayName ?? 'Boss'} 召喚增援!`, themeColor);
         this.cameras.main.shake(240, 0.012);
         void time;
     }
@@ -2346,9 +2356,10 @@ export class Game extends Scene
             if (d > 900) { this.acidSpitNextAt = time + 700; return; }  // 太遠不噴
             this.acidSpitTargetX = this.player.x;
             this.acidSpitTargetY = this.player.y;
-            // 地面預警圈(酸綠,鎖定落點不跟玩家 → 可走出)
-            this.acidSpitTelegraph = this.add.circle(this.acidSpitTargetX, this.acidSpitTargetY, ACID_SPIT_RADIUS, 0x4cff60, 0.12)
-                .setStrokeStyle(6, 0x4cff60, 0.8).setDepth(6);
+            // 地面預警圈(boss 主題色,鎖定落點不跟玩家 → 可走出)
+            const sc = this.activeBoss?.spitColor ?? 0x4cff60;
+            this.acidSpitTelegraph = this.add.circle(this.acidSpitTargetX, this.acidSpitTargetY, ACID_SPIT_RADIUS, sc, 0.12)
+                .setStrokeStyle(6, sc, 0.8).setDepth(6);
             this.tweens.add({ targets: this.acidSpitTelegraph, alpha: 0.32, duration: 200, yoyo: true, repeat: -1 });
             this.acidSpitResolveAt = time + ACID_SPIT_WINDUP_MS;
         }
@@ -2362,17 +2373,18 @@ export class Game extends Scene
         this.acidSpitTelegraph = undefined;
     }
 
-    // 酸液噴吐結算:清預警圈 → 生殘留酸池(綠 puddle,持續 DoT zone)
+    // 噴吐結算:清預警圈 → 生殘留池(boss 主題色 puddle,持續 DoT zone)
     private resolveAcidSpit(time: number) {
         this.destroyAcidSpitTelegraph();
         const x = this.acidSpitTargetX, y = this.acidSpitTargetY;
+        const sc = this.activeBoss?.spitColor ?? 0x4cff60;
         // 濺射視覺
-        const splash = this.add.circle(x, y, ACID_SPIT_RADIUS, 0x4cff60, 0.4).setDepth(7);
+        const splash = this.add.circle(x, y, ACID_SPIT_RADIUS, sc, 0.4).setDepth(7);
         this.tweens.add({ targets: splash, alpha: 0, scale: 1.2, duration: 280, onComplete: () => splash.destroy() });
         this.cameras.main.shake(160, 0.010);
-        // 殘留酸池(深綠底 + 螢光綠邊,DoT zone)
-        const pool = this.add.circle(x, y, ACID_SPIT_RADIUS, 0x2a8030, 0.34)
-            .setStrokeStyle(4, 0x4cff60, 0.6).setDepth(5);
+        // 殘留池(主題色底 + 亮邊,DoT zone)
+        const pool = this.add.circle(x, y, ACID_SPIT_RADIUS, sc, 0.26)
+            .setStrokeStyle(4, sc, 0.7).setDepth(5);
         this.tweens.add({ targets: pool, alpha: 0.18, duration: 600, yoyo: true, repeat: -1 });  // 沸騰呼吸感
         this.acidPools.push({ circle: pool, untilMs: time + ACID_POOL_LIFE_MS, nextTickMs: time + ACID_POOL_TICK_MS });
     }
@@ -2381,6 +2393,8 @@ export class Game extends Scene
     private updateAcidPools(time: number) {
         if (this.acidPools.length === 0) return;
         const dmg = Math.max(1, Math.round((this.activeBoss?.blueprint.contactDamage ?? 30) * 0.5));
+        const spitLabel = this.activeBoss?.spitLabel ?? '酸蝕';
+        const spitHex = '#' + (this.activeBoss?.spitColor ?? 0x4cff60).toString(16).padStart(6, '0');
         const survivors: { circle: Phaser.GameObjects.Arc; untilMs: number; nextTickMs: number }[] = [];
         for (const p of this.acidPools) {
             if (time >= p.untilMs) {
@@ -2394,7 +2408,7 @@ export class Game extends Scene
                 const inside = Math.hypot(this.player.x - p.circle.x, this.player.y - p.circle.y) <= ACID_SPIT_RADIUS;
                 if (inside && time >= this.playerInvulnUntilMs && !this.isGameOver) {
                     this.takeDamage(dmg, time);
-                    this.spawnFloatingLabel(this.player.x, this.player.y - 60, `-${dmg} 酸蝕`, '#4cff60');
+                    this.spawnFloatingLabel(this.player.x, this.player.y - 60, `-${dmg} ${spitLabel}`, spitHex);
                 }
             }
             survivors.push(p);
