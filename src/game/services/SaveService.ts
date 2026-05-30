@@ -1,7 +1,8 @@
 // 永久存檔 — localStorage(Phase 4a MVP,Phase 4d 再接 Firebase Cloud Save)
 // per GAME_SPEC_V3 §4.4 「死掉不歸零,進度 Save」
 
-import type { EquipSlot } from './ArmorService';
+import type { EquipSlot, ArmorDef } from './ArmorService';
+import { effectiveDefense } from './ArmorService';
 import type { SkinSlot } from './SkinService';
 
 const STORAGE_KEY = 'trash-epic-save-v1';
@@ -49,6 +50,7 @@ interface SaveData {
     // Phase 4c-F 防具
     ownedArmor: { id: string; data: string }[];        // 已得防具(stringified ArmorDef)
     equippedArmor: Partial<Record<EquipSlot, string>>; // paper doll 格位 → ownedArmor wrapper id
+    armorEnh: Record<string, number>;                  // ownedArmor id → 強化等級
     // Phase 4c-2 楓谷藥水
     potions: Record<string, number>;                   // potionId → 持有數
     potionHotbar: (string | null)[];                   // 快捷列 4 格 → potionId
@@ -120,6 +122,7 @@ function makeDefaultSave(): SaveData {
         familiarShards: {},
         ownedArmor: [],
         equippedArmor: {},
+        armorEnh: {},
         potions: { rust_water: 5, dry_cell: 5 },
         potionHotbar: ['rust_water', 'dry_cell', null, null],
         autoPot: { enabled: false, hpThresholdPct: 0.4, mpThresholdPct: 0.3, hpPotionId: 'rust_water', mpPotionId: 'dry_cell' },
@@ -192,6 +195,7 @@ export class SaveService {
             // Phase 4c-F forward-compat:舊 save 沒防具欄位
             merged.ownedArmor = Array.isArray(parsed.ownedArmor) ? [...parsed.ownedArmor] : [];
             merged.equippedArmor = { ...(parsed.equippedArmor ?? {}) };
+            merged.armorEnh = { ...(parsed.armorEnh ?? {}) };
             // Phase 4c-2 forward-compat:有 typed 藥水就用;舊 save 沒 → 把 legacy hpPotions/mpPotions 折算成鏽水瓶/乾電池液
             if (parsed.potions) {
                 merged.potions = { ...makeDefaultSave().potions, ...parsed.potions };
@@ -443,16 +447,19 @@ export class SaveService {
         this.data.equippedArmor[slot] = ownedId;
     }
     unequipArmor(slot: EquipSlot): void { delete this.data.equippedArmor[slot]; }
-    // 裝備中防具總防禦(takeDamage 減傷用)
+    getArmorEnh(ownedId: string): number { return this.data.armorEnh[ownedId] ?? 0; }
+    addArmorEnh(ownedId: string): void { this.data.armorEnh[ownedId] = (this.data.armorEnh[ownedId] ?? 0) + 1; }
+    // 裝備中防具總防禦(含強化 effectiveDefense,takeDamage 減傷用)
     getTotalArmorDefense(): number {
         let def = 0;
         for (const key in this.data.equippedArmor) {
             const wid = this.data.equippedArmor[key as EquipSlot];
+            if (!wid) continue;
             const entry = this.data.ownedArmor.find(o => o.id === wid);
             if (!entry) continue;
             try {
-                const a = JSON.parse(entry.data) as { defense?: number };
-                def += a.defense ?? 0;
+                const a = JSON.parse(entry.data) as ArmorDef;
+                def += effectiveDefense(a, this.data.armorEnh[wid] ?? 0);
             } catch { /* 壞資料跳過 */ }
         }
         return def;

@@ -3,7 +3,8 @@ import { SaveService } from '../services/SaveService';
 import { getWeapon, effectiveDamage, enhanceCost } from '../services/WeaponService';
 import {
     ArmorDef, EquipSlot, equipSlotLabel,
-    armorSlotForEquipSlot, armorDisplayName, armorRarityColor
+    armorSlotForEquipSlot, armorDisplayName, armorRarityColor,
+    effectiveDefense, armorEnhanceCost
 } from '../services/ArmorService';
 
 const W = 1080;
@@ -83,7 +84,10 @@ export class Inventory extends Scene {
                 fontFamily: 'sans-serif', fontSize: 18, color: '#ffe0c0',
                 align: 'center', wordWrap: { width: FRAME - 16 }
             }).setOrigin(0.5);
-            this.add.text(sp.x, sp.y + 38, `防 ${eq.defense}  [${eq.tier}]`, {
+            const eqId = SaveService.instance.getEquippedArmorId(sp.slot);
+            const aEnh = eqId ? SaveService.instance.getArmorEnh(eqId) : 0;
+            const effDef = effectiveDefense(eq, aEnh);
+            this.add.text(sp.x, sp.y + 38, `防 ${effDef}${aEnh > 0 ? ` +${aEnh}` : ''}  [${eq.tier}]`, {
                 fontFamily: 'monospace', fontSize: 18, color: '#ffe060', fontStyle: 'bold'
             }).setOrigin(0.5);
         } else {
@@ -126,13 +130,29 @@ export class Inventory extends Scene {
         layer.add(title);
 
         let rowY = 430;
-        // 卸下(若已裝)
+        // 卸下 + 強化(若已裝)
         if (SaveService.instance.getEquippedArmorId(slot)) {
             this.addPickerRow(layer, rowY, '✕ 卸下', '#ff6040', () => {
                 SaveService.instance.unequipArmor(slot);
                 SaveService.instance.save();
                 this.refreshAfterEquip();
             });
+            rowY += 110;
+            const eqId0 = SaveService.instance.getEquippedArmorId(slot)!;
+            const eqEnh0 = SaveService.instance.getArmorEnh(eqId0);
+            const eqCost0 = armorEnhanceCost(eqEnh0);
+            this.addPickerRow(layer, rowY, `⚒ 強化 +${eqEnh0} → +${eqEnh0 + 1}   花費 ${eqCost0} 金`, '#ffe060', () => {
+                const id = SaveService.instance.getEquippedArmorId(slot);
+                if (!id) return;
+                const c = armorEnhanceCost(SaveService.instance.getArmorEnh(id));
+                if (SaveService.instance.spendGold(c)) {
+                    SaveService.instance.addArmorEnh(id);
+                    SaveService.instance.save();
+                    this.refreshAfterEquip();   // picker 關 + frame 重繪新防禦
+                } else {
+                    this.flashMsg('金幣不足', '#c23a1a');
+                }
+            }, 0xff8830);
             rowY += 110;
         }
 

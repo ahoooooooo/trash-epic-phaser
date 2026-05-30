@@ -29,7 +29,7 @@
 4. **[ ] 4c-5:6 張 painted 地圖**(GPT-4o)— 廢料鎮/乾井路/鏽蝕巷/爐心門等,目前是純色底。需專門 session 跑 pipeline(quota+慢+逐張接 bgKey),不適合長 loop 尾端硬跑。
 5. **[x] 核心循環單一 → 精英怪系統**(2026-05-30 完成)— 8% mob 變精英(MobData.isElite,不污染共用 blueprint):1.5× scale / 金黃 0xffd040 tint / 3.5× HP / 4× 金幣+EXP / ×3 掉落機率 / spawn 金環+「精英怪出現」公告 / kill「精英擊破」+shake。給掛機加狩獵小目標。Codex APPROVE(2 輪,抓到 EXP 漏倍率)+ Playwright ELITE_CHANCE=1.0 實測金黃+大+公告+更肉。**增強(同日)**:小地圖精英=金黃大點(一眼可獵)+ 接觸傷害 ×1.6(肉+痛=真風險決策)。可續加:事件波/小目標任務。
 6. **[x] 武器強化 UI**(2026-05-30 完成 — 修活死系統)— Explore 發現 weaponEnh 後端有但**從沒 UI**(enh 永遠 0)。Inventory 武器摘要下加「強化武器」按鈕:顯示 +enh/cost/持有金,點擊花金幣 +1(無上限)→ scene.restart 重繪。Codex APPROVE + Playwright 實測 +2→+3/gold -100/攻擊 13→14。
-   **[ ] 防具強化 armorEnh**(下一棒可做,現有武器強化 UI 為範本)— 鏡像:SaveService armorEnh 欄位 + getArmorEnh/addArmorEnh + ArmorService.effectiveDefense + getTotalArmorDefense 套 enh(改 takeDamage 減傷)+ Inventory 每件裝備防具加強化按鈕(複製 drawEnhanceButton 樣式)。Explore 完整清單見上輪 commit 紀錄。
+   **[x] 防具強化 armorEnh**(2026-05-30 完成 — 裝備進程系統完整)— SaveService armorEnh(ownedId→enh)+ getArmorEnh/addArmorEnh + ArmorService.effectiveDefense/armorEnhanceCost(鏡像武器)+ getTotalArmorDefense 套 effectiveDefense(減傷反映強化)+ Inventory openSlotPicker 加「⚒ 強化」row + equip frame 顯示「防 N +M」。Codex APPROVE + Playwright 防11→防13(+1)/gold-50/armorEnh persist 實測。**小尾巴**:賣/丟防具未清 armorEnh(微記憶體殘留,可接受,日後可在 removeOwnedArmor 順手刪)。
 7. **[x] 金幣掉落 juice**(2026-05-30,楓谷爽感)— spawnGoldDrop 改枚數隨金額(boss/精英多枚噴發,cap 6);killMob 傳精英 ×4 金額。純視覺不影響經濟。Codex APPROVE。
 
 做完一項:更新本檔(劃掉 + 補完成紀錄)→ commit/push → 一句話報告 user + live URL。

@@ -17,6 +17,20 @@ export interface ArmorDef {
     defense: number;
 }
 
+// 防具強化(鏡像武器 effectiveDamage/enhanceCost):每級 +15% 經 dim 遞減,花金幣,無上限
+export function effectiveDefense(armor: ArmorDef, enhLevel: number): number {
+    if (enhLevel <= 0) return armor.defense;
+    let mult = 1;
+    for (let i = 1; i <= enhLevel; i++) {
+        const dim = Math.min(1, 100 / (i + 100));
+        mult += 0.15 * dim;
+    }
+    return Math.round(armor.defense * mult);
+}
+export function armorEnhanceCost(currentEnh: number): number {
+    return Math.floor(50 * (1 + currentEnh * 0.5));
+}
+
 const SLOT_LABEL: Record<ArmorSlot, string> = {
     helmet: '頭盔', chest: '胸甲', bracers: '護腕', legs: '護腿', boots: '戰靴', accessory: '飾品'
 };
