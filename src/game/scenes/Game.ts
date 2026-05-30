@@ -399,8 +399,10 @@ export class Game extends Scene
     private buffDefUntilMs = 0;
     private buffDefPct = 0;
     private potionSlotCountTexts: Phaser.GameObjects.Text[] = [];
-    // Phase 4b-12 (B) 掉落物磁吸 — pending pickups
-    private pendingPickups: { obj: Phaser.GameObjects.GameObject & { x: number; y: number; destroy: () => void }; collect: () => void }[] = [];
+    // Phase 4b-12 (B) 掉落物磁吸 — pending pickups(readyAt:落地動畫播完前不可吸取,楓谷風先掉地停一下)
+    private pendingPickups: { obj: Phaser.GameObjects.GameObject & { x: number; y: number; destroy: () => void }; collect: () => void; readyAt: number }[] = [];
+    private static readonly DROP_SETTLE_MS = 650;  // 掉落彈跳 + 在地上停留 → 才開始可被磁吸/拾取
+    private gameTime = 0;  // update(time) 的 global game-loop time(與傷害/spawn 判定同源,非 scene clock)
     // Phase 4b-13 小地圖 — graphics overlay 左上角
     private minimap!: Phaser.GameObjects.Graphics;
     private static readonly MINIMAP_SIZE = 320;
@@ -1272,6 +1274,7 @@ export class Game extends Scene
         if (this.questDialogOpen) return;
         if (this.vendorShopOpen) return;
         if (this.teleporting) return;  // 傳送過場中凍結 gameplay(fadeOut 期間不移動/不受傷)
+        this.gameTime = time;  // 掉落 settle / 磁吸 gate 用同源 game-loop time
         // ④ 出生無敵:首個真正 gameplay tick(FTUE pause→resume 後才跑到這)才 arm,用 update 的 global time 與傷害判定同源
         if (!this.spawnGraceArmed) { this.spawnGraceArmed = true; this.startSpawnGrace(time); }
         if (this.skillRequested) { this.skillRequested = false; this.useSkill(time); }
@@ -2718,9 +2721,12 @@ export class Game extends Scene
         const magnetR = buff.autoMagnetAll ? 99999 : Game.MAGNET_RANGE * (1 + buff.pickupRangePct);
         const lerp = buff.autoMagnetAll ? 0.16 : Game.MAGNET_LERP;
         const px = this.player.x, py = this.player.y;
+        const now = this.gameTime;
         for (let i = this.pendingPickups.length - 1; i >= 0; i--) {
             const e = this.pendingPickups[i];
             if (!e.obj.active) { this.pendingPickups.splice(i, 1); continue; }
+            // 掉落動畫播完前(readyAt)不吸不撿 — 楓谷風先掉地停一下
+            if (now < e.readyAt) continue;
             const dx = px - e.obj.x, dy = py - e.obj.y;
             const dist = Math.hypot(dx, dy);
             if (dist < pickupR) {
@@ -2907,10 +2913,11 @@ export class Game extends Scene
                     { y: dropY, duration: 220, ease: 'Bounce.out' }
                 ]
             });
-            // 加進磁吸 queue,player 靠近自動拾取
+            // 加進磁吸 queue,player 靠近自動拾取(落地動畫播完才可吸,多枚錯開)
             this.pendingPickups.push({
                 obj: coin,
-                collect: () => {} // gold 已在 grantKillReward 加進 save,coin 視覺到手即消
+                collect: () => {}, // gold 已在 grantKillReward 加進 save,coin 視覺到手即消
+                readyAt: this.gameTime + Game.DROP_SETTLE_MS + c * 40
             });
         }
         // 落地閃光環 ×2(交錯擴散,枚數多時環更大)
@@ -2963,7 +2970,8 @@ export class Game extends Scene
         });
         this.pendingPickups.push({
             obj: icon,
-            collect: onCollect
+            collect: onCollect,
+            readyAt: this.gameTime + Game.DROP_SETTLE_MS
         });
     }
 }
