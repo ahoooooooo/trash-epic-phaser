@@ -561,12 +561,13 @@ export class Game extends Scene
         if (!this.anims.exists('player_walk')) {
             this.anims.create({
                 key: 'player_walk',
-                // 抄 MapleStory body walk1:4 幀(0 接觸A / 1 通過 / 2 接觸B反向腿 / 3 通過反向)腿左右交替 + 身體水平。
-                // 0/2 接觸幀 = 腿鏡像(前後腳對調),1/3 通過幀。頭頂全 188 零抖、硬切 alpha 去毛邊。
+                // walk_sheet_v4:GPT-4o 一張雙姿勢 sheet(上半身完全一致只腿不同)→ 切 2 pose + 腿鏡像補另 2。
+                // 0 寬接觸右腳前 / 1 高抬膝(左) / 2 寬接觸左腳前(腿鏡像) / 3 高抬膝(右)。誇張跨步小尺寸也讀得出左右左右。
+                // 4 幀頭頂 181-183、腳底全 1240 對齊 → headScreenY 螢幕變化 0(零垂直抖動,已 Playwright 量測驗證)。
                 frames: [
                     { key: 'player_walk_0' }, { key: 'player_walk_1' }, { key: 'player_walk_2' }, { key: 'player_walk_3' }
                 ],
-                frameRate: 6,  // 抄 MapleStory ~180ms/幀(≈5.5fps),比 8fps 慢更順
+                frameRate: 8,  // 4 誇張幀 @8fps(125ms/幀,cycle 500ms)= 順暢步頻不拖
                 repeat: -1
             });
         }
