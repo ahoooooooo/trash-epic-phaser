@@ -561,13 +561,16 @@ export class Game extends Scene
         if (!this.anims.exists('player_walk')) {
             this.anims.create({
                 key: 'player_walk',
-                // walk_sheet_v4:GPT-4o 一張雙姿勢 sheet(上半身完全一致只腿不同)→ 切 2 pose + 腿鏡像補另 2。
-                // 0 寬接觸右腳前 / 1 高抬膝(左) / 2 寬接觸左腳前(腿鏡像) / 3 高抬膝(右)。誇張跨步小尺寸也讀得出左右左右。
-                // 4 幀頭頂 181-183、腳底全 1240 對齊 → headScreenY 螢幕變化 0(零垂直抖動,已 Playwright 量測驗證)。
+                // walk v7(round 7 重設計):8 幀完整 gait cycle —
+                // 0 寬接觸右前 / 1 重心移轉收腿 / 2 高抬左膝 / 3 左腿前伸 / 4 寬接觸左前 / 5 收腿(鏡) / 6 高抬右膝 / 7 右腿前伸。
+                // 新增幀 1/3 來自 v7 雙姿勢 sheet,5/7 = 腿鏡像 + foot-fix。8 幀頭頂 179-181、腳底全 1242 對齊(零垂直抖)。
                 frames: [
-                    { key: 'player_walk_0' }, { key: 'player_walk_1' }, { key: 'player_walk_2' }, { key: 'player_walk_3' }
+                    { key: 'player_walk_0' }, { key: 'player_walk_1' }, { key: 'player_walk_2' }, { key: 'player_walk_3' },
+                    { key: 'player_walk_4' }, { key: 'player_walk_5' }, { key: 'player_walk_6' }, { key: 'player_walk_7' }
                 ],
-                frameRate: 8,  // 4 誇張幀 @8fps(125ms/幀,cycle 500ms)= 順暢步頻不拖
+                // 步頻與位移同步(根治滑步):接觸幀兩腳距 633 art px × (376/1300) ≈ 183 world px = 每步地面距離。
+                // cycle = 2 步 × 183 / (MOVE_SPEED×1000) ≈ 0.915s → frameRate = 8 幀 / 0.915s ≈ 8.74(基準移速時腳落點固定)。
+                frameRate: 8.74,
                 repeat: -1
             });
         }
@@ -1605,6 +1608,7 @@ export class Game extends Scene
         this.player.angle = 0;
         if (state === 'idle') {
             this.player.anims.stop();
+            this.player.anims.timeScale = 1;
             this.player.setTexture('player_idle');
         } else {
             this.player.play('player_walk', true);
@@ -1622,6 +1626,7 @@ export class Game extends Scene
         this.player.angle = 0;  // 清走路 lean,attack 不帶傾斜
         this.player.off('animationcomplete-player_attack');
         this.playerActionAnim = 'attacking';
+        this.player.anims.timeScale = 1;  // walk 的移速同步不影響攻擊播放速率
         this.player.play('player_attack', true);
         this.lockPlayerScale();  // animationupdate 不觸發首 frame,手動鎖一次
         this.player.once('animationcomplete-player_attack', () => {
@@ -1718,6 +1723,13 @@ export class Game extends Scene
         const ny = this.player.y + normDy * speed * delta;
         this.player.x = Math.max(60, Math.min(this.mapConfig.width - 60, nx));
         this.player.y = Math.max(60, Math.min(this.mapConfig.height - 60, ny));
+        // walk v7 滑步根治:步頻跟實際位移同步。walk anim 基準 frameRate 8.74 對應基準速度
+        // (MOVE_SPEED,搖桿全推)。實際速度因 talent buff / 搖桿半推改變時等比縮放播放速率,
+        // 腳落點才不會相對地面滑動。attack anim 播放時不動 timeScale(playWeaponAttackAnim 重設 1)。
+        if (!this.playerActionAnim) {
+            // 直接等比(不設下限):慢推搖桿時動畫同樣慢,腳落點才恆貼地(Codex review fix)
+            this.player.anims.timeScale = Math.min(mag, 1) * (1 + buff.moveSpeedPct);
+        }
         // Phase 4c B fix:戰鬥朝向期間(剛攻擊過)不用移動方向覆蓋 flipX,避免往後走背打
         if (Math.abs(normDx) > 0.1 && this.time.now > this.combatFaceUntilMs) {
             this.player.setFlipX(normDx < 0);
@@ -1914,6 +1926,7 @@ export class Game extends Scene
         this.player.angle = 0;  // 清走路 lean
         this.player.off('animationcomplete-player_hurt');
         this.playerActionAnim = 'hurt';
+        this.player.anims.timeScale = 1;  // 不繼承 walk 移速同步值(Codex review fix)
         this.player.play('player_hurt', true);
         this.lockPlayerScale();  // hurt 單 frame,animationupdate 永不觸發,必手動鎖
         this.player.once('animationcomplete-player_hurt', () => {
