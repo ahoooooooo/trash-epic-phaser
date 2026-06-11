@@ -13,31 +13,42 @@ export class MainMenu extends Scene
         super('MainMenu');
     }
 
+    preload ()
+    {
+        // REBOOT v4 premium 門面資產(lazy,已快取則秒過)
+        this.load.setPath('assets');
+        if (!this.textures.exists('ui_home_bg')) this.load.image('ui_home_bg', 'ui/home_bg.png');
+        if (!this.textures.exists('ui_logo')) this.load.image('ui_logo', 'ui/logo.png');
+        if (!this.textures.exists('ui_btn_gold')) this.load.image('ui_btn_gold', 'ui/btn_gold.png');
+    }
+
     create ()
     {
         // per user 2026-05-29 bug 報告:死後重進不了 — starting flag 是 instance field,
         // scene 第二次進來時還是 true 卡住。每次 create() reset。
         this.starting = false;
-        // 1. painted 廢土背景(沿用 wasteland map 當 ambience)
-        const bg = this.add.image(W / 2, H / 2, 'map_wasteland_topdown');
-        bg.setDisplaySize(W, H);
-        bg.setAlpha(0.55);
-        // 暗 overlay 確保 UI 易讀
-        this.add.rectangle(W / 2, H / 2, W, H, 0x1a1612, 0.45);
+        // 1. REBOOT v4:全屏黃昏營地插畫(設計時上下已壓暗,輕 overlay 即可)
+        const bg = this.add.image(W / 2, H / 2, 'ui_home_bg');
+        bg.setScale(Math.max(W / bg.width, H / bg.height));
+        this.add.rectangle(W / 2, H / 2, W, H, 0x1a1208, 0.18);
+        // 餘燼粒子(營火氛圍)
+        for (let i = 0; i < 12; i++) {
+            const ex = 220 + Math.random() * 640;
+            const ey = 950 + Math.random() * 650;
+            const ember = this.add.circle(ex, ey, 2 + Math.random() * 3, 0xffa040, 0.7);
+            this.tweens.add({
+                targets: ember,
+                y: ey - 280 - Math.random() * 280, x: ex + (Math.random() - 0.5) * 110, alpha: 0,
+                duration: 4200 + Math.random() * 2800, delay: Math.random() * 4000, repeat: -1,
+                onRepeat: () => { ember.y = ey; ember.x = ex; ember.alpha = 0.7; }
+            });
+        }
 
-        // 2. Title block — 廢土風大字 + 副標
-        this.add.text(W / 2, 220, '破爛史詩', {
-            fontFamily: 'sans-serif', fontSize: 120, color: '#b08850', fontStyle: 'bold',
-            stroke: '#1a1612', strokeThickness: 10,
-            align: 'center'
-        }).setOrigin(0.5);
-        this.add.text(W / 2, 320, 'Trash Epic', {
-            fontFamily: 'sans-serif', fontSize: 40, color: '#a05a30',
-            align: 'center'
-        }).setOrigin(0.5);
-        this.add.text(W / 2, 370, '— 廢土生存 ARPG —', {
-            fontFamily: 'monospace', fontSize: 22, color: '#6a5a4a'
-        }).setOrigin(0.5);
+        // 2. 鍛鐵 logo(取代文字標題)— 滑入 + 微呼吸
+        const logo = this.add.image(W / 2, -150, 'ui_logo');
+        logo.setScale(760 / logo.width);
+        this.tweens.add({ targets: logo, y: 250, duration: 650, ease: 'Back.out' });
+        this.tweens.add({ targets: logo, scale: logo.scaleX * 1.012, duration: 2400, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: 800 });
 
         // 3. 主角立繪(正面,per user;地圖才側視)— 裝備角色 skin 則換成 skin 立繪
         const portraitKey = equippedCharacterPortraitKey(SaveService.instance.getEquippedSkin('character'), 'player_portrait');
@@ -129,9 +140,9 @@ export class MainMenu extends Scene
         console.log('[MainMenu] startGame() — starting flag:', this.starting);
         if (this.starting) return;
         this.starting = true;
-        // pivot 2026-06-11:主玩法改廢土塔防(ARPG Game scene 保留在 codebase 暫不入口)
-        console.log('[MainMenu] calling scene.start(TowerDefense)');
-        this.scene.start('TowerDefense');
+        // 2026-06-12 user 拍板:回到原設定(楓谷式走位刷怪 ARPG),關卡式塔防廢棄
+        console.log('[MainMenu] calling scene.start(Game)');
+        this.scene.start('Game');
     }
 
     private confirmReset() {

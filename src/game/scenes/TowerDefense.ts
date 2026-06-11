@@ -1,9 +1,23 @@
 import { Scene } from 'phaser';
+import { SaveService } from '../services/SaveService';
+import { FAMILIAR_POOL } from '../services/GachaService';
+import { TowerStat, towerStatOf, famLevelMult, stageOf, StageDef } from '../services/TDService';
 
-// 廢土塔防 MVP(pivot 2026-06-11 user 拍板):部署夥伴守軍擋怪物波次。
+// 廢土塔防 — 養成版(pivot v2 2026-06-12 user「這樣不是養成系」):
+// 塔防是戰鬥外殼,養成是本體 — 部署名單=抽卡擁有、守軍永久 Lv 吃進戰力、打關入帳金幣/晶體回頭升級抽卡。
 // 設計約束:零人形幀動畫(守軍=靜態立繪,怪=既有 2-frame/wobble),全 tween 特效。
 const W = 1080;
 const H = 1920;
+
+const FAM_FILES: Record<string, string> = {
+    fam_pip: 'familiar_r_scavver_kid_pip', fam_mira: 'familiar_r_gather_rat_mira',
+    fam_grub: 'familiar_r_goblin_underling_grub', fam_zix: 'familiar_r_pickpocket_goblin_zix',
+    fam_neek: 'familiar_r_oilamp_lighter_neek', fam_dorl: 'familiar_r_pot_dishwasher_dorl',
+    fam_fire_imp: 'familiar_sr_fire_imp', fam_ironguard: 'familiar_sr_ironguard_portrait',
+    fam_frost_witch: 'familiar_sr_frost_tongue_witch', fam_axe_brothers: 'familiar_sr_axe_brothers',
+    fam_blackmarket_fox: 'familiar_ssr_blackmarket_fox', fam_wasteland_prophet: 'familiar_ssr_wasteland_prophet',
+    fam_shadow_hunter: 'familiar_ssr_shadow_hunter_portrait', fam_appraisal_queen: 'familiar_ur_appraisal_queen'
+};
 
 // 怪物行進路徑(S 形,上進下出,單螢幕棋盤)
 const PATH: { x: number; y: number }[] = [
@@ -17,27 +31,7 @@ const PADS: { x: number; y: number }[] = [
     { x: 110, y: 1120 }, { x: 520, y: 1140 }, { x: 940, y: 1260 }, { x: 460, y: 1620 }
 ];
 
-interface TowerDef {
-    id: string;
-    name: string;
-    texKey: string;     // 夥伴立繪 texture key(lazy load)
-    file: string;       // familiars/ 下檔名
-    cost: number;
-    range: number;
-    rateMs: number;
-    dmg: number;
-    color: number;      // 投射物顏色
-    splash?: number;    // 濺射半徑
-    slowPct?: number;   // 緩速 %(0-1)
-    slowMs?: number;
-}
-
-const TOWER_DEFS: TowerDef[] = [
-    { id: 'pip', name: '廢料童子 皮普', texKey: 'fam_pip', file: 'familiar_r_scavver_kid_pip', cost: 100, range: 260, rateMs: 420, dmg: 12, color: 0xffe0c0 },
-    { id: 'mira', name: '採集鼠 米拉', texKey: 'fam_mira', file: 'familiar_r_gather_rat_mira', cost: 120, range: 250, rateMs: 760, dmg: 9, color: 0x9be060, slowPct: 0.35, slowMs: 1200 },
-    { id: 'fire_imp', name: '火焰小鬼', texKey: 'fam_fire_imp', file: 'familiar_sr_fire_imp', cost: 180, range: 235, rateMs: 900, dmg: 20, color: 0xff8830, splash: 95 },
-    { id: 'frost_witch', name: '霜舌巫師', texKey: 'fam_frost_witch', file: 'familiar_sr_frost_tongue_witch', cost: 220, range: 290, rateMs: 1100, dmg: 24, color: 0x66ccee, slowPct: 0.55, slowMs: 1500 }
-];
+// 部署候選 = FAMILIAR_POOL × TOWER_STATS(TDService),沒抽到的不出現在面板
 
 const UPGRADE_DMG_MULT = 1.6;
 const UPGRADE_RANGE_MULT = 1.1;
@@ -88,8 +82,9 @@ interface Creep {
 }
 
 interface Tower {
-    def: TowerDef;
-    level: number;
+    stat: TowerStat;
+    famLv: number;       // 永久養成等級(進場時快照)
+    level: number;       // 場內升級 1-3
     invested: number;
     padIdx: number;
     obj: Phaser.GameObjects.Image;
@@ -115,13 +110,23 @@ export class TowerDefense extends Scene {
     private waveBtn!: Phaser.GameObjects.Text;
     private panel?: Phaser.GameObjects.Container;
     private rangeCircle?: Phaser.GameObjects.Arc;
+    private stage!: StageDef;
+    private stageWaves: WaveDef[] = [];
+    private buildPage = 0;   // 部署面板分頁(每頁 4 隻)
 
     constructor() { super('TowerDefense'); }
 
+    init(data: { stageId?: string }) {
+        this.stage = stageOf(data?.stageId ?? 'st1');
+    }
+
     preload() {
         this.load.setPath('assets');
-        for (const d of TOWER_DEFS) {
-            if (!this.textures.exists(d.texKey)) this.load.image(d.texKey, `familiars/${d.file}.png`);
+        const save = SaveService.instance;
+        for (const fam of FAMILIAR_POOL) {
+            if (save.getOwnedCount(fam.id) > 0 && !this.textures.exists(fam.spriteKey)) {
+                this.load.image(fam.spriteKey, `familiars/${FAM_FILES[fam.id]}.png`);
+            }
         }
     }
 
@@ -129,11 +134,19 @@ export class TowerDefense extends Scene {
         // 重入 reset(scene.restart)
         this.scrap = START_SCRAP; this.lives = START_LIVES; this.waveIdx = 0;
         this.waveActive = false; this.spawnQueue = 0; this.creeps = []; this.towers = [];
-        this.gameEnded = false;
+        this.gameEnded = false; this.buildPage = 0;
         this.panel = undefined; this.rangeCircle = undefined;
 
-        // 棋盤背景(cover crop 置中)
-        const bg = this.add.image(W / 2, H / 2, 'map_wasteland_topdown');
+        // 關卡波次:取前 N 波 × 難度倍率(stage 6 的第 15 波天然是酸主 boss)
+        this.stageWaves = WAVES.slice(0, this.stage.waveCount).map(w => ({
+            ...w,
+            hp: Math.round(w.hp * this.stage.hpMult),
+            spd: w.spd * this.stage.spdMult,
+            scrap: Math.round(w.scrap * (1 + (this.stage.hpMult - 1) * 0.35))
+        }));
+
+        // 棋盤背景 = 關卡地圖(cover crop 置中)
+        const bg = this.add.image(W / 2, H / 2, this.stage.bgKey);
         const cover = Math.max(W / bg.width, H / bg.height);
         bg.setScale(cover).setDepth(0);
 
@@ -195,22 +208,31 @@ export class TowerDefense extends Scene {
         this.waveBtn.on('pointerdown', () => this.startWave());
         this.tweens.add({ targets: this.waveBtn, scale: 1.05, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
+        // 關卡名 + 撤退(回防線基地,不結算獎勵)
+        this.add.text(W / 2, 132, this.stage.nameZH, {
+            fontFamily: 'sans-serif', fontSize: 28, color: '#6a5a48'
+        }).setOrigin(0.5).setDepth(901);
+        const quit = this.add.text(W - 50, 36, '✕', {
+            fontFamily: 'sans-serif', fontSize: 44, color: '#b08850', fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(901).setInteractive({ useHandCursor: true });
+        quit.on('pointerdown', () => this.scene.start('StageSelect'));
+
         this.refreshHud();
     }
 
     private refreshHud() {
         this.livesText.setText(`❤ ${this.lives}`);
         this.scrapText.setText(`🔩 ${this.scrap}`);
-        this.waveText.setText(`波 ${Math.min(this.waveIdx + (this.waveActive ? 1 : 0), WAVES.length)}/${WAVES.length}`);
+        this.waveText.setText(`波 ${Math.min(this.waveIdx + (this.waveActive ? 1 : 0), this.stageWaves.length)}/${this.stageWaves.length}`);
     }
 
     private startWave() {
-        if (this.waveActive || this.gameEnded || this.waveIdx >= WAVES.length) return;
+        if (this.waveActive || this.gameEnded || this.waveIdx >= this.stageWaves.length) return;
         this.waveActive = true;
-        this.spawnQueue = WAVES[this.waveIdx].count;
+        this.spawnQueue = this.stageWaves[this.waveIdx].count;
         this.nextSpawnAt = 0;
         this.waveBtn.setVisible(false);
-        if (WAVES[this.waveIdx].boss) {
+        if (this.stageWaves[this.waveIdx].boss) {
             const warn = this.add.text(W / 2, H / 2 - 240, '⚠ 蝕骨蜈蚣巢母 來襲!', {
                 fontFamily: 'sans-serif', fontSize: 58, color: '#9be060', fontStyle: 'bold', stroke: '#1a1612', strokeThickness: 8
             }).setOrigin(0.5).setDepth(950);
@@ -256,34 +278,63 @@ export class TowerDefense extends Scene {
         c.add(this.add.text(W / 2, panelY - 4, '◤ 部署守軍 ◢', {
             fontFamily: 'sans-serif', fontSize: 40, color: '#ffe0c0', fontStyle: 'bold'
         }).setOrigin(0.5));
-        TOWER_DEFS.forEach((d, i) => {
+        // 部署名單 = 抽卡擁有(養成核心:沒抽到不能上場),每頁 4 隻
+        const save = SaveService.instance;
+        const roster = FAMILIAR_POOL.filter(f => save.getOwnedCount(f.id) > 0 && towerStatOf(f.id));
+        const pages = Math.max(1, Math.ceil(roster.length / 4));
+        this.buildPage = Math.min(this.buildPage, pages - 1);
+        const pageRoster = roster.slice(this.buildPage * 4, this.buildPage * 4 + 4);
+        pageRoster.forEach((fam, i) => {
+            const stat = towerStatOf(fam.id);
+            if (!stat) return;
             const cx = 150 + i * 260;
             const cy = panelY + 170;
-            const afford = this.scrap >= d.cost;
+            const lv = save.getFamiliarLevel(fam.id);
+            const afford = this.scrap >= stat.cost;
             const card = this.add.rectangle(cx, cy, 235, 270, afford ? 0x3a342c : 0x241f1a, 1)
                 .setStrokeStyle(3, afford ? 0xff8830 : 0x4a3a30).setInteractive({ useHandCursor: afford });
-            const img = this.add.image(cx, cy - 36, d.texKey);
-            img.setScale(150 / img.height);
-            if (!afford) img.setAlpha(0.4);
-            const label = this.add.text(cx, cy + 72, d.name.split(' ')[0], {
-                fontFamily: 'sans-serif', fontSize: 25, color: afford ? '#ffe0c0' : '#6a5a48'
+            if (this.textures.exists(fam.spriteKey)) {
+                const img = this.add.image(cx, cy - 36, fam.spriteKey);
+                img.setScale(150 / img.height);
+                if (!afford) img.setAlpha(0.4);
+                c.add(img);
+            }
+            const label = this.add.text(cx, cy + 64, `${fam.nameZH.split(' ')[0]} Lv.${lv}`, {
+                fontFamily: 'sans-serif', fontSize: 24, color: afford ? '#ffe0c0' : '#6a5a48'
             }).setOrigin(0.5);
-            const cost = this.add.text(cx, cy + 108, `🔩 ${d.cost}`, {
-                fontFamily: 'sans-serif', fontSize: 27, color: afford ? '#ffe060' : '#6a5a48', fontStyle: 'bold'
+            const cost = this.add.text(cx, cy + 104, `🔩 ${stat.cost} · ${stat.desc}`, {
+                fontFamily: 'sans-serif', fontSize: 25, color: afford ? '#ffe060' : '#6a5a48', fontStyle: 'bold'
             }).setOrigin(0.5);
-            card.on('pointerdown', () => { if (afford) this.buildTower(d, padIdx, px, py); });
-            c.add([card, img, label, cost]);
+            card.on('pointerdown', () => { if (afford) this.buildTower(fam.id, stat, padIdx, px, py); });
+            c.add([card, label, cost]);
         });
+        // 分頁(擁有 >4 隻)
+        if (pages > 1) {
+            const pageTxt = this.add.text(W / 2, panelY + 322, `${this.buildPage + 1}/${pages}`, {
+                fontFamily: 'sans-serif', fontSize: 28, color: '#b08850'
+            }).setOrigin(0.5);
+            const prev = this.add.text(W / 2 - 110, panelY + 322, '◀', {
+                fontFamily: 'sans-serif', fontSize: 40, color: '#ffe0c0'
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+            const next = this.add.text(W / 2 + 110, panelY + 322, '▶', {
+                fontFamily: 'sans-serif', fontSize: 40, color: '#ffe0c0'
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+            prev.on('pointerdown', () => { this.buildPage = (this.buildPage + pages - 1) % pages; this.showBuildPanel(padIdx, px, py); });
+            next.on('pointerdown', () => { this.buildPage = (this.buildPage + 1) % pages; this.showBuildPanel(padIdx, px, py); });
+            c.add([pageTxt, prev, next]);
+        }
         this.panel = c;
     }
 
-    private buildTower(def: TowerDef, padIdx: number, px: number, py: number) {
+    private buildTower(famId: string, stat: TowerStat, padIdx: number, px: number, py: number) {
         // tap 當下重驗(面板開著時戰況持續,開板時的 afford 可能過期 — Codex review fix)
-        if (this.scrap < def.cost || this.towers.some(t => t.padIdx === padIdx)) { this.closePanel(); return; }
-        this.scrap -= def.cost;
+        if (this.scrap < stat.cost || this.towers.some(t => t.padIdx === padIdx)) { this.closePanel(); return; }
+        this.scrap -= stat.cost;
         const plus = this.children.getByName(`padplus_${padIdx}`);
         plus?.destroy();
-        const obj = this.add.image(px, py - 34, def.texKey).setDepth(30).setInteractive({ useHandCursor: true });
+        const fam = FAMILIAR_POOL.find(f => f.id === famId);
+        const texKey = fam?.spriteKey ?? 'fam_pip';
+        const obj = this.add.image(px, py - 34, texKey).setDepth(30).setInteractive({ useHandCursor: true });
         obj.setScale(128 / obj.height);
         obj.on('pointerdown', () => {
             const t = this.towers.find(tt => tt.padIdx === padIdx);
@@ -292,7 +343,10 @@ export class TowerDefense extends Scene {
         // 部署登場 pop
         obj.setAlpha(0); obj.y -= 26;
         this.tweens.add({ targets: obj, alpha: 1, y: py - 34, duration: 260, ease: 'Back.out' });
-        const tower: Tower = { def, level: 1, invested: def.cost, padIdx, obj, pips: [], nextFireAt: 0 };
+        const tower: Tower = {
+            stat, famLv: SaveService.instance.getFamiliarLevel(famId),
+            level: 1, invested: stat.cost, padIdx, obj, pips: [], nextFireAt: 0
+        };
         this.drawLevelPips(tower, px, py);
         this.towers.push(tower);
         this.closePanel();
@@ -307,28 +361,32 @@ export class TowerDefense extends Scene {
         }
     }
 
-    private towerDmg(t: Tower) { return Math.round(t.def.dmg * Math.pow(UPGRADE_DMG_MULT, t.level - 1)); }
-    private towerRange(t: Tower) { return t.def.range * Math.pow(UPGRADE_RANGE_MULT, t.level - 1); }
+    // 戰力 = 基礎 × 永久 Lv 倍率 × 場內升級倍率(養成直接吃進傷害)
+    private towerDmg(t: Tower) { return Math.round(t.stat.dmg * famLevelMult(t.famLv) * Math.pow(UPGRADE_DMG_MULT, t.level - 1)); }
+    private towerRange(t: Tower) { return t.stat.range * Math.pow(UPGRADE_RANGE_MULT, t.level - 1); }
+    private towerName(t: Tower) {
+        return FAMILIAR_POOL.find(f => f.id === t.stat.famId)?.nameZH ?? t.stat.famId;
+    }
 
     private showTowerPanel(t: Tower) {
         this.closePanel();
         const pad = PADS[t.padIdx];
-        this.rangeCircle = this.add.circle(pad.x, pad.y, this.towerRange(t), t.def.color, 0.10)
-            .setStrokeStyle(2, t.def.color, 0.6).setDepth(15);
+        this.rangeCircle = this.add.circle(pad.x, pad.y, this.towerRange(t), t.stat.color, 0.10)
+            .setStrokeStyle(2, t.stat.color, 0.6).setDepth(15);
         const c = this.add.container(0, 0).setDepth(1000);
         const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.35).setInteractive();
         dim.on('pointerdown', () => this.closePanel());
         c.add(dim);
         const py = H - 380;
         c.add(this.add.rectangle(W / 2, py + 110, W - 40, 290, 0x2a2520, 0.97).setStrokeStyle(3, 0xa05a30));
-        c.add(this.add.text(W / 2, py - 18, `${t.def.name}  Lv.${t.level}`, {
-            fontFamily: 'sans-serif', fontSize: 40, color: '#ffe0c0', fontStyle: 'bold'
+        c.add(this.add.text(W / 2, py - 18, `${this.towerName(t)}  養成Lv.${t.famLv} · 場內Lv.${t.level}`, {
+            fontFamily: 'sans-serif', fontSize: 38, color: '#ffe0c0', fontStyle: 'bold'
         }).setOrigin(0.5));
         c.add(this.add.text(W / 2, py + 40, `傷害 ${this.towerDmg(t)} · 射程 ${Math.round(this.towerRange(t))}` +
-            (t.def.splash ? ' · 濺射' : '') + (t.def.slowPct ? ' · 緩速' : ''), {
+            (t.stat.splash ? ' · 濺射' : '') + (t.stat.slowPct ? ' · 緩速' : '') + (t.stat.bonusScrapPct ? ' · 生財' : ''), {
             fontFamily: 'sans-serif', fontSize: 28, color: '#b08850'
         }).setOrigin(0.5));
-        const upCost = Math.round(t.def.cost * UPGRADE_COST_PCT * t.level);
+        const upCost = Math.round(t.stat.cost * UPGRADE_COST_PCT * t.level);
         const maxed = t.level >= 3;
         const canUp = !maxed && this.scrap >= upCost;
         const upBtn = this.add.text(W / 2 - 200, py + 140, maxed ? '已滿級' : `⬆ 升級 🔩${upCost}`, {
@@ -366,7 +424,7 @@ export class TowerDefense extends Scene {
         if (this.gameEnded) return;
         // spawn
         if (this.waveActive && this.spawnQueue > 0 && time >= this.nextSpawnAt) {
-            const wave = WAVES[this.waveIdx];
+            const wave = this.stageWaves[this.waveIdx];
             this.spawnCreep(wave);
             this.spawnQueue -= 1;
             this.nextSpawnAt = time + wave.gapMs;
@@ -417,7 +475,7 @@ export class TowerDefense extends Scene {
                 if (!best || c.progress > best.progress) best = c;
             }
             if (best) {
-                t.nextFireAt = time + t.def.rateMs;
+                t.nextFireAt = time + t.stat.rateMs;
                 this.fireProjectile(t, pad.x, pad.y - 40, best);
             }
         }
@@ -427,7 +485,7 @@ export class TowerDefense extends Scene {
             this.waveIdx += 1;
             this.scrap += WAVE_CLEAR_BONUS;
             this.refreshHud();
-            if (this.waveIdx >= WAVES.length) { this.endGame(true); return; }
+            if (this.waveIdx >= this.stageWaves.length) { this.endGame(true); return; }
             this.waveBtn.setVisible(true);
         }
     }
@@ -435,7 +493,7 @@ export class TowerDefense extends Scene {
     private fireProjectile(t: Tower, sx: number, sy: number, target: Creep) {
         // 攻擊瞬間塔 recoil(打擊感)
         this.tweens.add({ targets: t.obj, scaleX: t.obj.scaleX * 1.08, scaleY: t.obj.scaleY * 0.92, duration: 70, yoyo: true });
-        const p = this.add.circle(sx, sy, t.def.splash ? 11 : 7, t.def.color, 1)
+        const p = this.add.circle(sx, sy, t.stat.splash ? 11 : 7, t.stat.color, 1)
             .setStrokeStyle(2, 0x1a1612, 0.8).setDepth(40);
         this.tweens.add({
             targets: p, x: target.obj.x, y: target.obj.y, duration: 130, ease: 'Quad.in',
@@ -443,13 +501,13 @@ export class TowerDefense extends Scene {
             onComplete: () => {
                 p.destroy();
                 if (!target.obj.active) return;
-                const impact = this.add.circle(target.obj.x, target.obj.y, t.def.splash ?? 16, t.def.color, t.def.splash ? 0.25 : 0)
-                    .setStrokeStyle(3, t.def.color, 0.9).setDepth(41);
+                const impact = this.add.circle(target.obj.x, target.obj.y, t.stat.splash ?? 16, t.stat.color, t.stat.splash ? 0.25 : 0)
+                    .setStrokeStyle(3, t.stat.color, 0.9).setDepth(41);
                 this.tweens.add({ targets: impact, scale: 1.6, alpha: 0, duration: 180, onComplete: () => impact.destroy() });
-                if (t.def.splash) {
+                if (t.stat.splash) {
                     for (const c of [...this.creeps]) {
                         if (!c.obj.active) continue;
-                        if (Math.hypot(c.obj.x - target.obj.x, c.obj.y - target.obj.y) <= t.def.splash) {
+                        if (Math.hypot(c.obj.x - target.obj.x, c.obj.y - target.obj.y) <= t.stat.splash) {
                             this.damageCreep(c, this.towerDmg(t), t);
                         }
                     }
@@ -464,7 +522,7 @@ export class TowerDefense extends Scene {
         // 投射物 130ms 後才命中,開火當下的 time 已過期 → 用 update-loop 維護的 nowMs(Codex review fix)
         const time = this.nowMs;
         c.hp -= dmg;
-        if (t.def.slowPct) { c.slowUntil = time + (t.def.slowMs ?? 1000); c.slowMult = 1 - t.def.slowPct; }
+        if (t.stat.slowPct) { c.slowUntil = time + (t.stat.slowMs ?? 1000); c.slowMult = 1 - t.stat.slowPct; }
         // hit flash(update 的染色優先序負責還原)+ squash
         c.flashUntil = time + 70;
         c.obj.setTint(0xffffff);
@@ -480,11 +538,11 @@ export class TowerDefense extends Scene {
             fontFamily: 'sans-serif', fontSize: 30, color: '#ffe0c0', fontStyle: 'bold', stroke: '#8b3a1f', strokeThickness: 4
         }).setOrigin(0.5).setDepth(50);
         this.tweens.add({ targets: txt, y: txt.y - 46, alpha: 0, duration: 480, onComplete: () => txt.destroy() });
-        if (c.hp <= 0) this.killCreep(c);
+        if (c.hp <= 0) this.killCreep(c, t.stat.bonusScrapPct ?? 0);
     }
 
-    private killCreep(c: Creep) {
-        this.scrap += c.scrap;
+    private killCreep(c: Creep, bonusScrapPct = 0) {
+        this.scrap += Math.round(c.scrap * (1 + bonusScrapPct));
         const reward = this.add.text(c.obj.x, c.obj.y - 40, `+🔩${c.scrap}`, {
             fontFamily: 'sans-serif', fontSize: 28, color: '#ffe060', fontStyle: 'bold', stroke: '#1a1612', strokeThickness: 4
         }).setOrigin(0.5).setDepth(50);
@@ -506,26 +564,51 @@ export class TowerDefense extends Scene {
         else c.obj.setActive(false);
     }
 
+    // 結算 = 養成資源入帳:勝利首通 clearGold+晶體、重複通關 40%、敗北按撐過波數補貼
     private endGame(victory: boolean) {
         this.gameEnded = true;
+        const save = SaveService.instance;
+        let goldGain = 0;
+        let crystalGain = 0;
+        let stars = 0;
+        if (victory) {
+            stars = this.lives >= 9 ? 3 : this.lives >= 5 ? 2 : 1;
+            const firstClear = save.getStageStars(this.stage.id) === 0;
+            goldGain = firstClear ? this.stage.clearGold : Math.round(this.stage.clearGold * this.stage.repeatGoldPct);
+            if (firstClear) crystalGain = this.stage.firstClearCrystal;
+            save.setStageStars(this.stage.id, stars);
+        } else {
+            goldGain = this.waveIdx * 30;   // 敗北補貼:撐過的波數 ×30
+        }
+        save.addGold(goldGain);
+        if (crystalGain > 0) save.addCrystal(crystalGain);
+        save.save();
+
         const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.78).setDepth(2000).setInteractive();
         void dim;
-        this.add.text(W / 2, H / 2 - 160, victory ? '🏆 防線守住了!' : '💀 防線陷落……', {
-            fontFamily: 'sans-serif', fontSize: 80, color: victory ? '#ffe060' : '#ff6050', fontStyle: 'bold',
+        this.add.text(W / 2, H / 2 - 240, victory ? '🏆 防線守住了!' : '💀 防線陷落……', {
+            fontFamily: 'sans-serif', fontSize: 76, color: victory ? '#ffe060' : '#ff6050', fontStyle: 'bold',
             stroke: '#1a1612', strokeThickness: 10
         }).setOrigin(0.5).setDepth(2001);
-        this.add.text(W / 2, H / 2 - 50, victory ? `15 波全清 · 剩餘 ❤ ${this.lives}` : `撐到第 ${this.waveIdx + 1} 波`, {
-            fontFamily: 'sans-serif', fontSize: 40, color: '#ffe0c0', stroke: '#1a1612', strokeThickness: 5
+        if (victory) {
+            this.add.text(W / 2, H / 2 - 140, '★'.repeat(stars) + '☆'.repeat(3 - stars), {
+                fontFamily: 'sans-serif', fontSize: 64, color: '#ffe060'
+            }).setOrigin(0.5).setDepth(2001);
+        }
+        this.add.text(W / 2, H / 2 - 50,
+            (victory ? `${this.stage.nameZH} 全清 · 剩餘 ❤ ${this.lives}` : `${this.stage.nameZH} · 撐到第 ${this.waveIdx + 1} 波`) +
+            `\n獲得 💰${goldGain}` + (crystalGain > 0 ? ` + 💎${crystalGain}(首通)` : ''), {
+            fontFamily: 'sans-serif', fontSize: 40, color: '#ffe0c0', stroke: '#1a1612', strokeThickness: 5, align: 'center'
         }).setOrigin(0.5).setDepth(2001);
-        const retry = this.add.text(W / 2, H / 2 + 120, victory ? '▶ 再守一次' : '▶ 重整防線', {
-            fontFamily: 'sans-serif', fontSize: 52, color: '#1a1612', fontStyle: 'bold',
-            backgroundColor: '#ff8830', padding: { x: 44, y: 18 }
+        const back = this.add.text(W / 2, H / 2 + 140, '⛺ 回防線基地', {
+            fontFamily: 'sans-serif', fontSize: 50, color: '#1a1612', fontStyle: 'bold',
+            backgroundColor: '#ffc040', padding: { x: 44, y: 18 }
+        }).setOrigin(0.5).setDepth(2001).setInteractive({ useHandCursor: true });
+        back.on('pointerdown', () => this.scene.start('StageSelect'));
+        const retry = this.add.text(W / 2, H / 2 + 268, '↻ 再戰本關', {
+            fontFamily: 'sans-serif', fontSize: 40, color: '#b08850',
+            backgroundColor: '#2a2520', padding: { x: 34, y: 14 }
         }).setOrigin(0.5).setDepth(2001).setInteractive({ useHandCursor: true });
         retry.on('pointerdown', () => this.scene.restart());
-        const menu = this.add.text(W / 2, H / 2 + 240, '回主選單', {
-            fontFamily: 'sans-serif', fontSize: 36, color: '#b08850',
-            backgroundColor: '#2a2520', padding: { x: 30, y: 12 }
-        }).setOrigin(0.5).setDepth(2001).setInteractive({ useHandCursor: true });
-        menu.on('pointerdown', () => this.scene.start('MainMenu'));
     }
 }

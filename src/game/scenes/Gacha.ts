@@ -52,7 +52,9 @@ export class Gacha extends Scene {
 
     init() {
         // preload 期間(首次開抽卡 lazy-load 立繪)的載入提示,避免黑屏
+        // pivot v2:可從 Game(ARPG)或 StageSelect(TD 養成)疊上來,動態 pause/resume
         if (this.scene.isActive('Game')) this.scene.pause('Game');
+        if (this.scene.isActive('StageSelect')) this.scene.pause('StageSelect');
         this.add.rectangle(0, 0, W, H, 0x1a1612, 1).setOrigin(0, 0);
         this.add.text(W / 2, H / 2, '招募名冊載入中…', {
             fontFamily: 'sans-serif', fontSize: 40, color: '#b08850', fontStyle: 'bold'
@@ -546,7 +548,9 @@ export class Gacha extends Scene {
     }
 
     private closeGacha() {
-        this.scene.resume('Game');
+        // 動態 resume 疊在底下的 scene(ARPG Game 或 TD StageSelect)
+        if (this.scene.isPaused('StageSelect')) this.scene.resume('StageSelect');
+        else this.scene.resume('Game');
         this.scene.stop();
     }
 

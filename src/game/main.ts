@@ -13,6 +13,8 @@ import { WorldMap } from './scenes/WorldMap';
 import { Coachmark } from './scenes/Coachmark';
 import { DailyReward } from './scenes/DailyReward';
 import { TowerDefense } from './scenes/TowerDefense';
+import { StageSelect } from './scenes/StageSelect';
+import { Barracks } from './scenes/Barracks';
 import { AUTO, Game, Scale } from 'phaser';
 import { Preloader } from './scenes/Preloader';
 
@@ -43,6 +45,8 @@ const config: Phaser.Types.Core.GameConfig = {
         MainMenu,
         MainGame,
         TowerDefense,
+        StageSelect,
+        Barracks,
         Inventory,
         Gacha,
         Storage,

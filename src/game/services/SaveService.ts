@@ -65,6 +65,9 @@ interface SaveData {
     // Phase 4c-4 商店 skin(純外觀)
     ownedSkinIds: string[];
     equippedSkins: Partial<Record<SkinSlot, string>>;
+    // TD 養成(pivot 2026-06-12):守軍永久等級 + 關卡星數
+    familiarLevels: Record<string, number>;   // familiar id → Lv(預設 1)
+    tdStageStars: Record<string, number>;     // stageId → 最佳星數(1-3,通關才有)
     // Phase 4c-6 變現:廢土晶體(付費幣)+ 禮包 + 月卡 + 每日領取
     crystal: number;
     purchasedPacks: Record<string, number>;  // packId → 累計購買次數(限購用)
@@ -139,6 +142,8 @@ function makeDefaultSave(): SaveData {
         autoPot: { enabled: false, hpThresholdPct: 0.4, mpThresholdPct: 0.3, hpPotionId: 'rust_water', mpPotionId: 'dry_cell' },
         ownedSkinIds: [],
         equippedSkins: {},
+        familiarLevels: {},
+        tdStageStars: {},
         crystal: 0,
         purchasedPacks: {},
         packLastBuyAt: {},
@@ -226,6 +231,9 @@ export class SaveService {
             // Phase 4c-4 skin forward-compat
             merged.ownedSkinIds = Array.isArray(parsed.ownedSkinIds) ? [...parsed.ownedSkinIds] : [];
             merged.equippedSkins = { ...(parsed.equippedSkins ?? {}) };
+            // TD 養成 forward-compat
+            merged.familiarLevels = { ...(parsed.familiarLevels ?? {}) };
+            merged.tdStageStars = { ...(parsed.tdStageStars ?? {}) };
             // Phase 4c-6 變現 forward-compat
             merged.crystal = typeof parsed.crystal === 'number' ? parsed.crystal : 0;
             merged.purchasedPacks = { ...(parsed.purchasedPacks ?? {}) };
@@ -385,6 +393,28 @@ export class SaveService {
     }
     getOwnedCount(id: string): number {
         return this.data.gachaCollection[id] ?? 0;
+    }
+
+    // ── TD 養成:守軍永久等級(金幣升級,戰力 = 基礎 × (1 + 0.15×(Lv-1)))──
+    getFamiliarLevel(id: string): number { return this.data.familiarLevels[id] ?? 1; }
+    // 升級費:100 × 1.35^(Lv-1),四捨五入到 10
+    familiarLevelUpCost(id: string): number {
+        const lv = this.getFamiliarLevel(id);
+        return Math.round(100 * Math.pow(1.35, lv - 1) / 10) * 10;
+    }
+    // 花金幣升 1 級;守門:必須擁有。回傳是否成功
+    levelUpFamiliar(id: string): boolean {
+        if ((this.data.gachaCollection[id] ?? 0) <= 0) return false;
+        const cost = this.familiarLevelUpCost(id);
+        if (this.data.gold < cost) return false;
+        this.data.gold -= cost;
+        this.data.familiarLevels[id] = this.getFamiliarLevel(id) + 1;
+        return true;
+    }
+    // ── TD 關卡星數 ──
+    getStageStars(stageId: string): number { return this.data.tdStageStars[stageId] ?? 0; }
+    setStageStars(stageId: string, stars: number): void {
+        if (stars > this.getStageStars(stageId)) this.data.tdStageStars[stageId] = stars;
     }
 
     // 出戰夥伴 — effect 由 computeTalentBuff 摺進 buff
