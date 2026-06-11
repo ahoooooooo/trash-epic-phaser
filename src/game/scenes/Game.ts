@@ -321,6 +321,9 @@ interface MobData {
     bleedDmgPerTick?: number;    // 每秒流血傷害
     bleedNextTickMs?: number;    // 下次流血 tick
     staggerUntilMs?: number;     // 鋼筋棒 Stagger 短暈到期
+    baseScale?: number;          // 受擊 squash 還原基準(elite 與普通不同)
+    idleTween?: Phaser.Tweens.Tween;  // 單張 sprite 的呼吸 wobble(squash 期間 pause 避免搶 scale)
+    squashing?: boolean;         // 受擊 squash 進行中(防疊加)
 }
 
 export class Game extends Scene
@@ -994,6 +997,8 @@ export class Game extends Scene
                 else if (td.blueprint.tint !== undefined) m.setTint(td.blueprint.tint).setTintMode(0);  // multiply 保留紋路
                 else m.clearTint();
             });
+            // 技能命中同樣 squash(Codex review fix:AoE path 也要)
+            this.squashMob(m, data, false);
             // 傷害數字(抗性後)
             const t = this.add.text(m.x, m.y - 54, `${sd}`, {
                 fontFamily: 'sans-serif', fontSize: 44, color: '#ffe060',
@@ -1761,8 +1766,9 @@ export class Game extends Scene
                 }
                 // Phase 4b-11 play frame anim by blueprint id
                 // 真‧獨立新怪是單張 sprite(無 run frames)→ 不 play frame anim(否則會換到 giantrat/centipede 貼圖),改腳步輕微縮放抖動
+                let idleTween: Phaser.Tweens.Tween | undefined;
                 if (bp.spriteKey === 'mob_rust_spider' || bp.spriteKey === 'mob_reactor_crawler' || bp.spriteKey === 'mob_mutant_creeper' || bp.spriteKey === 'mob_rust_scorpion' || bp.spriteKey === 'mob_acidsire') {
-                    this.tweens.add({ targets: mob, scaleX: mScale * 1.06, scaleY: mScale * 0.96, duration: 380, yoyo: true, repeat: -1 });
+                    idleTween = this.tweens.add({ targets: mob, scaleX: mScale * 1.06, scaleY: mScale * 0.96, duration: 380, yoyo: true, repeat: -1 });
                 } else if (bp.id === 'centipede' || bp.id === 'scrap_drone') {
                     mob.play('centipede_wave');
                 } else {
@@ -1777,7 +1783,9 @@ export class Game extends Scene
                     wanderTargetX: sp.x,
                     wanderTargetY: sp.y,
                     nextWanderAt: 0,
-                    isElite
+                    isElite,
+                    baseScale: mScale,
+                    idleTween
                 };
                 mob.setData('mob', data);
                 if (isElite) {
@@ -2075,6 +2083,9 @@ export class Game extends Scene
             }
         });
 
+        // 受擊 squash & stretch(puppet 程式動畫層:壓扁回彈,與 hit flash/HitStop 疊加)
+        this.squashMob(target, data, isCrit);
+
         // Damage popup — crit:大、亮黃紅、彈跳重擊感;普通:小、暖橙、輕飄
         // 元素剋制提示:剋制(>1.15)亮綠 + ↑;抗性(<0.85)暗灰 + ↓(讓玩家看得到元素系統)
         const effLabel = resistMult >= 1.15 ? ' ↑' : resistMult <= 0.85 ? ' ↓' : '';
@@ -2173,6 +2184,28 @@ export class Game extends Scene
             targets: target, scale: target.scaleX * 1.4, alpha: 0,
             duration: 180, ease: 'Quad.out',
             onComplete: () => target.destroy()
+        });
+    }
+
+    // puppet 程式動畫層:受擊 squash & stretch — 壓扁(寬+扁)再回彈。
+    // 與單張怪的呼吸 wobble 共用 scale 屬性,squash 期間 pause idle tween 避免互搶,
+    // 結束還原 baseScale(elite 與普通不同)再 resume;killMob 的 killTweensOf 會一併清掉。
+    private squashMob(target: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite, data: MobData, isCrit: boolean) {
+        if (data.squashing || !target.active || data.baseScale === undefined) return;
+        data.squashing = true;
+        data.idleTween?.pause();
+        const b = data.baseScale;
+        const amt = isCrit ? 0.22 : 0.13;  // 暴擊壓更扁
+        this.tweens.add({
+            targets: target,
+            scaleX: b * (1 + amt), scaleY: b * (1 - amt),
+            duration: 60, yoyo: true, ease: 'Quad.out',
+            onComplete: () => {
+                data.squashing = false;
+                if (!target.active) return;
+                target.setScale(b);
+                data.idleTween?.resume();
+            }
         });
     }
 
@@ -2345,11 +2378,13 @@ export class Game extends Scene
             const ay = Math.max(80, Math.min(this.mapConfig.height - 80, by + Math.sin(ang) * dist));
             const mob = this.add.sprite(ax, ay, bp.spriteKey).setScale(addScale);
             // 單張 sprite → wobble(與 field mob 一致,不 play giantrat anim)
-            this.tweens.add({ targets: mob, scaleX: addScale * 1.08, scaleY: addScale * 0.94, duration: 340, yoyo: true, repeat: -1 });
+            const addIdleTween = this.tweens.add({ targets: mob, scaleX: addScale * 1.08, scaleY: addScale * 0.94, duration: 340, yoyo: true, repeat: -1 });
             const data: MobData = {
                 blueprint: bp, hp: addHp, spawnPoint: null,
                 lastContactMs: -Infinity, state: 'chase',
-                wanderTargetX: ax, wanderTargetY: ay, nextWanderAt: 0
+                wanderTargetX: ax, wanderTargetY: ay, nextWanderAt: 0,
+                baseScale: addScale,
+                idleTween: addIdleTween
             };
             mob.setData('mob', data);
             mob.setData('shadow', this.makeGroundShadow(mob.x, mob.y, Math.max(24, mob.displayWidth * 0.7)));
@@ -2600,10 +2635,11 @@ export class Game extends Scene
             mob.setTint(bp.tint); // multiply mode 保留紋路
         }
         // 有 frame anim 就 play;單張 sprite(如 acidsire)用 idle wobble tween(死亡 killMob 會 killTweensOf 清掉)
+        let bossIdleTween: Phaser.Tweens.Tween | undefined;
         if (def.animKey && this.anims.exists(def.animKey)) {
             mob.play(def.animKey);
         } else {
-            this.tweens.add({
+            bossIdleTween = this.tweens.add({
                 targets: mob, angle: { from: -3, to: 3 }, scaleX: { from: bp.scale, to: bp.scale * 1.04 },
                 duration: 620, yoyo: true, repeat: -1, ease: 'Sine.inOut'
             });
@@ -2617,7 +2653,9 @@ export class Game extends Scene
             wanderTargetX: bx,
             wanderTargetY: by,
             nextWanderAt: 0,
-            isRaging: false
+            isRaging: false,
+            baseScale: bp.scale,
+            idleTween: bossIdleTween
         };
         mob.setData('mob', data);
         // VFX-A:boss 大陰影
