@@ -12,6 +12,7 @@ import { Talent } from './scenes/Talent';
 import { WorldMap } from './scenes/WorldMap';
 import { Coachmark } from './scenes/Coachmark';
 import { DailyReward } from './scenes/DailyReward';
+import { TowerDefense } from './scenes/TowerDefense';
 import { AUTO, Game, Scale } from 'phaser';
 import { Preloader } from './scenes/Preloader';
 
@@ -41,6 +42,7 @@ const config: Phaser.Types.Core.GameConfig = {
         Register,
         MainMenu,
         MainGame,
+        TowerDefense,
         Inventory,
         Gacha,
         Storage,

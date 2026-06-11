@@ -129,8 +129,9 @@ export class MainMenu extends Scene
         console.log('[MainMenu] startGame() — starting flag:', this.starting);
         if (this.starting) return;
         this.starting = true;
-        console.log('[MainMenu] calling scene.start(Game)');
-        this.scene.start('Game');
+        // pivot 2026-06-11:主玩法改廢土塔防(ARPG Game scene 保留在 codebase 暫不入口)
+        console.log('[MainMenu] calling scene.start(TowerDefense)');
+        this.scene.start('TowerDefense');
     }
 
     private confirmReset() {
