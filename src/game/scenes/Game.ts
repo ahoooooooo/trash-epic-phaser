@@ -1701,6 +1701,9 @@ export class Game extends Scene
 
     private handleMovement(delta: number)
     {
+        // 楓谷式攻擊站定:揮擊動畫(~167ms)期間不位移,修「攻擊姿勢在地上滑行」的不協調
+        // (hurt 不 root — 被打仍可走位;攻擊結束下一 frame 即恢復移動)
+        if (this.playerActionAnim === 'attacking') return;
         let dx = 0, dy = 0;
         if (this.joystick.active) {
             dx = this.joystick.dx;
