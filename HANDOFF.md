@@ -129,6 +129,8 @@
 
 53. **[x] 美術重做 P2 — familiar 抽卡立繪 14 張 cel 重製(美術重做收官)**(2026-06-11)— P0(12 戰鬥資產)/P1(8 地圖)後最後一批。13 隻 deep design(16-28 號 doc)+ shadow_hunter(inbox prompt 檔),scavrat 已淘汰跳過(src 無引用)。配方同 P0:GPT-4o + player idle anchor reference + style-lock prompt(各自允許的飽和 accent 寫明:奈克油燈橙/火焰小鬼/鐵殼紅眼/霜巫冰藍/先知七彩晶/女王紫晶金光/影獵紫眼)→ BiRefNet 去背 → bbox+20margin 組畫布 quantize。稀有度氣場遞增(R 樸素→UR 女王最華麗)。Playwright 實測:夥伴頁 + 十連招募 → 新立繪在稀有度框結果卡正常顯示,console 0 error。Codex APPROVE(1 輪:風格一致/accent 控制住/稀有度成立)。**教訓**:① OpenAI 配額會在大批生成中途耗盡(14 張跑到第 3 張死,18:59 重置,等了 ~3hr 自動續跑)— 大批量生成前估 quota,中斷後 ScheduleWakeup 鏈自動恢復;② 批次 bash for-loop 的 prompt 路徑必須 forward-slash。**美術重做總結(ART_BIBLE_V3 全達成)**:34 張資產(12 戰鬥+8 地圖+14 立繪)+ 走路 v7 8 幀,全遊戲統一 Warm Wasteland Cel,commits 477aada/c61d577/217ab18/本批。
 
+54. **[x] puppet 程式動畫層第一棒 — 怪物受擊 squash & stretch**(2026-06-11,接美術重做後「讓圖動起來」方案 3)— 所有怪受擊瞬間壓扁回彈(60ms yoyo,scaleX×1.13/scaleY×0.87,暴擊 ×1.22/×0.78),與 hit flash/HitStop/knockback 疊加。**與呼吸 wobble 共存設計**:MobData 加 baseScale/idleTween/squashing;squashMob pause idle wobble → squash tween → onComplete 還原 baseScale + resume;killMob killTweensOf 一併清掉(中斷殘留 squashing=true 無害,怪已銷毀)。Codex 第 1 輪抓 2 漏:① useSkill AoE 命中路徑沒 squash(技能打怪不壓扁)② spawnBroodAdds 沒存 baseScale/idleTween(boss 召喚 add 被打 no-op)→ 修完第 2 輪 APPROVE。tsc 0+build+Playwright 24 連拍 @40ms 抓到受擊白閃幀明顯壓扁 vs 平常正常比例(squash_zoom_6 vs 21)。commit 本批。**後續 puppet 層 backlog**:尾巴甩動/頭轉向需切 part(燈籠褲連體切不開,deferred);死亡 squash-pop 已有(killMob scale×1.4 fade)。**下一棒**:Phase 4c-2 楓谷藥水系統(16 種+auto-pot+快捷列,spec 在 docs/design/v2/maplestory_systems_v2.md,task #132)→ 4c-3 各地商販 → 4c-4 商店 skin 補完。
+
 ## 美術 pipeline(要生 sprite/地圖時)
 在 `D:\Trash Epic`(非 git,跑 codex exec 要 `--skip-git-repo-check`):
 1. `python -m automation.codex_imagegen --asset-id X --count 1 --prompt-file P.txt`(GPT-4o ~105s)
